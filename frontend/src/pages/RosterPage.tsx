@@ -143,12 +143,16 @@ const RosterPage: React.FC = () => {
 
   useEffect(() => {
     const handleAgents = (data: any) => {
-      setAgents(data);
-      localStorage.setItem('agents', JSON.stringify(data));
+      if (data) {
+        setAgents(data);
+        localStorage.setItem('agents', JSON.stringify(data));
+      }
     };
     const handleRoster = (data: any) => {
-      setRoster(data);
-      localStorage.setItem('roster', JSON.stringify(data));
+      if (data) {
+        setRoster(data);
+        localStorage.setItem('roster', JSON.stringify(data));
+      }
     };
 
     socket.on('agents_updated', handleAgents);
@@ -156,33 +160,36 @@ const RosterPage: React.FC = () => {
     socket.on('log_added', ({ dateStr, logEntry }) => {
       saveSingleLogFromServer(dateStr, logEntry);
     });
-    socket.on('init', (db) => {
-      if (db.agents && db.agents.length) {
+    
+    const handleInit = (db: any) => {
+      console.log('Received INIT data from server');
+      if (db.agents) {
         setAgents(db.agents);
         localStorage.setItem('agents', JSON.stringify(db.agents));
       }
-      if (db.roster && db.roster.length) {
+      if (db.roster) {
         setRoster(db.roster);
         localStorage.setItem('roster', JSON.stringify(db.roster));
       }
       if (db.logs) {
         saveLogsFromServer(db.logs);
       }
-    });
+    };
 
-    // Initial load from localStorage as fallback
-    const savedAgents = localStorage.getItem('agents');
-    if (savedAgents) setAgents(JSON.parse(savedAgents));
-    else setAgents(MOCK_AGENTS);
+    socket.on('init', handleInit);
 
-    const savedRoster = localStorage.getItem('roster');
-    if (savedRoster) setRoster(JSON.parse(savedRoster));
-    else setRoster(MOCK_ROSTER);
+    // CRITICAL: If the socket is already connected (e.g. from App.tsx),
+    // we need to request the state manually because we missed the 'init' event
+    // that happened on connection.
+    if (socket.connected) {
+      socket.emit('get_initial_data');
+    }
 
     return () => {
       socket.off('agents_updated', handleAgents);
       socket.off('roster_updated', handleRoster);
-      socket.off('init');
+      socket.off('log_added');
+      socket.off('init', handleInit);
     };
   }, []);
 

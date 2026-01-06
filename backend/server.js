@@ -113,6 +113,10 @@ io.on('connection', (socket) => {
     socket.emit('presence_updated', Array.from(onlineUsers.values()));
   });
 
+  socket.on('get_initial_data', () => {
+    socket.emit('init', db);
+  });
+
   socket.on('join', (username) => {
     onlineUsers.set(socket.id, username);
     broadcastPresence();

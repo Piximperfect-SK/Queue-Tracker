@@ -33,16 +33,22 @@ const TrackerPage: React.FC = () => {
 
   useEffect(() => {
     const handleAgents = (data: any) => {
-      setAgents(data);
-      localStorage.setItem('agents', JSON.stringify(data));
+      if (data) {
+        setAgents(data);
+        localStorage.setItem('agents', JSON.stringify(data));
+      }
     };
     const handleRoster = (data: any) => {
-      setRoster(data);
-      localStorage.setItem('roster', JSON.stringify(data));
+      if (data) {
+        setRoster(data);
+        localStorage.setItem('roster', JSON.stringify(data));
+      }
     };
     const handleStats = (data: any) => {
-      setStats(data);
-      localStorage.setItem('stats', JSON.stringify(data));
+      if (data) {
+        setStats(data);
+        localStorage.setItem('stats', JSON.stringify(data));
+      }
     };
 
     socket.on('agents_updated', handleAgents);
@@ -51,50 +57,27 @@ const TrackerPage: React.FC = () => {
     socket.on('log_added', ({ dateStr, logEntry }) => {
       saveSingleLogFromServer(dateStr, logEntry);
     });
-    socket.on('init', (db) => {
-      if (db.agents && db.agents.length) {
-        setAgents(db.agents);
-        localStorage.setItem('agents', JSON.stringify(db.agents));
-      }
-      if (db.roster && db.roster.length) {
-        setRoster(db.roster);
-        localStorage.setItem('roster', JSON.stringify(db.roster));
-      }
-      if (db.stats && db.stats.length) {
-        setStats(db.stats);
-        localStorage.setItem('stats', JSON.stringify(db.stats));
-      }
-      if (db.logs) {
-        saveLogsFromServer(db.logs);
-      }
-    });
+    
+    const handleInit = (db: any) => {
+      console.log('Received INIT data in TrackerPage');
+      if (db.agents) setAgents(db.agents);
+      if (db.roster) setRoster(db.roster);
+      if (db.stats) setStats(db.stats);
+      if (db.logs) saveLogsFromServer(db.logs);
+    };
 
-    // Initial load from localStorage as fallback
-    const savedAgents = localStorage.getItem('agents');
-    setAgents(savedAgents ? JSON.parse(savedAgents) : MOCK_AGENTS);
+    socket.on('init', handleInit);
 
-    const savedRoster = localStorage.getItem('roster');
-    setRoster(savedRoster ? JSON.parse(savedRoster) : MOCK_ROSTER);
-
-    const savedStats = localStorage.getItem('stats');
-    if (savedStats) {
-      setStats(JSON.parse(savedStats));
-    } else {
-      setStats(MOCK_AGENTS.map(agent => ({ 
-        agentId: agent.id, 
-        date: new Date().toISOString().split('T')[0], 
-        incidents: 0, 
-        sctasks: 0, 
-        calls: 0,
-        comments: ''
-      })));
+    if (socket.connected) {
+      socket.emit('get_initial_data');
     }
 
     return () => {
       socket.off('agents_updated', handleAgents);
       socket.off('roster_updated', handleRoster);
       socket.off('stats_updated', handleStats);
-      socket.off('init');
+      socket.off('log_added');
+      socket.off('init', handleInit);
     };
   }, []);
 
