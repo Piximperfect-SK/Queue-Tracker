@@ -14,30 +14,33 @@ function App() {
 
   useEffect(() => {
     const handleConnect = () => {
-      console.log('Connected to server as:', currentUser);
+      console.log('CONNECTED to server:', socket.io.uri);
       if (currentUser) {
         syncData.join(currentUser);
       }
     };
 
-    const handlePresence = (users: string[]) => {
-      console.log('Presence update received:', users);
-      setOnlineUsers(users);
+    const handleConnectError = (error: any) => {
+      console.error('CONNECTION ERROR to:', socket.io.uri, error);
     };
 
     socket.on('connect', handleConnect);
-    socket.on('presence_updated', handlePresence);
+    socket.on('connect_error', handleConnectError);
+    socket.on('presence_updated', (users: string[]) => {
+      console.log('Presence update received:', users);
+      setOnlineUsers(users);
+    });
 
-    // If already connected when effect runs
     if (socket.connected) {
       handleConnect();
-      // Ask server for current list if we missed the connection packet
-      socket.emit('get_presence');
+    } else {
+      socket.connect(); // Ensure it tries to connect
     }
 
     return () => {
       socket.off('connect', handleConnect);
-      socket.off('presence_updated', handlePresence);
+      socket.off('connect_error', handleConnectError);
+      socket.off('presence_updated');
     };
   }, [currentUser]);
 
