@@ -178,6 +178,15 @@ const RosterPage: React.FC = () => {
 
     socket.on('init', handleInit);
 
+    // Initial load from localStorage as fallback
+    const savedAgents = localStorage.getItem('agents');
+    if (savedAgents) setAgents(JSON.parse(savedAgents));
+    else setAgents(MOCK_AGENTS);
+
+    const savedRoster = localStorage.getItem('roster');
+    if (savedRoster) setRoster(JSON.parse(savedRoster));
+    else setRoster(MOCK_ROSTER);
+
     // CRITICAL: If the socket is already connected (e.g. from App.tsx),
     // we need to request the state manually because we missed the 'init' event
     // that happened on connection.
@@ -651,7 +660,7 @@ const RosterPage: React.FC = () => {
 
       {/* Add Agent Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-100 p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
             <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
               <h3 className="text-lg font-black text-gray-900 tracking-tight">Add New Agent</h3>

@@ -68,6 +68,27 @@ const TrackerPage: React.FC = () => {
 
     socket.on('init', handleInit);
 
+    // Initial load from localStorage as fallback
+    const savedAgents = localStorage.getItem('agents');
+    setAgents(savedAgents ? JSON.parse(savedAgents) : MOCK_AGENTS);
+
+    const savedRoster = localStorage.getItem('roster');
+    setRoster(savedRoster ? JSON.parse(savedRoster) : MOCK_ROSTER);
+
+    const savedStats = localStorage.getItem('stats');
+    if (savedStats) {
+      setStats(JSON.parse(savedStats));
+    } else {
+      setStats(MOCK_AGENTS.map(agent => ({ 
+        agentId: agent.id, 
+        date: new Date().toISOString().split('T')[0], 
+        incidents: 0, 
+        sctasks: 0, 
+        calls: 0,
+        comments: ''
+      })));
+    }
+
     if (socket.connected) {
       socket.emit('get_initial_data');
     }
