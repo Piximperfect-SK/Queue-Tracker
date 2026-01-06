@@ -10,29 +10,32 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
+// Add health check endpoint
+app.get('/health', (req, res) => res.status(200).send('Backend is running'));
 
-// Expand CORS to allow common dev ports just in case
-const allowedOrigins = [FRONTEND_URL, "http://localhost:5173", "http://localhost:5174", "http://localhost:3000"];
+const FRONTEND_URL = process.env.FRONTEND_URL;
 
-app.use(cors({
+// Be more permissive with CORS for initial setup debugging
+const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
+    // allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    // In production, we ideally want to check against FRONTEND_URL
+    // But to get the user up and running, we'll log what origin is trying to connect
+    console.log(`Connection attempt from origin: ${origin}`);
+    callback(null, true); 
   },
-  methods: ["GET", "POST"]
-}));
+  methods: ["GET", "POST"],
+  credentials: true
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: {
-    origin: allowedOrigins,
-    methods: ["GET", "POST"]
-  }
+  cors: corsOptions
 });
 
 const DATA_FILE = path.join(__dirname, 'data.json');
