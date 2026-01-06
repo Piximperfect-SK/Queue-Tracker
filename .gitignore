@@ -11,6 +11,16 @@ node_modules
 dist
 dist-ssr
 *.local
+.venv
+venv
+ENV
+env.bak
+env/
+pyvenv.cfg
+.Python
+
+# Netlify
+.netlify
 
 # Editor directories and files
 .vscode/*
