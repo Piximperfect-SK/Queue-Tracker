@@ -10,6 +10,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+// Root route for verification
+app.get('/', (req, res) => res.status(200).send('Queue Tracker API is Live!'));
 // Add health check endpoint
 app.get('/health', (req, res) => res.status(200).send('Backend is running'));
 
