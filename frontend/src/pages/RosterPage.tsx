@@ -31,15 +31,15 @@ const ALL_SHIFT_TYPES: ShiftType[] = [
 
 const getShiftColor = (shift: string) => {
   switch (shift) {
-    case '6AM-3PM': return { bg: 'bg-sky-400', text: 'text-sky-700', light: 'bg-sky-50', border: 'border-sky-100' };
-    case '1PM-10PM': return { bg: 'bg-yellow-400', text: 'text-yellow-700', light: 'bg-yellow-50', border: 'border-yellow-100' };
-    case '2PM-11PM': return { bg: 'bg-orange-300', text: 'text-orange-700', light: 'bg-orange-50', border: 'border-orange-100' };
-    case '10PM-7AM': return { bg: 'bg-slate-700', text: 'text-slate-700', light: 'bg-slate-100', border: 'border-slate-200' };
+    case '6AM-3PM': return { bg: 'bg-sky-600', text: 'text-sky-600', light: 'bg-sky-50', border: 'border-sky-200', card: 'bg-sky-200' };
+    case '1PM-10PM': return { bg: 'bg-amber-600', text: 'text-amber-600', light: 'bg-amber-50', border: 'border-amber-200', card: 'bg-amber-200' };
+    case '2PM-11PM': return { bg: 'bg-orange-600', text: 'text-orange-600', light: 'bg-orange-50', border: 'border-orange-200', card: 'bg-orange-200' };
+    case '10PM-7AM': return { bg: 'bg-slate-700', text: 'text-slate-700', light: 'bg-slate-100', border: 'border-slate-300', card: 'bg-slate-400' };
     case 'EL':
     case 'PL':
     case 'UL':
-    case 'MID-LEAVE': return { bg: 'bg-red-600', text: 'text-red-600', light: 'bg-red-50', border: 'border-red-100' };
-    default: return { bg: 'bg-slate-200', text: 'text-slate-400', light: 'bg-slate-50', border: 'border-slate-100' };
+    case 'MID-LEAVE': return { bg: 'bg-rose-600', text: 'text-rose-600', light: 'bg-rose-50', border: 'border-rose-200', card: 'bg-rose-200' };
+    default: return { bg: 'bg-slate-500', text: 'text-slate-500', light: 'bg-slate-50', border: 'border-slate-200', card: 'bg-slate-200' };
   }
 };
 
@@ -55,7 +55,7 @@ const DroppableContainer: React.FC<DroppableContainerProps> = ({ id, children, c
   return (
     <div 
       ref={setNodeRef} 
-      className={`${className} ${isOver ? 'ring-2 ring-blue-400 ring-inset bg-blue-50/30' : ''} transition-all duration-200`}
+      className={`${className} ${isOver ? 'ring-2 ring-blue-500/50 bg-blue-500/5' : ''} transition-all duration-300 rounded-2xl`}
     >
       {children}
     </div>
@@ -82,7 +82,8 @@ const SortableAgent: React.FC<SortableAgentProps> = ({ agent, shift, colors, onS
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.5 : 1,
+    opacity: isDragging ? 0.3 : 1,
+    scale: isDragging ? 1.05 : 1,
     zIndex: isDragging ? 50 : 1,
   };
 
@@ -90,30 +91,27 @@ const SortableAgent: React.FC<SortableAgentProps> = ({ agent, shift, colors, onS
     <li
       ref={setNodeRef}
       style={style}
-      className={`flex items-center justify-between p-3 hover:${colors.light} rounded-xl transition-all group border border-transparent hover:border-${colors.border} bg-white shadow-sm mb-2`}
+      className={`flex items-center justify-between px-2 py-1 rounded-lg transition-all group ${colors.card} backdrop-blur-md hover:opacity-90 shadow-md active:scale-[0.98] cursor-default flex-1 min-h-0 min-h-[36px] mb-0.5 last:mb-0`}
     >
-      <div className="flex items-center space-x-3">
-        <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 transition-colors">
-          <GripVertical size={16} />
+      <div className="flex items-center space-x-2 flex-1 min-w-0">
+        <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-black/50 hover:text-black transition-colors shrink-0">
+          <GripVertical size={12} />
         </div>
-        <div className={`w-10 h-10 ${colors.bg} rounded-xl flex items-center justify-center text-white text-sm font-black shadow-sm`}>
-          {agent.name.charAt(0)}
-        </div>
-        <div>
-          <span className="text-gray-900 font-black text-sm block leading-tight">{agent.name}</span>
+        <div className="truncate flex-1 min-w-0 ml-0">
+          <span className="text-black font-semibold text-[12px] block leading-tight truncate">{agent.name}</span>
           {agent.isQH && (
-            <span className="text-[9px] font-black text-green-600 uppercase tracking-tighter">Quality Handler</span>
+            <span className="text-[7px] font-semibold text-black/70 uppercase tracking-[0.05em] block truncate">QA</span>
           )}
         </div>
       </div>
-      <div className="flex items-center">
+      <div className="flex items-center shrink-0">
         <select 
           value={shift}
           onChange={(e) => onShiftChange(agent.id, e.target.value as ShiftType)}
-          className={`text-[10px] font-black bg-transparent border-none focus:ring-0 ${colors.text} cursor-pointer outline-none opacity-0 group-hover:opacity-100 transition-opacity`}
+          className={`text-[9px] font-black bg-white/20 px-1 py-0.5 rounded-md border-none focus:ring-0 ${colors.text} cursor-pointer outline-none opacity-0 group-hover:opacity-100 transition-opacity uppercase tracking-widest`}
         >
           {ALL_SHIFT_TYPES.map(s => (
-            <option key={s} value={s}>{s}</option>
+            <option key={s} value={s} className="bg-white text-slate-900 font-bold">{s}</option>
           ))}
         </select>
       </div>
@@ -373,13 +371,16 @@ const RosterPage: React.FC = () => {
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
+    const { active, over, delta } = event;
     setActiveId(null);
 
     if (!over) return;
 
     const agentId = active.id as string;
     const overId = over.id as string;
+
+    // Only allow delete if dragged horizontally (left/right)
+    const isHorizontalDrag = Math.abs(delta.x) > Math.abs(delta.y);
 
     if (SHIFTS.includes(overId as any)) {
       updateShift(agentId, overId as ShiftType);
@@ -392,8 +393,8 @@ const RosterPage: React.FC = () => {
       setRoster(updatedRoster);
       localStorage.setItem('roster', JSON.stringify(updatedRoster));
     }
-    else if (overId === 'TRASH') {
-      // Delete agent globally
+    else if (overId === 'TRASH' && isHorizontalDrag) {
+      // Delete agent globally only if dragged horizontally
       const agentToDelete = agents.find(a => a.id === agentId);
       const updatedAgents = agents.filter(a => a.id !== agentId);
       const updatedRoster = roster.filter(r => r.agentId !== agentId);
@@ -445,16 +446,20 @@ const RosterPage: React.FC = () => {
   const activeAgentShift = activeId ? roster.find(r => r.agentId === activeId && r.date === selectedDate)?.shift || 'Unassigned' : null;
 
   return (
-    <div className="h-full flex flex-col overflow-hidden bg-slate-50">
-      {/* Header - Compact */}
-      <div className="px-6 py-3 flex flex-col md:flex-row justify-between items-center gap-4 shrink-0 bg-white border-b border-gray-200 shadow-sm z-10">
-        <div className="flex items-center space-x-4">
-          <h1 className="text-2xl font-black text-gray-900 tracking-tight leading-none">Service Desk Roster</h1>
-          <div className="h-6 w-px bg-gray-200 hidden md:block"></div>
-          <p className="text-xs text-gray-500 font-medium hidden md:block uppercase tracking-wider">Shift Management</p>
+    <div className="h-full flex flex-col overflow-hidden px-2 pb-2">
+      {/* Header - Minimal Light */}
+      <div className="mb-6 flex flex-col md:flex-row justify-between items-center gap-4 shrink-0 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-xl">
+        <div className="flex items-center space-x-3">
+          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+            <CalendarIcon size={16} className="text-white" />
+          </div>
+          <div>
+            <h1 className="text-lg font-semibold text-black tracking-tight leading-none">Roster Control</h1>
+            <p className="text-[8px] text-black/60 font-medium uppercase tracking-[0.1em] mt-0.5">Personnel Shift Board</p>
+          </div>
         </div>
         
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2 bg-transparent p-0">
           <input 
             type="file" 
             ref={fileInputRef}
@@ -462,37 +467,37 @@ const RosterPage: React.FC = () => {
             accept=".xlsx, .xls, .csv"
             className="hidden"
           />
-          <button 
-            onClick={() => downloadLogsForDate(selectedDate)}
-            className="flex items-center space-x-2 bg-white border border-gray-200 hover:border-blue-400 hover:text-blue-600 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all shadow-sm group"
-            title="Download logs for selected date"
-          >
-            <FileText size={14} className="text-blue-600" />
-            <span>Logs</span>
-          </button>
-          <button 
-            onClick={() => downloadAllLogs()}
-            className="flex items-center space-x-2 bg-white border border-gray-200 hover:border-slate-400 hover:text-slate-600 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all shadow-sm group"
-            title="Download full audit history"
-          >
-            <Database size={14} className="text-slate-500" />
-            <span>All</span>
-          </button>
-          <button 
-            onClick={() => fileInputRef.current?.click()}
-            className="flex items-center space-x-2 bg-white border border-gray-200 hover:border-blue-400 hover:text-blue-600 px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-widest transition-all shadow-sm group"
-          >
-            <FileSpreadsheet size={14} className="text-green-600 group-hover:text-blue-600" />
-            <span>Import Excel</span>
-          </button>
+          <div className="flex gap-1 shrink-0">
+            <button 
+              onClick={() => downloadLogsForDate(selectedDate)}
+              className="p-1.5 rounded-lg text-black hover:bg-black/5 transition-all"
+              title="Daily Logs"
+            >
+              <FileText size={14} />
+            </button>
+            <button 
+              onClick={() => downloadAllLogs()}
+              className="p-1.5 rounded-lg text-black hover:bg-black/5 transition-all"
+              title="Full Archive"
+            >
+              <Database size={14} />
+            </button>
+            <button 
+              onClick={() => fileInputRef.current?.click()}
+              className="p-1.5 rounded-lg text-black hover:bg-black/5 transition-all"
+              title="Import Excel"
+            >
+              <FileSpreadsheet size={14} />
+            </button>
+          </div>
 
-          <div className="flex items-center bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 shadow-inner w-fit">
-            <CalendarIcon size={14} className="text-blue-500 mr-2" />
+          <div className="flex items-center px-3 py-1.5 gap-2 bg-black/10 rounded-lg border border-black/20">
+            <CalendarIcon size={16} className="text-black" />
             <input 
               type="date" 
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="outline-none bg-transparent text-gray-700 text-[11px] font-black uppercase tracking-widest"
+              className="outline-none bg-transparent text-black text-[11px] font-bold uppercase tracking-widest cursor-pointer"
             />
           </div>
         </div>
@@ -504,29 +509,32 @@ const RosterPage: React.FC = () => {
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex-1 flex overflow-hidden p-4 gap-4">
-          {/* Main Roster Area (3/4) */}
-          <div className="w-3/4 flex flex-col gap-4 overflow-hidden">
-            {/* Shifts Grid - Fixed Height */}
-            <div className="grid grid-cols-4 gap-4 h-2/3">
+        <div className="flex-1 flex overflow-hidden gap-4">
+          {/* Main Roster Area */}
+          <div className="flex-1 flex flex-col gap-4 overflow-hidden">
+            {/* Shifts Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 flex-1 overflow-hidden">
               {SHIFTS.map((shift) => {
                 const colors = getShiftColor(shift);
                 const shiftAgents = getAgentsForShift(shift);
                 return (
-                  <div key={shift} className={`bg-white rounded-xl shadow-sm overflow-hidden border border-gray-200 flex flex-col`}>
-                    <div className={`${colors.light} border-b border-gray-100 px-3 py-2 flex justify-between items-center shrink-0`}>
-                      <span className={`text-[10px] font-black ${colors.text} uppercase tracking-widest`}>{shift}</span>
-                      <span className={`text-[9px] font-black ${colors.text} bg-white/80 px-1.5 py-0.5 rounded border ${colors.border}`}>
+                  <div key={shift} className="bg-teal-50/40 backdrop-blur-xl rounded-2xl border border-teal-200/30 flex flex-col overflow-hidden group/column shadow-xl">
+                    <div className="px-4 py-2 flex justify-between items-center shrink-0 border-b border-teal-200/10 bg-teal-50/20">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-1.5 h-1.5 rounded-full ${colors.bg}`} />
+                        <span className={`text-[9px] font-semibold text-slate-800 uppercase tracking-wide`}>{shift}</span>
+                      </div>
+                      <span className={`text-[8px] font-semibold text-slate-700 bg-white/60 backdrop-blur-md px-1.5 py-0.5 rounded-full border border-white/30`}>
                         {shiftAgents.length}
                       </span>
                     </div>
-                    <DroppableContainer id={shift} className="p-2 grow overflow-y-auto scrollbar-hide">
+                    <DroppableContainer id={shift} className="p-1.5 overflow-y-auto">
                       <SortableContext
                         id={shift}
                         items={shiftAgents.map(a => a.id)}
                         strategy={verticalListSortingStrategy}
                       >
-                        <ul className="space-y-1 h-full">
+                        <ul className="flex flex-col gap-0.5">
                           {shiftAgents.map(agent => (
                             <SortableAgent 
                               key={agent.id} 
@@ -537,7 +545,9 @@ const RosterPage: React.FC = () => {
                             />
                           ))}
                           {shiftAgents.length === 0 && (
-                            <li className="flex items-center justify-center h-full text-gray-300 italic text-[10px]">Empty</li>
+                            <li className="flex flex-col items-center justify-center p-3 opacity-30 shrink-0 border-2 border-dashed border-white/20 rounded-lg">
+                              <span className="text-[8px] font-semibold uppercase tracking-tight text-slate-500 italic">No Personnel</span>
+                            </li>
                           )}
                         </ul>
                       </SortableContext>
@@ -547,157 +557,137 @@ const RosterPage: React.FC = () => {
               })}
             </div>
 
-            {/* Off Duty Section - Fixed Height */}
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col h-1/3 overflow-hidden">
-              <div className="px-4 py-2 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between shrink-0">
-                <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Off Duty / Leave / Emergency</h2>
-                <span className="bg-red-50 text-red-600 text-[9px] font-black px-2 py-0.5 rounded border border-red-100">
-                  {getOffDutyAgents().length} Agents
-                </span>
+            {/* Leaves & Week Off Section */}
+            {getOffDutyAgents().length > 0 && (
+              <div className="bg-white/20 backdrop-blur-xl rounded-xl border border-white/30 flex flex-col px-3 py-2 shadow-md">
+                <h3 className="text-xs font-semibold text-black uppercase tracking-widest mb-2">Leaves / Week Off</h3>
+                <div className="flex flex-wrap gap-1">
+                  {getOffDutyAgents().map(({ agent, reason }) => {
+                    const colors = getShiftColor(reason);
+                    return (
+                      <div key={agent.id} className={`${colors.card} px-2 py-1 rounded-lg flex items-center gap-1 shadow-sm`}>
+                        <span className="text-black font-semibold text-[11px] truncate">{agent.name}</span>
+                        <span className="text-[8px] font-semibold text-black/70 uppercase tracking-tight">{reason}</span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-              <DroppableContainer id="OFF_DUTY" className="p-3 grow overflow-y-auto scrollbar-hide">
+            )}
+
+            {/* Unassigned Pool Section */}
+            <div className="bg-white/20 backdrop-blur-xl rounded-2xl border border-white/30 flex flex-col h-1/4 overflow-hidden shadow-xl">
+              <div className="px-5 py-2 border-b border-white/20 bg-white/10 flex items-center justify-between shrink-0">
+                <h2 className="text-xs font-semibold text-black uppercase tracking-widest">Unassigned Pool</h2>
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={() => setIsModalOpen(true)}
+                    className="w-8 h-8 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center transition-all shadow-md active:scale-95"
+                    title="Add Agent"
+                  >
+                    <Plus size={16} />
+                  </button>
+                  <span className="bg-slate-900/20 text-black text-xs font-semibold px-2 py-1 rounded-md uppercase tracking-wider">
+                    {getUnassignedAgents().length} Personnel
+                  </span>
+                </div>
+              </div>
+              <DroppableContainer id="UNASSIGNED" className="p-2 h-auto max-h-full overflow-auto">
                 <SortableContext
-                  id="OFF_DUTY"
-                  items={getOffDutyAgents().map(item => item.agent.id)}
+                  id="UNASSIGNED"
+                  items={getUnassignedAgents().map(a => a.id)}
                   strategy={verticalListSortingStrategy}
                 >
-                  <div className="grid grid-cols-4 gap-2 h-full">
-                    {getOffDutyAgents().map(({ agent, reason }) => {
-                      const colors = getShiftColor(reason);
-                      return (
-                        <SortableAgent 
-                          key={agent.id} 
-                          agent={agent} 
-                          shift={reason} 
-                          colors={colors} 
-                          onShiftChange={updateShift}
-                        />
-                      );
-                    })}
-                    {getOffDutyAgents().length === 0 && (
-                      <div className="col-span-full flex items-center justify-center h-full text-gray-300 italic text-[10px]">All agents on duty</div>
-                    )}
+                  <div className="grid grid-cols-3 md:grid-cols-5 lg:grid-cols-8 gap-2 h-auto content-start pb-2">
+                    {getUnassignedAgents().map(agent => (
+                      <SortableAgent 
+                        key={agent.id} 
+                        agent={agent} 
+                        shift="Unassigned" 
+                        colors={{ bg: 'bg-blue-600', text: 'text-blue-600', light: 'bg-blue-100', border: 'border-blue-200', card: 'bg-blue-200' }} 
+                        onShiftChange={updateShift}
+                      />
+                    ))}
                   </div>
                 </SortableContext>
               </DroppableContainer>
             </div>
           </div>
-
-          {/* Sidebar (1/4) */}
-          <div className="w-1/4 flex flex-col bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-            <div className="p-3 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-2">
-                <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Unassigned Pool</h2>
-                <span className="bg-blue-50 text-blue-600 text-[9px] font-black px-2 py-0.5 rounded border border-blue-100">
-                  {getUnassignedAgents().length}
-                </span>
-              </div>
-              <button 
-                onClick={() => setIsModalOpen(true)}
-                className="p-1 hover:bg-blue-100 text-blue-600 rounded-md transition-colors"
-                title="Add Agent"
-              >
-                <Plus size={14} />
-              </button>
-            </div>
-            <DroppableContainer id="UNASSIGNED" className="flex-1 p-3 overflow-y-auto scrollbar-hide">
-              <SortableContext
-                id="UNASSIGNED"
-                items={getUnassignedAgents().map(a => a.id)}
-                strategy={verticalListSortingStrategy}
-              >
-                <div className="flex flex-col gap-1.5 h-full">
-                  {getUnassignedAgents().map(agent => (
-                    <SortableAgent 
-                      key={agent.id} 
-                      agent={agent} 
-                      shift="Unassigned" 
-                      colors={{ bg: 'bg-blue-400', text: 'text-blue-700', light: 'bg-blue-50', border: 'border-blue-100' }} 
-                      onShiftChange={updateShift}
-                    />
-                  ))}
-                  {getUnassignedAgents().length === 0 && (
-                    <div className="flex flex-col items-center justify-center h-full text-center py-8">
-                      <p className="text-gray-300 italic text-[10px]">Pool Empty</p>
-                    </div>
-                  )}
-                </div>
-              </SortableContext>
-            </DroppableContainer>
-          </div>
         </div>
 
         <DragOverlay>
           {activeId && activeAgent ? (
-            <div className={`flex items-center justify-between p-2 rounded-lg border-2 border-blue-400 bg-white shadow-2xl scale-105 opacity-90 w-48`}>
-              <div className="flex items-center space-x-2">
-                <div className={`w-8 h-8 ${getShiftColor(activeAgentShift || '').bg} rounded-lg flex items-center justify-center text-white text-xs font-black shadow-sm`}>
-                  {activeAgent.name.charAt(0)}
-                </div>
+            <div className={`flex items-center justify-between p-4 rounded-2xl border border-teal-200/20 bg-teal-50/40 backdrop-blur-2xl shadow-2xl scale-110 w-64`}>
+              <div className="flex items-center space-x-3 ml-2">
                 <div>
-                  <span className="text-gray-900 font-black text-xs block leading-tight">{activeAgent.name}</span>
+                  <span className="text-slate-800 font-black text-sm block leading-tight">{activeAgent.name}</span>
+                  <span className="text-[8px] font-black text-blue-500 uppercase tracking-widest mt-1 block">Relocating...</span>
                 </div>
               </div>
             </div>
           ) : null}
         </DragOverlay>
 
-        {/* Trash Zone - Appears when dragging */}
+        {/* Trash Zone - Left and Right Sides */}
         {activeId && (
-          <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-10 duration-300">
-            <DroppableContainer 
-              id="TRASH" 
-              className="group flex flex-col items-center justify-center w-32 h-32 rounded-full border-4 border-dashed border-red-200 bg-red-50/50 hover:bg-red-100 hover:border-red-400 transition-all"
-            >
-              <div className="text-red-400 group-hover:text-red-600 group-hover:scale-110 transition-all">
-                <Trash2 size={32} />
-              </div>
-              <span className="text-[10px] font-black text-red-400 uppercase tracking-widest mt-2">Drop to Delete</span>
-            </DroppableContainer>
-          </div>
+          <>
+            <div className="fixed left-0 top-1/2 -translate-y-1/2 z-50 w-20 h-24" id="TRASH"></div>
+            <div className="fixed right-0 top-1/2 -translate-y-1/2 z-50 w-20 h-24" id="TRASH"></div>
+          </>
         )}
       </DndContext>
 
-      {/* Add Agent Modal */}
+      {/* Light Theme Add Agent Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-100 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
-            <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-              <h3 className="text-lg font-black text-gray-900 tracking-tight">Add New Agent</h3>
+        <div className="fixed inset-0 flex items-center justify-center z-[100] p-6">
+          <div className="absolute inset-0 bg-slate-900/20 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
+          <div className="bg-teal-50/60 backdrop-blur-3xl rounded-[2rem] border border-teal-200/30 shadow-2xl w-full max-w-md overflow-hidden relative animate-in fade-in zoom-in duration-200">
+            <div className="p-8 pb-4">
+              <div className="flex items-center justify-between mb-8">
+                <div className="w-12 h-12 bg-blue-500/10 rounded-2xl flex items-center justify-center border border-teal-200/20">
+                  <Plus size={24} className="text-blue-600" />
+                </div>
+                <button 
+                  onClick={() => setIsModalOpen(false)}
+                  className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-teal-50/40 rounded-full transition-all"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              <h3 className="text-2xl font-black text-slate-800 tracking-tight mb-2">Register Personnel</h3>
+              <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mb-8">Add new agent to global database</p>
+              
+              <div className="space-y-6">
+                <div className="group">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1 group-focus-within:text-blue-600 transition-colors">
+                    Agent Name
+                  </label>
+                  <input 
+                    autoFocus
+                    type="text" 
+                    value={newAgentName}
+                    onChange={(e) => setNewAgentName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAddAgent()}
+                    placeholder="Enter full name"
+                    className="w-full px-5 py-4 bg-teal-50/30 backdrop-blur-md border border-teal-200/20 rounded-2xl focus:border-blue-500 focus:bg-teal-50/50 outline-none text-slate-800 font-bold transition-all placeholder:text-slate-400"
+                  />
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-8 pt-4 flex gap-4">
               <button 
                 onClick={() => setIsModalOpen(false)}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            <div className="p-6">
-              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
-                Agent Name
-              </label>
-              <input 
-                autoFocus
-                type="text" 
-                value={newAgentName}
-                onChange={(e) => setNewAgentName(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleAddAgent()}
-                placeholder="e.g. John Doe"
-                className="w-full px-4 py-3 rounded-xl border-2 border-gray-100 focus:border-blue-500 focus:ring-0 outline-none font-bold text-gray-800 transition-all placeholder:text-gray-300"
-              />
-            </div>
-            <div className="p-6 bg-gray-50/50 border-t border-gray-100 flex gap-3">
-              <button 
-                onClick={() => setIsModalOpen(false)}
-                className="flex-1 px-6 py-3 rounded-xl font-black text-sm text-gray-500 hover:bg-gray-100 transition-all active:scale-95"
+                className="flex-1 px-6 py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest text-slate-500 hover:bg-teal-50/40 transition-all active:scale-95"
               >
                 Cancel
               </button>
               <button 
                 onClick={handleAddAgent}
                 disabled={!newAgentName.trim()}
-                className="flex-1 px-6 py-3 rounded-xl font-black text-sm bg-blue-600 text-white hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/20 active:scale-95 disabled:opacity-50 disabled:shadow-none disabled:active:scale-100"
+                className="flex-1 px-6 py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest bg-blue-600 text-white hover:bg-blue-700 transition-all shadow-xl shadow-blue-600/20 active:scale-95 disabled:opacity-20"
               >
-                Add Agent
+                Confirm
               </button>
             </div>
           </div>

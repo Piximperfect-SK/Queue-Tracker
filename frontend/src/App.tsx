@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import RosterPage from './pages/RosterPage';
 import TrackerPage from './pages/TrackerPage';
 import SettingsPage from './pages/SettingsPage';
+import LogMonitorPage from './pages/LogMonitorPage';
 import { User, LogIn, ShieldAlert, Lock, Fingerprint, Loader2 } from 'lucide-react';
 import { syncData, socket } from './utils/socket';
+import bgVideo from './assets/video-background.mp4';
 
 function App() {
   const [currentUser, setCurrentUser] = useState<string | null>(localStorage.getItem('currentUser'));
@@ -109,28 +111,31 @@ function App() {
 
   // 1. Backend Down State
   if (isBackendDown) {
-    // ... same as before ...
     return (
-      <div className="h-screen w-screen bg-[#020617] flex items-center justify-center p-6 relative overflow-hidden font-sans">
-        <div className="absolute top-[-10%] left-[-10%] w-125 h-125 bg-red-500/10 rounded-full blur-[120px] animate-pulse" />
-        <div className="w-full max-w-105 relative">
-          <div className="bg-white/3 backdrop-blur-2xl rounded-[2.5rem] border border-white/8 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.5)] overflow-hidden p-10 text-center animate-in fade-in zoom-in duration-500">
-            <div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-red-500/20">
+      <div className="h-screen w-screen bg-slate-50 flex items-center justify-center p-6 relative overflow-hidden font-sans">
+        <video autoPlay muted loop playsInline className="absolute inset-0 w-full h-full object-cover scale-105">
+          <source src={bgVideo} type="video/mp4" />
+        </video>
+        <div className="absolute inset-0 bg-white/20 backdrop-blur-[2px]" />
+        
+        <div className="w-full max-w-105 relative z-10">
+          <div className="bg-white/60 backdrop-blur-3xl rounded-[2.5rem] border border-white/30 shadow-2xl overflow-hidden p-10 text-center animate-in fade-in zoom-in duration-500">
+            <div className="w-16 h-16 bg-red-500/10 text-red-600 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-white/20 shadow-sm">
               <ShieldAlert size={32} />
             </div>
-            <h1 className="text-3xl font-black text-white mb-2 tracking-tight">System Offline</h1>
-            <p className="text-slate-400 text-xs font-bold uppercase tracking-[0.2em] mb-10 leading-relaxed">
+            <h1 className="text-2xl font-black text-slate-800 mb-2 tracking-tight">System Offline</h1>
+            <p className="text-slate-500 text-[11px] font-bold uppercase tracking-[0.2em] mb-10 leading-relaxed">
               Establishing Secure Link... <br/>
-              <span className="opacity-50 text-[10px]">Server may be waking from sleep</span>
+              <span className="opacity-60 text-[10px]">Server may be waking from sleep</span>
             </p>
             <div className="space-y-4">
               <button 
                 onClick={() => window.location.reload()}
-                className="w-full bg-white/5 hover:bg-white/10 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all border border-white/10 active:scale-95"
+                className="w-full bg-slate-800 hover:bg-slate-900 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all shadow-lg active:scale-95"
               >
                 Manual Retry
               </button>
-              <div className="flex items-center justify-center gap-2 text-[9px] font-black uppercase tracking-[0.3em] text-slate-600">
+              <div className="flex items-center justify-center gap-2 text-[9px] font-black uppercase tracking-[0.3em] text-slate-500">
                 <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
                 <span>Auto-Reconnecting...</span>
               </div>
@@ -143,25 +148,33 @@ function App() {
 
   // 2. Auth State
   if (!isAuthenticated) {
-    // ... same as before but ensured no "Guest" ...
     return (
-      <div className="h-screen w-screen bg-[#020617] flex items-center justify-center p-6 relative overflow-hidden font-sans">
-        <div className="absolute top-[-10%] left-[-10%] w-125 h-125 bg-blue-500/10 rounded-full blur-[120px] animate-pulse" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-125 h-125 bg-purple-500/10 rounded-full blur-[120px] animate-pulse delay-700" />
+      <div className="h-screen w-screen bg-slate-50 flex items-center justify-center p-6 relative overflow-hidden font-sans">
+        {/* Background Video for Auth Screen */}
+        <video 
+          autoPlay 
+          muted 
+          loop 
+          playsInline
+          className="absolute inset-0 w-full h-full object-cover scale-105"
+        >
+          <source src={bgVideo} type="video/mp4" />
+        </video>
+        <div className="absolute inset-0 bg-teal-50/20 backdrop-blur-[2px]" />
         
-        <div className="w-full max-w-105 relative">
-          <div className="bg-white/3 backdrop-blur-2xl rounded-[2.5rem] border border-white/8 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.5)] overflow-hidden p-10 animate-in fade-in zoom-in duration-700">
+        <div className="w-full max-w-105 relative z-10">
+          <div className="bg-teal-50/80 backdrop-blur-3xl rounded-[2.5rem] border border-teal-200/50 shadow-2xl overflow-hidden p-10 animate-in fade-in zoom-in duration-500">
             <div className="text-center mb-10">
-              <div className="w-16 h-16 bg-linear-to-tr from-blue-600 to-indigo-500 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-blue-600/20 rotate-3">
-                <Fingerprint size={32} className="text-white" />
+              <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-blue-600/40">
+                <Fingerprint size={28} className="text-white" />
               </div>
-              <h1 className="text-3xl font-black text-white mb-2 tracking-tight">Access Gate</h1>
-              <p className="text-slate-400 text-xs font-bold uppercase tracking-[0.2em]">Authorized Personnel Only</p>
+              <h1 className="text-2xl font-black text-slate-900 mb-1 tracking-tight">Access Gate</h1>
+              <p className="text-slate-600 text-[10px] font-black uppercase tracking-widest">Authorized Personnel Only</p>
             </div>
 
             <form onSubmit={handleLogin} className="space-y-6">
               {authError && (
-                <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-400 text-[10px] font-black uppercase tracking-widest text-center animate-pulse">
+                <div className="p-4 bg-rose-600/10 border border-rose-500/30 rounded-2xl text-rose-700 text-[10px] font-black uppercase tracking-widest text-center animate-pulse">
                   {authError}
                 </div>
               )}
@@ -169,8 +182,8 @@ function App() {
               <div className="space-y-4">
                 <div className="group">
                   <div className="flex items-center gap-2 mb-2 ml-1">
-                    <User size={12} className="text-slate-500 group-focus-within:text-blue-400 transition-colors" />
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest group-focus-within:text-blue-400 transition-colors">Identification</label>
+                    <User size={12} className="text-slate-500 group-focus-within:text-blue-600 transition-colors" />
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest group-focus-within:text-blue-600 transition-colors">Identification</label>
                   </div>
                   <input 
                     autoFocus
@@ -179,15 +192,15 @@ function App() {
                     onChange={(e) => setTempName(e.target.value)}
                     placeholder="Enter your full name"
                     disabled={isVerifying}
-                    className="w-full px-5 py-4 bg-white/3 border border-white/8 rounded-2xl focus:border-blue-500/50 focus:bg-white/6 outline-none text-white font-bold transition-all placeholder:text-slate-600"
+                    className="w-full px-5 py-4 bg-teal-50/50 border border-teal-200/40 rounded-2xl focus:border-blue-500 focus:bg-teal-50/100 outline-none text-slate-900 font-black transition-all placeholder:text-slate-400"
                     required
                   />
                 </div>
 
                 <div className="group">
                   <div className="flex items-center gap-2 mb-2 ml-1">
-                    <Lock size={12} className="text-slate-500 group-focus-within:text-blue-400 transition-colors" />
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest group-focus-within:text-blue-400 transition-colors">Security Key</label>
+                    <Lock size={12} className="text-slate-500 group-focus-within:text-blue-600 transition-colors" />
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest group-focus-within:text-blue-600 transition-colors">Security Key</label>
                   </div>
                   <input 
                     type="password" 
@@ -195,7 +208,7 @@ function App() {
                     onChange={(e) => setTempKey(e.target.value)}
                     placeholder="••••••••••••"
                     disabled={isVerifying}
-                    className="w-full px-5 py-4 bg-white/3 border border-white/8 rounded-2xl focus:border-blue-500/50 focus:bg-white/6 outline-none text-white font-bold transition-all placeholder:text-slate-600"
+                    className="w-full px-5 py-4 bg-teal-50/50 border border-teal-200/40 rounded-2xl focus:border-blue-500 focus:bg-teal-50/100 outline-none text-slate-900 font-black transition-all placeholder:text-slate-400"
                     required
                   />
                 </div>
@@ -204,13 +217,13 @@ function App() {
               <button 
                 type="submit"
                 disabled={isVerifying}
-                className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-blue-600/50 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all shadow-lg shadow-blue-600/20 active:scale-[0.98] flex items-center justify-center gap-3 group"
+                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all shadow-xl shadow-blue-600/30 active:scale-[0.98] flex items-center justify-center gap-3"
               >
                 {isVerifying ? (
                   <Loader2 size={18} className="animate-spin" />
                 ) : (
                   <>
-                    <LogIn size={18} className="group-hover:translate-x-1 transition-transform" />
+                    <LogIn size={18} />
                     <span>Establish Link</span>
                   </>
                 )}
@@ -218,15 +231,11 @@ function App() {
             </form>
 
             <div className="mt-8 text-center">
-              <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/3 rounded-full border border-white/5">
-                <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-                <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Protocol Secure</span>
+              <div className="inline-flex items-center gap-3 px-4 py-2 bg-slate-900/5 rounded-full border border-slate-900/10">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Secure Link Active</span>
               </div>
             </div>
-          </div>
-          
-          <div className="mt-8 text-center text-slate-600 text-[10px] font-bold uppercase tracking-[0.3em]">
-            &copy; 2026 Queue Tracker System
           </div>
         </div>
       </div>
@@ -236,17 +245,32 @@ function App() {
   // 3. Main App State
   return (
     <Router>
-      <div className="h-screen w-screen bg-slate-50 flex flex-col overflow-hidden fixed inset-0 font-sans">
-        <Navbar currentUser={currentUser!} onLogout={handleLogout} onlineUsers={onlineUsers} />
-        <main className="flex-1 w-full overflow-hidden min-h-0 relative">
-          <div className="absolute inset-0 overflow-hidden flex flex-col">
+      <div className="h-screen w-full relative overflow-hidden font-sans selection:bg-blue-500/30 text-slate-800">
+        {/* Background Video */}
+        <video 
+          autoPlay 
+          muted 
+          loop 
+          playsInline
+          className="absolute inset-0 w-full h-full object-cover scale-105"
+        >
+          <source src={bgVideo} type="video/mp4" />
+        </video>
+        
+        {/* Teal Overlay for Glassmorphism */}
+        <div className="absolute inset-0 bg-teal-50/40 backdrop-blur-[2px]" />
+
+        <div className="relative z-10 flex flex-col h-full">
+          <Navbar currentUser={currentUser!} onLogout={handleLogout} onlineUsers={onlineUsers} />
+          <main className="flex-1 w-full max-w-full mx-auto px-3 py-2 overflow-hidden">
             <Routes>
               <Route path="/" element={<RosterPage />} />
-              <Route path="/tracker" element={<TrackerPage />} />
+              <Route path="/tracker" element={<TrackerPage currentUser={currentUser!} />} />
               <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/logs" element={<LogMonitorPage />} />
             </Routes>
-          </div>
-        </main>
+          </main>
+        </div>
       </div>
     </Router>
   );

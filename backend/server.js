@@ -5,6 +5,7 @@ import cors from 'cors';
 import { rateLimit } from 'express-rate-limit';
 import mongoose from 'mongoose';
 import path from 'path';
+import 'dotenv/config';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);

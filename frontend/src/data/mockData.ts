@@ -20,7 +20,8 @@ export const SHIFTS: ShiftType[] = ['6AM-3PM', '1PM-10PM', '2PM-11PM', '10PM-7AM
 // Sample Roster for a few days
 export const MOCK_ROSTER: RosterEntry[] = [];
 
-const dates = ['2026-01-05', '2026-01-06', '2026-01-07'];
+const today = new Date().toISOString().split('T')[0];
+const dates = [today, '2026-01-05', '2026-01-06', '2026-01-07'];
 
 dates.forEach(date => {
   MOCK_AGENTS.forEach((agent, index) => {
