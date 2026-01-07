@@ -20,7 +20,7 @@ function App() {
 
   useEffect(() => {
     const handleConnect = () => {
-      console.log('CONNECTED to server:', socket.io.uri);
+      console.log('CONNECTED to server');
       setIsBackendDown(false);
       if (currentUser) {
         syncData.join(currentUser, accessKey);
@@ -28,7 +28,7 @@ function App() {
     };
 
     const handleConnectError = (error: any) => {
-      console.error('CONNECTION ERROR to:', socket.io.uri, error);
+      console.error('CONNECTION ERROR:', error);
       setIsBackendDown(true);
       setIsVerifying(false);
     };
@@ -130,16 +130,16 @@ function App() {
     return (
       <div className="h-screen w-screen bg-[#020617] flex items-center justify-center p-6 relative overflow-hidden font-sans">
         {/* Animated Background Orbs */}
-        <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-blue-500/10 rounded-full blur-[120px] animate-pulse" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-purple-500/10 rounded-full blur-[120px] animate-pulse delay-700" />
+        <div className="absolute top-[-10%] left-[-10%] w-125 h-125 bg-blue-500/10 rounded-full blur-[120px] animate-pulse" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-125 h-125 bg-purple-500/10 rounded-full blur-[120px] animate-pulse delay-700" />
         
-        <div className="w-full max-w-[420px] relative">
+        <div className="w-full max-w-105 relative">
           {/* Glass Card */}
-          <div className="bg-white/[0.03] backdrop-blur-2xl rounded-[2.5rem] border border-white/[0.08] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.5)] overflow-hidden p-10 animate-in fade-in zoom-in duration-700">
+          <div className="bg-white/3 backdrop-blur-2xl rounded-[2.5rem] border border-white/8 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.5)] overflow-hidden p-10 animate-in fade-in zoom-in duration-700">
             
             {/* Header */}
             <div className="text-center mb-10">
-              <div className="w-16 h-16 bg-gradient-to-tr from-blue-600 to-indigo-500 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-blue-600/20 rotate-3">
+              <div className="w-16 h-16 bg-linear-to-tr from-blue-600 to-indigo-500 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-blue-600/20 rotate-3">
                 <Fingerprint size={32} className="text-white" />
               </div>
               <h1 className="text-3xl font-black text-white mb-2 tracking-tight">Access Gate</h1>
@@ -166,7 +166,7 @@ function App() {
                     onChange={(e) => setTempName(e.target.value)}
                     placeholder="Enter your full name"
                     disabled={isVerifying}
-                    className="w-full px-5 py-4 bg-white/[0.03] border border-white/[0.08] rounded-2xl focus:border-blue-500/50 focus:bg-white/[0.06] outline-none text-white font-bold transition-all placeholder:text-slate-600"
+                    className="w-full px-5 py-4 bg-white/3 border border-white/8 rounded-2xl focus:border-blue-500/50 focus:bg-white/6 outline-none text-white font-bold transition-all placeholder:text-slate-600"
                     required
                   />
                 </div>
@@ -182,7 +182,7 @@ function App() {
                     onChange={(e) => setTempKey(e.target.value)}
                     placeholder="••••••••••••"
                     disabled={isVerifying}
-                    className="w-full px-5 py-4 bg-white/[0.03] border border-white/[0.08] rounded-2xl focus:border-blue-500/50 focus:bg-white/[0.06] outline-none text-white font-bold transition-all placeholder:text-slate-600"
+                    className="w-full px-5 py-4 bg-white/3 border border-white/8 rounded-2xl focus:border-blue-500/50 focus:bg-white/6 outline-none text-white font-bold transition-all placeholder:text-slate-600"
                     required
                   />
                 </div>
@@ -205,7 +205,7 @@ function App() {
             </form>
 
             <div className="mt-8 text-center">
-              <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/[0.03] rounded-full border border-white/[0.05]">
+              <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/3 rounded-full border border-white/5">
                 <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
                 <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Protocol Secure</span>
               </div>
@@ -223,7 +223,7 @@ function App() {
   return (
     <Router>
       <div className="h-screen w-screen bg-slate-50 flex flex-col overflow-hidden fixed inset-0">
-        <Navbar currentUser={currentUser} onLogout={handleLogout} onlineUsers={onlineUsers} />
+        <Navbar currentUser={currentUser!} onLogout={handleLogout} onlineUsers={onlineUsers} />
         <main className="flex-1 w-full overflow-hidden min-h-0 relative">
           <div className="absolute inset-0 overflow-hidden flex flex-col">
             <Routes>
