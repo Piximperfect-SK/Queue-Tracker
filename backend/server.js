@@ -18,6 +18,7 @@ const limiter = rateLimit({
   max: 100, // Limit each IP to 100 requests per window
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => req.path.startsWith('/socket.io/'), // Don't rate limit socket handshake
 });
 app.use(limiter);
 
@@ -26,17 +27,19 @@ app.get('/', (req, res) => res.status(200).send('Queue Tracker API is Live!'));
 // Add health check endpoint
 app.get('/health', (req, res) => res.status(200).send('Backend is running'));
 
-const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
+const FRONTEND_URL = (process.env.FRONTEND_URL || "http://localhost:5173").replace(/\/$/, "");
 
 // STRICT CORS: Only allow the authorized frontend and localhost for development
 const corsOptions = {
   origin: (origin, callback) => {
-    const isLocalhost = origin && (origin.includes('localhost') || origin.includes('127.0.0.1'));
+    // If no origin (like mobile apps or curl), or if it matches our allowed patterns
+    const cleanOrigin = origin ? origin.replace(/\/$/, "") : null;
+    const isLocalhost = cleanOrigin && (cleanOrigin.includes('localhost') || cleanOrigin.includes('127.0.0.1'));
     
-    if (!origin || isLocalhost || origin === FRONTEND_URL) {
+    if (!origin || isLocalhost || cleanOrigin === FRONTEND_URL) {
       callback(null, true);
     } else {
-      console.warn(`BLOCKED CORS connection from: ${origin}`);
+      console.warn(`BLOCKED CORS connection from: ${origin}. Expected: ${FRONTEND_URL}`);
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -58,7 +61,11 @@ const sanitize = (text) => {
   return text.replace(/<[^>]*>/g, '').trim();
 };
 
-const TEAM_ACCESS_KEY = process.env.TEAM_ACCESS_KEY || ""; // If empty, no key required
+const TEAM_ACCESS_KEY = (process.env.TEAM_ACCESS_KEY || "").trim(); // Ensure no sneaky spaces
+console.log('--- SECURITY CONFIG ---');
+console.log('Team Access Key:', TEAM_ACCESS_KEY ? 'PROTECTED (Key set)' : 'UNPROTECTED (No key set)');
+console.log('Frontend URL:', FRONTEND_URL);
+console.log('-----------------------');
 
 // Socket Throttling Helper
 const eventCounts = new Map();
@@ -172,14 +179,20 @@ io.on('connection', (socket) => {
 
   socket.on('join', ({ username, accessKey }) => {
     const cleanName = sanitize(username);
+    const cleanKey = (accessKey || "").trim();
+
     // Security check: If a key is required, validate it
-    if (TEAM_ACCESS_KEY && accessKey !== TEAM_ACCESS_KEY) {
-      console.warn(`Unauthorized join attempt from ${cleanName} with key: ${accessKey}`);
+    if (TEAM_ACCESS_KEY && cleanKey !== TEAM_ACCESS_KEY) {
+      console.warn(`Unauthorized join attempt from ${cleanName} with key: ${cleanKey}`);
       return socket.emit('error_message', 'Invalid Team Access Key. Access Denied.');
     }
 
     onlineUsers.set(socket.id, cleanName);
     broadcastPresence();
+    
+    // Send full data again upon successful join to ensure sync
+    socket.emit('init', db);
+    
     console.log(`${cleanName} joined. Online:`, Array.from(onlineUsers.values()));
   });
 

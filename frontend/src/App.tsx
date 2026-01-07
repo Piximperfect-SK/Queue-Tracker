@@ -4,7 +4,7 @@ import Navbar from './components/Navbar';
 import RosterPage from './pages/RosterPage';
 import TrackerPage from './pages/TrackerPage';
 import SettingsPage from './pages/SettingsPage';
-import { User, LogIn } from 'lucide-react';
+import { User, LogIn, ShieldAlert } from 'lucide-react';
 import { syncData, socket } from './utils/socket';
 
 function App() {
@@ -14,10 +14,12 @@ function App() {
   const [tempKey, setTempKey] = useState('');
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [isBackendDown, setIsBackendDown] = useState(false);
 
   useEffect(() => {
     const handleConnect = () => {
       console.log('CONNECTED to server:', socket.io.uri);
+      setIsBackendDown(false);
       if (currentUser) {
         syncData.join(currentUser, accessKey);
       }
@@ -25,6 +27,7 @@ function App() {
 
     const handleConnectError = (error: any) => {
       console.error('CONNECTION ERROR to:', socket.io.uri, error);
+      setIsBackendDown(true);
     };
 
     const handleErrorMessage = (msg: string) => {
@@ -77,6 +80,34 @@ function App() {
     setCurrentUser(null);
     setAccessKey('');
   };
+
+  if (isBackendDown) {
+    return (
+      <div className="h-screen w-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-3xl shadow-xl w-full max-w-md p-10 text-center border border-slate-100">
+          <div className="w-20 h-20 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
+            <ShieldAlert size={40} />
+          </div>
+          <h1 className="text-2xl font-black text-slate-800 mb-3 tracking-tight">System Offline</h1>
+          <p className="text-slate-500 font-medium mb-8 leading-relaxed text-sm">
+            The service is currently down or waking up (Render free tier). Connection will be restored automatically.
+          </p>
+          <div className="space-y-3">
+            <button 
+              onClick={() => window.location.reload()}
+              className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-slate-800 transition-all shadow-lg shadow-slate-200"
+            >
+              Reload Application
+            </button>
+            <div className="flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400 py-2">
+              <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+              <span>Auto-retrying...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!currentUser) {
     return (
