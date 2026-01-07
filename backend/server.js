@@ -13,7 +13,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 
 // MongoDB Connection
-const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:21017/queue_tracker";
+const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/queue_tracker";
 mongoose.connect(MONGODB_URI)
   .then(() => console.log('Successfully connected to MongoDB'))
   .catch(err => console.error('MongoDB connection error:', err));
@@ -104,13 +104,11 @@ const FRONTEND_URL = (process.env.FRONTEND_URL || "http://localhost:5173").repla
 // STRICT CORS: Only allow the authorized frontend and localhost for development
 const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
+    // If no origin (like mobile apps or curl), or if it matches our allowed patterns
+    const cleanOrigin = origin ? origin.replace(/\/$/, "") : null;
+    const isLocalhost = cleanOrigin && (cleanOrigin.includes('localhost') || cleanOrigin.includes('127.0.0.1'));
     
-    const cleanOrigin = origin.replace(/\/$/, "");
-    const isLocalhost = cleanOrigin.includes('localhost') || cleanOrigin.includes('127.0.0.1');
-    const isNetlify = cleanOrigin.includes('queue-tracker2026.netlify.app');
-    
-    if (isLocalhost || isNetlify || cleanOrigin === FRONTEND_URL) {
+    if (!origin || isLocalhost || cleanOrigin === FRONTEND_URL) {
       callback(null, true);
     } else {
       console.warn(`BLOCKED CORS connection from: ${origin}. Expected: ${FRONTEND_URL}`);
@@ -163,6 +161,16 @@ const socketRateLimit = (socket, next) => {
     return false; // Stop processing
   }
   return true;
+};
+
+const DATA_FILE = path.join(__dirname, 'data.json');
+
+// Load initial data
+let db = {
+  agents: [],
+  roster: [],
+  stats: [],
+  logs: {}
 };
 
 let onlineUsers = new Map(); // socket.id -> username
@@ -231,6 +239,8 @@ io.on('connection', async (socket) => {
   // Send initial data
   await sendSyncData();
   
+  // IMMEDIATELY broadcast current online users to EVERYONE
+  // This ensures new tabs see everyone and everyone sees the new connection attempt
   const broadcastPresence = () => {
     io.emit('presence_updated', Array.from(onlineUsers.values()));
   };
@@ -249,6 +259,7 @@ io.on('connection', async (socket) => {
     const cleanName = sanitize(username);
     const cleanKey = (accessKey || "").trim();
 
+    // Security check: If a key is required, validate it
     if (TEAM_ACCESS_KEY && cleanKey !== TEAM_ACCESS_KEY) {
       console.warn(`Unauthorized join attempt from ${cleanName} with key: ${cleanKey}`);
       return socket.emit('error_message', 'Invalid Team Access Key. Access Denied.');
@@ -256,12 +267,15 @@ io.on('connection', async (socket) => {
 
     onlineUsers.set(socket.id, cleanName);
     broadcastPresence();
+    
+    // Send full data again upon successful join to ensure sync
     await sendSyncData();
     
     console.log(`${cleanName} joined. Online:`, Array.from(onlineUsers.values()));
   });
 
   socket.on('update_agents', async (agents) => {
+    // Sanitize agent names
     const cleanAgents = agents.map(a => ({ ...a, name: sanitize(a.name) }));
     await State.updateOne({ key: 'global' }, { $set: { agents: cleanAgents } });
     socket.broadcast.emit('agents_updated', cleanAgents);
@@ -290,7 +304,7 @@ io.on('connection', async (socket) => {
 
   socket.on('disconnect', () => {
     const username = onlineUsers.get(socket.id);
-    eventCounts.delete(socket.id);
+    eventCounts.delete(socket.id); // Clean up rate limit tracking
     if (username) {
       onlineUsers.delete(socket.id);
       io.emit('presence_updated', Array.from(onlineUsers.values()));

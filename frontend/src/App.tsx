@@ -20,7 +20,7 @@ function App() {
 
   useEffect(() => {
     const handleConnect = () => {
-      console.log('CONNECTED to server');
+      console.log('CONNECTED to server:', socket.io.uri);
       setIsBackendDown(false);
       if (currentUser) {
         syncData.join(currentUser, accessKey);
@@ -28,12 +28,8 @@ function App() {
     };
 
     const handleConnectError = (error: any) => {
-      console.error('CONNECTION ERROR:', error);
-      // Only show backend down if we aren't already authenticated
-      // to prevent interrupting active users during brief blips
-      if (!isAuthenticated) {
-        setIsBackendDown(true);
-      }
+      console.error('CONNECTION ERROR to:', socket.io.uri, error);
+      setIsBackendDown(true);
       setIsVerifying(false);
     };
 
@@ -105,17 +101,19 @@ function App() {
   if (isBackendDown) {
     return (
       <div className="h-screen w-screen bg-[#020617] flex items-center justify-center p-6 relative overflow-hidden font-sans">
-        <div className="absolute top-[-10%] left-[-10%] w-125 h-125 bg-red-500/5 rounded-full blur-[120px]" />
+        {/* Animated Background Orbs */}
+        <div className="absolute top-[-10%] left-[-10%] w-125 h-125 bg-red-500/10 rounded-full blur-[120px] animate-pulse" />
         
         <div className="w-full max-w-105 relative">
+          {/* Glass Card */}
           <div className="bg-white/3 backdrop-blur-2xl rounded-[2.5rem] border border-white/8 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.5)] overflow-hidden p-10 text-center animate-in fade-in zoom-in duration-500">
             <div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-red-500/20">
               <ShieldAlert size={32} />
             </div>
-            <h1 className="text-2xl font-black text-white mb-2 tracking-tight">System Offline</h1>
-            <p className="text-slate-400 text-xs font-medium mb-10 leading-relaxed uppercase tracking-widest">
-              Establishing reach... <br/>
-              <span className="opacity-50 text-[10px]">Server may be waking up</span>
+            <h1 className="text-3xl font-black text-white mb-2 tracking-tight">System Offline</h1>
+            <p className="text-slate-400 text-xs font-bold uppercase tracking-[0.2em] mb-10 leading-relaxed">
+              Establishing Secure Link... <br/>
+              <span className="opacity-50 text-[10px]">Server may be waking from sleep</span>
             </p>
             
             <div className="space-y-4">
@@ -128,7 +126,7 @@ function App() {
               
               <div className="flex items-center justify-center gap-2 text-[9px] font-black uppercase tracking-[0.3em] text-slate-600">
                 <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
-                <span>Auto-Linking...</span>
+                <span>Auto-Reconnecting...</span>
               </div>
             </div>
           </div>
@@ -235,6 +233,82 @@ function App() {
     <Router>
       <div className="h-screen w-screen bg-slate-50 flex flex-col overflow-hidden fixed inset-0">
         <Navbar currentUser={currentUser!} onLogout={handleLogout} onlineUsers={onlineUsers} />
+                <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-400 text-[10px] font-black uppercase tracking-widest text-center animate-pulse">
+                  {authError}
+                </div>
+              )}
+
+              <div className="space-y-4">
+                <div className="group">
+                  <div className="flex items-center gap-2 mb-2 ml-1">
+                    <User size={12} className="text-slate-500 group-focus-within:text-blue-400 transition-colors" />
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest group-focus-within:text-blue-400 transition-colors">Identification</label>
+                  </div>
+                  <input 
+                    autoFocus
+                    type="text" 
+                    value={tempName}
+                    onChange={(e) => setTempName(e.target.value)}
+                    placeholder="Enter your full name"
+                    disabled={isVerifying}
+                    className="w-full px-5 py-4 bg-white/[0.03] border border-white/[0.08] rounded-2xl focus:border-blue-500/50 focus:bg-white/[0.06] outline-none text-white font-bold transition-all placeholder:text-slate-600"
+                    required
+                  />
+                </div>
+
+                <div className="group">
+                  <div className="flex items-center gap-2 mb-2 ml-1">
+                    <Lock size={12} className="text-slate-500 group-focus-within:text-blue-400 transition-colors" />
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest group-focus-within:text-blue-400 transition-colors">Security Key</label>
+                  </div>
+                  <input 
+                    type="password" 
+                    value={tempKey}
+                    onChange={(e) => setTempKey(e.target.value)}
+                    placeholder="••••••••••••"
+                    disabled={isVerifying}
+                    className="w-full px-5 py-4 bg-white/[0.03] border border-white/[0.08] rounded-2xl focus:border-blue-500/50 focus:bg-white/[0.06] outline-none text-white font-bold transition-all placeholder:text-slate-600"
+                    required
+                  />
+                </div>
+              </div>
+
+              <button 
+                type="submit"
+                disabled={isVerifying}
+                className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-blue-600/50 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all shadow-lg shadow-blue-600/20 active:scale-[0.98] flex items-center justify-center gap-3 group"
+              >
+                {isVerifying ? (
+                  <Loader2 size={18} className="animate-spin" />
+                ) : (
+                  <>
+                    <LogIn size={18} className="group-hover:translate-x-1 transition-transform" />
+                    <span>Establish Link</span>
+                  </>
+                )}
+              </button>
+            </form>
+
+            <div className="mt-8 text-center">
+              <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/[0.03] rounded-full border border-white/[0.05]">
+                <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Protocol Secure</span>
+              </div>
+            </div>
+          </div>
+          
+          <div className="mt-8 text-center text-slate-600 text-[10px] font-bold uppercase tracking-[0.3em]">
+            &copy; 2026 Queue Tracker System
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <Router>
+      <div className="h-screen w-screen bg-slate-50 flex flex-col overflow-hidden fixed inset-0">
+        <Navbar currentUser={currentUser} onLogout={handleLogout} onlineUsers={onlineUsers} />
         <main className="flex-1 w-full overflow-hidden min-h-0 relative">
           <div className="absolute inset-0 overflow-hidden flex flex-col">
             <Routes>
