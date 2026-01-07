@@ -32,11 +32,13 @@ const FRONTEND_URL = (process.env.FRONTEND_URL || "http://localhost:5173").repla
 // STRICT CORS: Only allow the authorized frontend and localhost for development
 const corsOptions = {
   origin: (origin, callback) => {
-    // If no origin (like mobile apps or curl), or if it matches our allowed patterns
-    const cleanOrigin = origin ? origin.replace(/\/$/, "") : null;
-    const isLocalhost = cleanOrigin && (cleanOrigin.includes('localhost') || cleanOrigin.includes('127.0.0.1'));
+    if (!origin) return callback(null, true);
     
-    if (!origin || isLocalhost || cleanOrigin === FRONTEND_URL) {
+    const cleanOrigin = origin.replace(/\/$/, "");
+    const isLocalhost = cleanOrigin.includes('localhost') || cleanOrigin.includes('127.0.0.1');
+    const isNetlify = cleanOrigin.includes('queue-tracker2026.netlify.app');
+    
+    if (isLocalhost || isNetlify || cleanOrigin === FRONTEND_URL) {
       callback(null, true);
     } else {
       console.warn(`BLOCKED CORS connection from: ${origin}. Expected: ${FRONTEND_URL}`);

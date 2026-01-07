@@ -29,7 +29,11 @@ function App() {
 
     const handleConnectError = (error: any) => {
       console.error('CONNECTION ERROR:', error);
-      setIsBackendDown(true);
+      // Only show backend down if we aren't already authenticated
+      // to prevent interrupting active users during brief blips
+      if (!isAuthenticated) {
+        setIsBackendDown(true);
+      }
       setIsVerifying(false);
     };
 
@@ -100,25 +104,32 @@ function App() {
 
   if (isBackendDown) {
     return (
-      <div className="h-screen w-screen bg-slate-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-3xl shadow-xl w-full max-w-md p-10 text-center border border-slate-100">
-          <div className="w-20 h-20 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
-            <ShieldAlert size={40} />
-          </div>
-          <h1 className="text-2xl font-black text-slate-800 mb-3 tracking-tight">System Offline</h1>
-          <p className="text-slate-500 font-medium mb-8 leading-relaxed text-sm">
-            The service is currently down or waking up (Render free tier). Connection will be restored automatically.
-          </p>
-          <div className="space-y-3">
-            <button 
-              onClick={() => window.location.reload()}
-              className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-slate-800 transition-all shadow-lg shadow-slate-200"
-            >
-              Reload Application
-            </button>
-            <div className="flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400 py-2">
-              <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-              <span>Auto-retrying...</span>
+      <div className="h-screen w-screen bg-[#020617] flex items-center justify-center p-6 relative overflow-hidden font-sans">
+        <div className="absolute top-[-10%] left-[-10%] w-125 h-125 bg-red-500/5 rounded-full blur-[120px]" />
+        
+        <div className="w-full max-w-105 relative">
+          <div className="bg-white/3 backdrop-blur-2xl rounded-[2.5rem] border border-white/8 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.5)] overflow-hidden p-10 text-center animate-in fade-in zoom-in duration-500">
+            <div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-red-500/20">
+              <ShieldAlert size={32} />
+            </div>
+            <h1 className="text-2xl font-black text-white mb-2 tracking-tight">System Offline</h1>
+            <p className="text-slate-400 text-xs font-medium mb-10 leading-relaxed uppercase tracking-widest">
+              Establishing reach... <br/>
+              <span className="opacity-50 text-[10px]">Server may be waking up</span>
+            </p>
+            
+            <div className="space-y-4">
+              <button 
+                onClick={() => window.location.reload()}
+                className="w-full bg-white/5 hover:bg-white/10 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all border border-white/10 active:scale-95"
+              >
+                Manual Retry
+              </button>
+              
+              <div className="flex items-center justify-center gap-2 text-[9px] font-black uppercase tracking-[0.3em] text-slate-600">
+                <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
+                <span>Auto-Linking...</span>
+              </div>
             </div>
           </div>
         </div>
