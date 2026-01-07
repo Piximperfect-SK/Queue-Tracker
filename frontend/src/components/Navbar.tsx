@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Calendar, BarChart2, Settings, LogOut, Wifi, WifiOff } from 'lucide-react';
+import { Calendar, BarChart2, Settings, LogOut, Activity } from 'lucide-react';
 import { socket } from '../utils/socket';
 
 interface NavbarProps {
@@ -26,80 +26,84 @@ const Navbar: React.FC<NavbarProps> = ({ currentUser, onLogout, onlineUsers }) =
   }, []);
 
   return (
-    <nav className="bg-white border-b border-slate-200 shrink-0">
+    <nav className="bg-teal-50/40 backdrop-blur-2xl border-b border-teal-200/20 shrink-0 sticky top-0 z-50 shadow-sm">
       <div className="max-w-screen-2xl mx-auto px-6">
-        <div className="flex justify-between h-11 items-center">
-          <div className="flex items-center space-x-3">
-            <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center text-white font-black text-base">Q</div>
-            <span className="text-base font-black text-slate-800 tracking-tight">QueueTracker</span>
+        <div className="flex justify-between h-14 items-center">
+          <div className="flex items-center space-x-4">
+            <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center text-white font-black text-xl shadow-lg shadow-blue-600/20">Q</div>
+            <span className="text-lg font-black text-slate-800 tracking-tight">QueueTracker</span>
             
-            <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-tighter ml-2 ${isConnected ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
-              {isConnected ? <Wifi size={10} /> : <WifiOff size={10} />}
-              {isConnected ? 'Sync On' : 'Offline'}
+            <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ml-2 border transition-colors ${isConnected ? 'bg-green-500/20 text-green-700 border-green-500/20' : 'bg-red-500/20 text-red-700 border-red-500/20'}`}>
+              <div className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+              {isConnected ? 'Sync Active' : 'Offline'}
             </div>
           </div>
           
-          <div className="flex items-center space-x-6">
+          <div className="flex items-center space-x-8">
             {/* Online Users Indicator */}
-            <div className="flex items-center gap-2 px-2 py-1 bg-slate-50/50 rounded-full border border-slate-100">
-              <div className="flex -space-x-1.5">
+            <div className="flex items-center gap-3 px-3 py-1.5 bg-teal-50/30 rounded-full border border-teal-200/20">
+              <div className="flex -space-x-2">
                 {[...new Set(onlineUsers.filter(u => u !== currentUser))].map((user, i) => (
                   <div 
                     key={i} 
-                    className="group relative flex items-center bg-white border border-slate-200 rounded-full h-6 transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] hover:z-10 hover:pr-3 hover:pl-1 hover:space-x-2 overflow-hidden max-w-6 hover:max-w-50 shadow-sm cursor-default"
+                    className="group relative flex items-center bg-teal-50/50 border border-teal-200/30 rounded-full h-7 transition-all duration-500 hover:z-10 hover:pr-4 hover:pl-1 hover:space-x-3 overflow-hidden max-w-[28px] hover:max-w-50 shadow-sm cursor-default"
                   >
-                    <div className="w-5 h-5 shrink-0 rounded-full flex items-center justify-center text-[8px] font-black text-white bg-slate-400">
+                    <div className="w-5 h-5 shrink-0 rounded-full flex items-center justify-center text-[10px] font-black text-white bg-blue-500 shadow-sm">
                       {user.charAt(0).toUpperCase()}
                     </div>
-                    <span className="text-[9px] font-black text-slate-700 uppercase tracking-wider whitespace-nowrap opacity-0 group-hover:opacity-100 transition-all duration-300 delay-100">
+                    <span className="text-[10px] font-black text-slate-700 uppercase tracking-widest whitespace-nowrap opacity-0 group-hover:opacity-100 transition-all duration-300 delay-100">
                       {user}
                     </span>
                   </div>
                 ))}
                 {onlineUsers.length <= 1 && (
-                  <div className="w-5 h-5 rounded-full border border-dashed border-slate-200 flex items-center justify-center">
-                    <div className="w-1 h-1 bg-slate-200 rounded-full" />
+                  <div className="w-7 h-7 rounded-full border border-dashed border-slate-400 flex items-center justify-center bg-teal-50/10">
+                    <div className="w-1.5 h-1.5 bg-slate-400 rounded-full" />
                   </div>
                 )}
               </div>
-              <div className="flex items-center gap-1.5 ml-1 pr-1">
-                <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+              <div className="flex items-center gap-2 pr-1">
+                <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${onlineUsers.length > 1 ? 'bg-green-500' : 'bg-slate-500'}`} />
+                <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">
                   {onlineUsers.length > 1 ? 'Live' : 'Solo'}
                 </span>
               </div>
             </div>
 
-            <div className="flex space-x-1">
-              <Link to="/" className="px-3 py-1.5 rounded-md text-xs font-bold text-slate-600 hover:bg-slate-100 hover:text-blue-600 transition-all flex items-center space-x-2">
-                <Calendar size={14} />
+            <div className="flex space-x-2">
+              <Link to="/" className="px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest text-slate-600 hover:text-blue-600 hover:bg-teal-50/40 transition-all flex items-center space-x-2.5">
+                <Calendar size={16} />
                 <span>Roster</span>
               </Link>
-              <Link to="/tracker" className="px-3 py-1.5 rounded-md text-xs font-bold text-slate-600 hover:bg-slate-100 hover:text-blue-600 transition-all flex items-center space-x-2">
-                <BarChart2 size={14} />
+              <Link to="/tracker" className="px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest text-slate-600 hover:text-blue-600 hover:bg-teal-50/40 transition-all flex items-center space-x-2.5">
+                <BarChart2 size={16} />
                 <span>Tracker</span>
               </Link>
-              <Link to="/settings" className="px-3 py-1.5 rounded-md text-xs font-bold text-slate-600 hover:bg-slate-100 hover:text-blue-600 transition-all flex items-center space-x-2">
-                <Settings size={14} />
+              <Link to="/settings" className="px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest text-slate-600 hover:text-blue-600 hover:bg-teal-50/40 transition-all flex items-center space-x-2.5">
+                <Settings size={16} />
                 <span>Settings</span>
+              </Link>
+              <Link to="/logs" className="px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest text-slate-600 hover:text-blue-600 hover:bg-teal-50/40 transition-all flex items-center space-x-2.5">
+                <Activity size={16} />
+                <span>Monitor</span>
               </Link>
             </div>
 
-            <div className="h-6 w-px bg-slate-200" />
+            <div className="h-8 w-px bg-teal-200/30" />
 
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 bg-slate-50 px-2.5 py-1 rounded-full border border-slate-200">
-                <div className="w-5 h-5 bg-blue-600 rounded-full flex items-center justify-center text-[10px] text-white font-black">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3 bg-teal-50/40 px-4 py-1.5 rounded-full border border-teal-200/30 shadow-sm">
+                <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center text-[10px] text-white font-black shadow-md">
                   {currentUser.charAt(0).toUpperCase()}
                 </div>
-                <span className="text-[10px] font-black text-slate-700 uppercase tracking-wider">{currentUser}</span>
+                <span className="text-[11px] font-black text-slate-700 uppercase tracking-widest">{currentUser}</span>
               </div>
               <button 
                 onClick={onLogout}
-                className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                className="p-2 text-slate-500 hover:text-red-500 hover:bg-red-50/50 rounded-xl transition-all"
                 title="Logout"
               >
-                <LogOut size={14} />
+                <LogOut size={18} />
               </button>
             </div>
           </div>
