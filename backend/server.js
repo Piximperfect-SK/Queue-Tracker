@@ -2,6 +2,7 @@ import express from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
+import { rateLimit } from 'express-rate-limit';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -10,23 +11,34 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+
+// Security: Rate limiting for HTTP requests
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per window
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use(limiter);
+
 // Root route for verification
 app.get('/', (req, res) => res.status(200).send('Queue Tracker API is Live!'));
 // Add health check endpoint
 app.get('/health', (req, res) => res.status(200).send('Backend is running'));
 
-const FRONTEND_URL = process.env.FRONTEND_URL;
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
 
-// Be more permissive with CORS for initial setup debugging
+// STRICT CORS: Only allow the authorized frontend and localhost for development
 const corsOptions = {
   origin: (origin, callback) => {
-    // allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
+    const isLocalhost = origin && (origin.includes('localhost') || origin.includes('127.0.0.1'));
     
-    // In production, we ideally want to check against FRONTEND_URL
-    // But to get the user up and running, we'll log what origin is trying to connect
-    console.log(`Connection attempt from origin: ${origin}`);
-    callback(null, true); 
+    if (!origin || isLocalhost || origin === FRONTEND_URL) {
+      callback(null, true);
+    } else {
+      console.warn(`BLOCKED CORS connection from: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
   },
   methods: ["GET", "POST"],
   credentials: true
@@ -39,6 +51,38 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: corsOptions
 });
+
+// Security: Simple sanitizer to prevent HTML/Script injection
+const sanitize = (text) => {
+  if (typeof text !== 'string') return text;
+  return text.replace(/<[^>]*>/g, '').trim();
+};
+
+const TEAM_ACCESS_KEY = process.env.TEAM_ACCESS_KEY || ""; // If empty, no key required
+
+// Socket Throttling Helper
+const eventCounts = new Map();
+const socketRateLimit = (socket, next) => {
+  const socketId = socket.id;
+  const now = Date.now();
+  
+  if (!eventCounts.has(socketId)) {
+    eventCounts.set(socketId, { count: 0, lastReset: now });
+  }
+  
+  const stats = eventCounts.get(socketId);
+  if (now - stats.lastReset > 1000) { // Reset every second
+    stats.count = 0;
+    stats.lastReset = now;
+  }
+  
+  stats.count++;
+  if (stats.count > 20) { // Max 20 events per second per socket
+    console.warn(`Socket ${socketId} exceeded rate limit`);
+    return false; // Stop processing
+  }
+  return true;
+};
 
 const DATA_FILE = path.join(__dirname, 'data.json');
 
@@ -98,6 +142,15 @@ app.get('/download-all-logs', (req, res) => {
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
 
+  // Apply rate limiting to all incoming socket events
+  socket.use(([event, ...args], next) => {
+    if (socketRateLimit(socket)) {
+      next();
+    } else {
+      socket.emit('error_message', 'Slow down! Too many requests.');
+    }
+  });
+
   // Send initial data
   socket.emit('init', db);
   
@@ -117,16 +170,25 @@ io.on('connection', (socket) => {
     socket.emit('init', db);
   });
 
-  socket.on('join', (username) => {
-    onlineUsers.set(socket.id, username);
+  socket.on('join', ({ username, accessKey }) => {
+    const cleanName = sanitize(username);
+    // Security check: If a key is required, validate it
+    if (TEAM_ACCESS_KEY && accessKey !== TEAM_ACCESS_KEY) {
+      console.warn(`Unauthorized join attempt from ${cleanName} with key: ${accessKey}`);
+      return socket.emit('error_message', 'Invalid Team Access Key. Access Denied.');
+    }
+
+    onlineUsers.set(socket.id, cleanName);
     broadcastPresence();
-    console.log(`${username} joined. Online:`, Array.from(onlineUsers.values()));
+    console.log(`${cleanName} joined. Online:`, Array.from(onlineUsers.values()));
   });
 
   socket.on('update_agents', (agents) => {
-    db.agents = agents;
+    // Sanitize agent names
+    const cleanAgents = agents.map(a => ({ ...a, name: sanitize(a.name) }));
+    db.agents = cleanAgents;
     saveData();
-    socket.broadcast.emit('agents_updated', agents);
+    socket.broadcast.emit('agents_updated', cleanAgents);
   });
 
   socket.on('update_roster', (roster) => {
@@ -142,15 +204,21 @@ io.on('connection', (socket) => {
   });
 
   socket.on('add_log', (logEntry) => {
+    const cleanEntry = {
+      ...logEntry,
+      user: sanitize(logEntry.user),
+      details: sanitize(logEntry.details)
+    };
     const dateStr = new Date().toISOString().split('T')[0];
     if (!db.logs[dateStr]) db.logs[dateStr] = [];
-    db.logs[dateStr].push(logEntry);
+    db.logs[dateStr].push(cleanEntry);
     saveData();
-    socket.broadcast.emit('log_added', { dateStr, logEntry });
+    socket.broadcast.emit('log_added', { dateStr, logEntry: cleanEntry });
   });
 
   socket.on('disconnect', () => {
     const username = onlineUsers.get(socket.id);
+    eventCounts.delete(socket.id); // Clean up rate limit tracking
     if (username) {
       onlineUsers.delete(socket.id);
       io.emit('presence_updated', Array.from(onlineUsers.values()));
