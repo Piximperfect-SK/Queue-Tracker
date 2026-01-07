@@ -18,18 +18,33 @@ function App() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [isBackendDown, setIsBackendDown] = useState(false);
 
+  const handleLogout = () => {
+    localStorage.removeItem('currentUser');
+    localStorage.removeItem('teamAccessKey');
+    setCurrentUser(null);
+    setAccessKey('');
+    setIsAuthenticated(false);
+  };
+
+  useEffect(() => {
+    // PREVENT "Guest" from sticking around in localStorage from old versions
+    const savedUser = localStorage.getItem('currentUser');
+    if (savedUser === 'Guest') {
+      handleLogout();
+    }
+  }, []);
+
   useEffect(() => {
     const handleConnect = () => {
       console.log('CONNECTED to server');
       setIsBackendDown(false);
-      if (currentUser) {
+      if (currentUser && currentUser !== 'Guest') {
         syncData.join(currentUser, accessKey);
       }
     };
 
     const handleConnectError = (error: any) => {
       console.error('CONNECTION ERROR:', error);
-      // Only show backend down if we aren't already authenticated
       if (!isAuthenticated) {
         setIsBackendDown(true);
       }
@@ -39,24 +54,21 @@ function App() {
     const handleErrorMessage = (msg: string) => {
       setAuthError(msg);
       setIsVerifying(false);
-      // If server rejects access key, clear it
       if (msg.toLowerCase().includes('denied')) {
-        localStorage.removeItem('currentUser');
-        localStorage.removeItem('teamAccessKey');
-        setCurrentUser(null);
-        setAccessKey('');
-        setIsAuthenticated(false);
+        handleLogout();
       }
     };
 
     const handleInit = () => {
+      // SECURITY: If for some reason the name is missing or set to "Guest", force logout
+      if (!currentUser || currentUser === 'Guest') {
+        handleLogout();
+        return;
+      }
       setIsAuthenticated(true);
       setIsVerifying(false);
-      // Store in localStorage once server confirms valid session
-      if (currentUser) {
-        localStorage.setItem('currentUser', currentUser);
-        localStorage.setItem('teamAccessKey', accessKey);
-      }
+      localStorage.setItem('currentUser', currentUser);
+      localStorage.setItem('teamAccessKey', accessKey);
     };
 
     socket.on('connect', handleConnect);
@@ -84,24 +96,20 @@ function App() {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (tempName.trim()) {
+    const cleanName = tempName.trim();
+    if (cleanName && cleanName !== 'Guest') {
       setIsVerifying(true);
       setAuthError(null);
-      setCurrentUser(tempName.trim());
+      setCurrentUser(cleanName);
       setAccessKey(tempKey.trim());
+    } else if (cleanName === 'Guest') {
+      setAuthError('The name "Guest" is reserved. Please use your professional name.');
     }
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('currentUser');
-    localStorage.removeItem('teamAccessKey');
-    setCurrentUser(null);
-    setAccessKey('');
-    setIsAuthenticated(false);
   };
 
   // 1. Backend Down State
   if (isBackendDown) {
+    // ... same as before ...
     return (
       <div className="h-screen w-screen bg-[#020617] flex items-center justify-center p-6 relative overflow-hidden font-sans">
         <div className="absolute top-[-10%] left-[-10%] w-125 h-125 bg-red-500/10 rounded-full blur-[120px] animate-pulse" />
@@ -135,6 +143,7 @@ function App() {
 
   // 2. Auth State
   if (!isAuthenticated) {
+    // ... same as before but ensured no "Guest" ...
     return (
       <div className="h-screen w-screen bg-[#020617] flex items-center justify-center p-6 relative overflow-hidden font-sans">
         <div className="absolute top-[-10%] left-[-10%] w-125 h-125 bg-blue-500/10 rounded-full blur-[120px] animate-pulse" />
@@ -228,7 +237,7 @@ function App() {
   return (
     <Router>
       <div className="h-screen w-screen bg-slate-50 flex flex-col overflow-hidden fixed inset-0 font-sans">
-        <Navbar currentUser={currentUser || 'Guest'} onLogout={handleLogout} onlineUsers={onlineUsers} />
+        <Navbar currentUser={currentUser!} onLogout={handleLogout} onlineUsers={onlineUsers} />
         <main className="flex-1 w-full overflow-hidden min-h-0 relative">
           <div className="absolute inset-0 overflow-hidden flex flex-col">
             <Routes>
@@ -242,5 +251,6 @@ function App() {
     </Router>
   );
 }
+
 
 export default App;
