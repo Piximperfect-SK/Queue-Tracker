@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MOCK_AGENTS, SHIFTS, MOCK_ROSTER } from '../data/mockData';
-import { Calendar as CalendarIcon, GripVertical, FileSpreadsheet, Plus, X, Trash2, FileText, Database } from 'lucide-react';
+import { Calendar as CalendarIcon, GripVertical, FileSpreadsheet, Plus, X, Trash2, FileText, Database, AlertCircle } from 'lucide-react';
 import type { Agent, RosterEntry, ShiftType } from '../types';
 import * as XLSX from 'xlsx';
 import { addLog, downloadLogsForDate, downloadAllLogs, saveLogsFromServer, saveSingleLogFromServer } from '../utils/logger';
@@ -126,6 +126,8 @@ const RosterPage: React.FC = () => {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newAgentName, setNewAgentName] = useState('');
+  const [isLeaveConfirmModalOpen, setIsLeaveConfirmModalOpen] = useState(false);
+  const [pendingLeaveAssignment, setPendingLeaveAssignment] = useState<{ agentId: string; shift: ShiftType } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const sensors = useSensors(
@@ -347,7 +349,21 @@ const RosterPage: React.FC = () => {
     setIsModalOpen(false);
   };
 
+  const LEAVE_TYPES = ['EL', 'PL', 'UL', 'MID-LEAVE', 'WO', 'ML', 'CO'];
+
   const updateShift = (agentId: string, shift: ShiftType) => {
+    // Check if this is a leave type assignment
+    if (LEAVE_TYPES.includes(shift)) {
+      setPendingLeaveAssignment({ agentId, shift });
+      setIsLeaveConfirmModalOpen(true);
+      return;
+    }
+
+    // Execute normal shift update
+    executeShiftUpdate(agentId, shift);
+  };
+
+  const executeShiftUpdate = (agentId: string, shift: ShiftType) => {
     const agent = agents.find(a => a.id === agentId);
     const updatedRoster = [...roster];
     const index = updatedRoster.findIndex(r => r.agentId === agentId && r.date === selectedDate);
@@ -364,6 +380,19 @@ const RosterPage: React.FC = () => {
     localStorage.setItem('roster', JSON.stringify(updatedRoster));
     syncData.updateRoster(updatedRoster);
     addLog('Update Shift', `${agent?.name || agentId}: ${oldShift} -> ${shift} (Date: ${selectedDate})`);
+  };
+
+  const handleLeaveConfirm = () => {
+    if (pendingLeaveAssignment) {
+      executeShiftUpdate(pendingLeaveAssignment.agentId, pendingLeaveAssignment.shift);
+      setPendingLeaveAssignment(null);
+      setIsLeaveConfirmModalOpen(false);
+    }
+  };
+
+  const handleLeaveCancel = () => {
+    setPendingLeaveAssignment(null);
+    setIsLeaveConfirmModalOpen(false);
   };
 
   const handleDragStart = (event: DragStartEvent) => {
@@ -686,6 +715,60 @@ const RosterPage: React.FC = () => {
                 onClick={handleAddAgent}
                 disabled={!newAgentName.trim()}
                 className="flex-1 px-6 py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest bg-blue-600 text-white hover:bg-blue-700 transition-all shadow-xl shadow-blue-600/20 active:scale-95 disabled:opacity-20"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Leave Confirmation Modal */}
+      {isLeaveConfirmModalOpen && pendingLeaveAssignment && (
+        <div className="fixed inset-0 flex items-center justify-center z-[100] p-6">
+          <div className="absolute inset-0 bg-slate-900/20 backdrop-blur-sm" onClick={handleLeaveCancel} />
+          <div className="bg-rose-50/60 backdrop-blur-3xl rounded-[2rem] border border-rose-200/30 shadow-2xl w-full max-w-sm overflow-hidden relative animate-in fade-in zoom-in duration-200">
+            <div className="p-8 pb-4">
+              <div className="flex items-center justify-between mb-8">
+                <div className="w-12 h-12 bg-rose-500/10 rounded-2xl flex items-center justify-center border border-rose-200/20">
+                  <AlertCircle size={24} className="text-rose-600" />
+                </div>
+                <button 
+                  onClick={handleLeaveCancel}
+                  className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-rose-50/40 rounded-full transition-all"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              <h3 className="text-2xl font-black text-slate-800 tracking-tight mb-2">Confirm Leave Assignment</h3>
+              <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mb-8">Assign this agent to leave status</p>
+              
+              <div className="space-y-4 mb-8">
+                <div className="p-4 bg-rose-100/30 rounded-xl border border-rose-200/20">
+                  <p className="text-[11px] text-slate-500 font-bold uppercase tracking-widest mb-2">Agent</p>
+                  <p className="text-lg font-black text-slate-800">{agents.find(a => a.id === pendingLeaveAssignment.agentId)?.name || 'Unknown'}</p>
+                </div>
+                <div className="p-4 bg-rose-100/30 rounded-xl border border-rose-200/20">
+                  <p className="text-[11px] text-slate-500 font-bold uppercase tracking-widest mb-2">Leave Type</p>
+                  <p className="text-lg font-black text-rose-600">{pendingLeaveAssignment.shift}</p>
+                </div>
+                <div className="p-4 bg-slate-100/30 rounded-xl border border-slate-200/20">
+                  <p className="text-[11px] text-slate-500 font-bold uppercase tracking-widest mb-2">Date</p>
+                  <p className="text-lg font-black text-slate-800">{new Date(selectedDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-8 pt-4 flex gap-4">
+              <button 
+                onClick={handleLeaveCancel}
+                className="flex-1 px-6 py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest text-slate-500 hover:bg-rose-50/40 transition-all active:scale-95"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleLeaveConfirm}
+                className="flex-1 px-6 py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest bg-rose-600 text-white hover:bg-rose-700 transition-all shadow-xl shadow-rose-600/20 active:scale-95"
               >
                 Confirm
               </button>
