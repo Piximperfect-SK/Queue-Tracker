@@ -230,19 +230,15 @@ io.on('connection', async (socket) => {
     }
   });
 
-  // Helper to send current state
-  const sendSyncData = async () => {
-    const state = await getFullState();
-    socket.emit('init', state);
-  };
-
-  // Send initial data
-  await sendSyncData();
-  
   // IMMEDIATELY broadcast current online users to EVERYONE
   // This ensures new tabs see everyone and everyone sees the new connection attempt
   const broadcastPresence = () => {
     io.emit('presence_updated', Array.from(onlineUsers.values()));
+  };
+
+  const sendSyncData = async () => {
+    const state = await getFullState();
+    socket.emit('init', state);
   };
 
   broadcastPresence();
