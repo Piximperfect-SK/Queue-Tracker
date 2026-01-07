@@ -9,14 +9,17 @@ import { syncData, socket } from './utils/socket';
 
 function App() {
   const [currentUser, setCurrentUser] = useState<string | null>(localStorage.getItem('currentUser'));
+  const [accessKey, setAccessKey] = useState<string>(localStorage.getItem('teamAccessKey') || '');
   const [tempName, setTempName] = useState('');
+  const [tempKey, setTempKey] = useState('');
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
     const handleConnect = () => {
       console.log('CONNECTED to server:', socket.io.uri);
       if (currentUser) {
-        syncData.join(currentUser);
+        syncData.join(currentUser, accessKey);
       }
     };
 
@@ -24,8 +27,20 @@ function App() {
       console.error('CONNECTION ERROR to:', socket.io.uri, error);
     };
 
+    const handleErrorMessage = (msg: string) => {
+      setAuthError(msg);
+      // If server rejects access key, clear it
+      if (msg.includes('Access Denied')) {
+        localStorage.removeItem('currentUser');
+        localStorage.removeItem('teamAccessKey');
+        setCurrentUser(null);
+        setAccessKey('');
+      }
+    };
+
     socket.on('connect', handleConnect);
     socket.on('connect_error', handleConnectError);
+    socket.on('error_message', handleErrorMessage);
     socket.on('presence_updated', (users: string[]) => {
       console.log('Presence update received:', users);
       setOnlineUsers(users);
@@ -40,21 +55,27 @@ function App() {
     return () => {
       socket.off('connect', handleConnect);
       socket.off('connect_error', handleConnectError);
+      socket.off('error_message', handleErrorMessage);
       socket.off('presence_updated');
     };
-  }, [currentUser]);
+  }, [currentUser, accessKey]);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     if (tempName.trim()) {
       localStorage.setItem('currentUser', tempName.trim());
+      localStorage.setItem('teamAccessKey', tempKey.trim());
       setCurrentUser(tempName.trim());
+      setAccessKey(tempKey.trim());
+      setAuthError(null);
     }
   };
 
   const handleLogout = () => {
     localStorage.removeItem('currentUser');
+    localStorage.removeItem('teamAccessKey');
     setCurrentUser(null);
+    setAccessKey('');
   };
 
   if (!currentUser) {
@@ -66,27 +87,45 @@ function App() {
               <User size={40} />
             </div>
             <h1 className="text-2xl font-black tracking-tight mb-2">Queue Tracker</h1>
-            <p className="text-blue-100 text-sm font-medium">Please enter your name to continue</p>
+            <p className="text-blue-100 text-sm font-medium">Authorized Personnel Only</p>
           </div>
           <form onSubmit={handleLogin} className="p-8">
-            <div className="mb-6">
-              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Your Full Name</label>
-              <input 
-                autoFocus
-                type="text" 
-                value={tempName}
-                onChange={(e) => setTempName(e.target.value)}
-                placeholder="e.g. John Doe"
-                className="w-full px-4 py-4 rounded-xl border-2 border-gray-100 focus:border-blue-500 focus:ring-0 outline-none font-bold text-gray-800 transition-all placeholder:text-gray-300"
-                required
-              />
+            {authError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-100 text-red-600 text-[10px] font-black uppercase tracking-widest rounded-xl text-center">
+                {authError}
+              </div>
+            )}
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Your Full Name</label>
+                <input 
+                  autoFocus
+                  type="text" 
+                  value={tempName}
+                  onChange={(e) => setTempName(e.target.value)}
+                  placeholder="e.g. John Doe"
+                  className="w-full px-4 py-4 rounded-xl border-2 border-gray-100 focus:border-blue-500 focus:ring-0 outline-none font-bold text-gray-800 transition-all placeholder:text-gray-300"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Team Access Key</label>
+                <input 
+                  type="password" 
+                  value={tempKey}
+                  onChange={(e) => setTempKey(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full px-4 py-4 rounded-xl border-2 border-gray-100 focus:border-blue-500 focus:ring-0 outline-none font-bold text-gray-800 transition-all placeholder:text-gray-300"
+                  required
+                />
+              </div>
             </div>
             <button 
               type="submit"
-              className="w-full bg-blue-600 text-white py-4 rounded-xl font-black text-sm hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/20 active:scale-95 flex items-center justify-center gap-2"
+              className="w-full mt-6 bg-blue-600 text-white py-4 rounded-xl font-black text-sm hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/20 active:scale-95 flex items-center justify-center gap-2"
             >
               <LogIn size={18} />
-              <span>Start Tracking</span>
+              <span>Verify & Start</span>
             </button>
           </form>
         </div>

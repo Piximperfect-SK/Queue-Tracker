@@ -15,7 +15,7 @@ export const socket = io(SOCKET_URL, {
 });
 
 export const syncData = {
-  join: (username: string) => socket.emit('join', username),
+  join: (username: string, accessKey: string) => socket.emit('join', { username, accessKey }),
   updateAgents: (agents: any) => socket.emit('update_agents', agents),
   updateRoster: (roster: any) => socket.emit('update_roster', roster),
   updateStats: (stats: any) => socket.emit('update_stats', stats),
