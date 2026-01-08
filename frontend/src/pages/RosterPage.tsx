@@ -43,6 +43,106 @@ const getShiftColor = (shift: string) => {
   }
 };
 
+  const BLUEPRINT_CACHE_KEY = 'roster_blueprint';
+
+  const SHIFT_PATTERNS: Array<[RegExp, ShiftType]> = [
+    [/6:?00\s*AM/i, '6AM-3PM'],
+    [/1:?00\s*PM/i, '1PM-10PM'],
+    [/2:?00\s*PM/i, '2PM-11PM'],
+    [/10:?00\s*PM/i, '10PM-7AM'],
+    [/\bWO\b|WEEK\s*OFF|OFF\b/i, 'WO'],
+    [/\bCO\b/i, 'CO'],
+    [/\bML\b|MATERNITY/i, 'ML'],
+    [/\bPL\b|PATERNITY/i, 'PL'],
+    [/\bEL\b|EARNED\s*LEAVE/i, 'EL'],
+    [/\bUL\b|UNPAID\s*LEAVE/i, 'UL'],
+    [/MID-?LEAVE/i, 'MID-LEAVE'],
+  ];
+
+  const normalizeName = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+  const detectShiftType = (value: string): ShiftType | null => {
+    const cleaned = value.trim();
+    if (!cleaned) return null;
+    for (const [pattern, shift] of SHIFT_PATTERNS) {
+      if (pattern.test(cleaned)) {
+        return shift;
+      }
+    }
+    return null;
+  };
+
+  const parseDateCell = (value: any): string | null => {
+    if (value instanceof Date) {
+      return value.toISOString().split('T')[0];
+    }
+    if (typeof value === 'number') {
+      const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+      const millis = Math.round(value * 86400000);
+      const date = new Date(excelEpoch.getTime() + millis);
+      if (!isNaN(date.getTime())) {
+        return date.toISOString().split('T')[0];
+      }
+    }
+    if (typeof value === 'string') {
+      const cleaned = value.replace(/(\d+)(st|nd|rd|th)/gi, '$1').replace(/\s*-\s*/g, ' ').trim();
+      const parsed = new Date(cleaned);
+      if (!isNaN(parsed.getTime())) {
+        return parsed.toISOString().split('T')[0];
+      }
+    }
+    return null;
+  };
+
+  const findDateRowIndex = (data: any[][]): number => {
+    const rowsToInspect = Math.min(5, data.length);
+    for (let i = 0; i < rowsToInspect; i += 1) {
+      const row = data[i];
+      if (!row) continue;
+      let parsedCount = 0;
+      for (let j = 1; j < row.length; j += 1) {
+        if (parseDateCell(row[j])) parsedCount += 1;
+      }
+      if (parsedCount >= 2) return i;
+    }
+    return -1;
+  };
+
+  const mergeRosterEntries = (base: RosterEntry[], additions: RosterEntry[]) => {
+    const merged = [...base];
+    additions.forEach(entry => {
+      const idx = merged.findIndex(r => r.agentId === entry.agentId && r.date === entry.date);
+      if (idx > -1) merged[idx] = entry;
+      else merged.push(entry);
+    });
+    return merged;
+  };
+
+  const loadBlueprint = (): Record<string, RosterEntry[]> => {
+    try {
+      return JSON.parse(localStorage.getItem(BLUEPRINT_CACHE_KEY) || '{}');
+    } catch (error) {
+      console.warn('Invalid roster blueprint payload', error);
+      return {};
+    }
+  };
+
+  const applyBlueprint = (base: RosterEntry[]) => {
+    const blueprintEntries = Object.values(loadBlueprint()).flat();
+    if (!blueprintEntries.length) return base;
+    return mergeRosterEntries(base, blueprintEntries);
+  };
+
+  const persistBlueprintEntries = (entries: RosterEntry[]) => {
+    if (!entries.length) return;
+    const blueprint = loadBlueprint();
+    entries.forEach(entry => {
+      blueprint[entry.date] = (blueprint[entry.date] || []).filter(e => e.agentId !== entry.agentId);
+      blueprint[entry.date].push(entry);
+    });
+    localStorage.setItem(BLUEPRINT_CACHE_KEY, JSON.stringify(blueprint));
+  };
+
 interface DroppableContainerProps {
   id: string;
   children: React.ReactNode;
@@ -97,7 +197,7 @@ const SortableAgent: React.FC<SortableAgentProps> = ({ agent, shift, colors, onS
     <li
       ref={setNodeRef}
       style={style}
-      className={`flex items-center justify-between px-2 py-1 rounded-lg transition-all group ${colors.card} backdrop-blur-md hover:opacity-90 shadow-md active:scale-[0.98] cursor-default flex-1 min-h-0 min-h-[36px] mb-0.5 last:mb-0`}
+      className={`flex items-center justify-between px-2 py-1 rounded-lg transition-all group ${colors.card} backdrop-blur-md hover:opacity-90 shadow-md active:scale-[0.98] cursor-default flex-1 min-h-9 mb-0.5 last:mb-0`}
     >
       <div className="flex items-center space-x-2 flex-1 min-w-0">
         <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-black/50 hover:text-black transition-colors shrink-0">
@@ -163,8 +263,9 @@ const RosterPage: React.FC = () => {
     };
     const handleRoster = (data: any) => {
       if (data) {
-        setRoster(data);
-        localStorage.setItem('roster', JSON.stringify(data));
+        const merged = applyBlueprint(data);
+        setRoster(merged);
+        localStorage.setItem('roster', JSON.stringify(merged));
       }
     };
 
@@ -181,8 +282,9 @@ const RosterPage: React.FC = () => {
         localStorage.setItem('agents', JSON.stringify(db.agents));
       }
       if (db.roster) {
-        setRoster(db.roster);
-        localStorage.setItem('roster', JSON.stringify(db.roster));
+        const merged = applyBlueprint(db.roster);
+        setRoster(merged);
+        localStorage.setItem('roster', JSON.stringify(merged));
       }
       if (db.logs) {
         saveLogsFromServer(db.logs);
@@ -197,8 +299,8 @@ const RosterPage: React.FC = () => {
     else setAgents(MOCK_AGENTS);
 
     const savedRoster = localStorage.getItem('roster');
-    if (savedRoster) setRoster(JSON.parse(savedRoster));
-    else setRoster(MOCK_ROSTER);
+    const baseRoster = savedRoster ? JSON.parse(savedRoster) : MOCK_ROSTER;
+    setRoster(applyBlueprint(baseRoster));
 
     // CRITICAL: If the socket is already connected (e.g. from App.tsx),
     // we need to request the state manually because we missed the 'init' event
@@ -231,30 +333,29 @@ const RosterPage: React.FC = () => {
         const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null }) as any[][];
         console.log('Raw Excel Data:', data);
 
-        if (data.length < 2 || data[0].length < 2) {
-          alert('File structure incorrect. Need Dates in Row 1 and Agents in Column A.');
+        if (data.length < 2) {
+          alert('File structure incorrect. Need dates in the header row and agent names in column A.');
           return;
         }
 
-        // 1. Map Dates from the first row (Row 0), starting from Column B (Index 1)
-        const dateMap: { [colIdx: number]: string } = {};
-        const firstRow = data[0];
-        for (let j = 1; j < firstRow.length; j++) {
-          let val = firstRow[j];
-          if (!val) continue;
+        const dateRowIdx = findDateRowIndex(data);
+        if (dateRowIdx < 0) {
+          alert('Could not detect the date row. Ensure the header row contains actual dates like "3rd January 2026".');
+          return;
+        }
 
-          let dateStr = '';
-          if (val instanceof Date) {
-            dateStr = val.toISOString().split('T')[0];
-          } else {
-            // Try parsing string dates like "3rd January 2026"
-            const cleanVal = String(val).replace(/(\d+)(st|nd|rd|th)/, '$1');
-            const d = new Date(cleanVal);
-            if (!isNaN(d.getTime())) {
-              dateStr = d.toISOString().split('T')[0];
-            }
+        const dateMap: { [colIdx: number]: string } = {};
+        const dateRow = data[dateRowIdx];
+        for (let j = 1; j < dateRow.length; j += 1) {
+          const parsedDate = parseDateCell(dateRow[j]);
+          if (parsedDate) {
+            dateMap[j] = parsedDate;
           }
-          if (dateStr) dateMap[j] = dateStr;
+        }
+
+        if (!Object.keys(dateMap).length) {
+          alert('No valid dates found in the header. Check that the row you expect contains calendar dates.');
+          return;
         }
 
         console.log('Detected Dates:', dateMap);
@@ -262,13 +363,14 @@ const RosterPage: React.FC = () => {
         // 2. Map Agents from the first column (Column 0) and process shifts
         const newEntries: RosterEntry[] = [];
         const unmatchedAgents = new Set<string>();
+        const agentLookup = new Map(agents.map(agent => [normalizeName(agent.name), agent] as const));
 
         // Start from Row 1 to check all rows for agent names
         for (let i = 1; i < data.length; i++) {
           const row = data[i];
           if (!row || !row[0]) continue;
 
-          const agentName = String(row[0]).trim();
+            const agentName = String(row[0]).trim();
           // Skip header-like rows
           if (agentName.toLowerCase().includes('names/dates') || 
               agentName.toLowerCase() === 'saturday' || 
@@ -279,9 +381,7 @@ const RosterPage: React.FC = () => {
               agentName.toLowerCase() === 'thursday' ||
               agentName.toLowerCase() === 'friday') continue;
 
-          const agent = agents.find(a => 
-            a.name.toLowerCase().replace(/\s+/g, '') === agentName.toLowerCase().replace(/\s+/g, '')
-          );
+          const agent = agentLookup.get(normalizeName(agentName));
 
           if (!agent) {
             unmatchedAgents.add(agentName);
@@ -295,35 +395,25 @@ const RosterPage: React.FC = () => {
             const shiftValue = row[j];
 
             if (date && shiftValue !== null && shiftValue !== undefined) {
-              let shift: ShiftType = 'WO';
-              const val = String(shiftValue).toUpperCase();
+              const shift = detectShiftType(String(shiftValue));
+              if (!shift) return;
 
-              if (val.includes('06:00 AM')) shift = '6AM-3PM';
-              else if (val.includes('01:00 PM')) shift = '1PM-10PM';
-              else if (val.includes('02:00 PM')) shift = '2PM-11PM';
-              else if (val.includes('10:00 PM')) shift = '10PM-7AM';
-              else if (val === 'WO' || val === 'CO' || val === 'OFF') shift = 'WO';
-              
               newEntries.push({
                 agentId: agent.id,
-                date: date,
-                shift: shift
+                date,
+                shift
               });
             }
           });
         }
 
         if (newEntries.length > 0) {
-          const updatedRoster = [...roster];
-          newEntries.forEach(entry => {
-            const idx = updatedRoster.findIndex(r => r.agentId === entry.agentId && r.date === entry.date);
-            if (idx > -1) updatedRoster[idx] = entry;
-            else updatedRoster.push(entry);
-          });
+          const updatedRoster = mergeRosterEntries(roster, newEntries);
 
           setRoster(updatedRoster);
           localStorage.setItem('roster', JSON.stringify(updatedRoster));
           syncData.updateRoster(updatedRoster);
+          persistBlueprintEntries(newEntries);
           
           addLog('Excel Import', `Imported ${newEntries.length} entries for ${Array.from(new Set(newEntries.map(e => e.agentId))).length} agents.`);
           
@@ -488,7 +578,6 @@ const RosterPage: React.FC = () => {
   };
 
   const activeAgent = activeId ? agents.find(a => a.id === activeId) : null;
-  const activeAgentShift = activeId ? roster.find(r => r.agentId === activeId && r.date === selectedDate)?.shift || 'Unassigned' : null;
 
   return (
     <div className="h-full flex flex-col overflow-hidden px-2 pb-2">
@@ -500,7 +589,7 @@ const RosterPage: React.FC = () => {
           </div>
           <div>
             <h1 className="text-lg font-semibold text-black tracking-tight leading-none">Roster Control</h1>
-            <p className="text-[8px] text-black/60 font-medium uppercase tracking-[0.1em] mt-0.5">Personnel Shift Board</p>
+            <p className="text-[8px] text-black/60 font-medium uppercase tracking-widest mt-0.5">Personnel Shift Board</p>
           </div>
         </div>
         
@@ -686,9 +775,9 @@ const RosterPage: React.FC = () => {
 
       {/* Light Theme Add Agent Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 flex items-center justify-center z-[100] p-6">
+        <div className="fixed inset-0 flex items-center justify-center z-100 p-6">
           <div className="absolute inset-0 bg-slate-900/20 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
-          <div className="bg-teal-50/60 backdrop-blur-3xl rounded-[2rem] border border-teal-200/30 shadow-2xl w-full max-w-md overflow-hidden relative animate-in fade-in zoom-in duration-200">
+          <div className="bg-teal-50/60 backdrop-blur-3xl rounded-4xl border border-teal-200/30 shadow-2xl w-full max-w-md overflow-hidden relative animate-in fade-in zoom-in duration-200">
             <div className="p-8 pb-4">
               <div className="flex items-center justify-between mb-8">
                 <div className="w-12 h-12 bg-blue-500/10 rounded-2xl flex items-center justify-center border border-teal-200/20">

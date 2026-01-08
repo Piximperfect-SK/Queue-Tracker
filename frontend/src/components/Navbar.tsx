@@ -46,7 +46,7 @@ const Navbar: React.FC<NavbarProps> = ({ currentUser, onLogout, onlineUsers }) =
                 {[...new Set(onlineUsers.filter(u => u !== currentUser))].map((user, i) => (
                   <div 
                     key={i} 
-                    className="group relative flex items-center bg-teal-50/50 border border-teal-200/30 rounded-full h-7 transition-all duration-500 hover:z-10 hover:pr-4 hover:pl-1 hover:space-x-3 overflow-hidden max-w-[28px] hover:max-w-50 shadow-sm cursor-default"
+                    className="group relative flex items-center bg-teal-50/50 border border-teal-200/30 rounded-full h-7 transition-all duration-500 hover:z-10 hover:pr-4 hover:pl-1 hover:space-x-3 overflow-hidden max-w-7 hover:max-w-50 shadow-sm cursor-default"
                   >
                     <div className="w-5 h-5 shrink-0 rounded-full flex items-center justify-center text-[10px] font-black text-white bg-blue-500 shadow-sm">
                       {user.charAt(0).toUpperCase()}

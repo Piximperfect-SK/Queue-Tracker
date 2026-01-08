@@ -119,7 +119,7 @@ const SettingsPage: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 flex-1 overflow-hidden min-h-0">
         {/* Personnel Matrix */}
-        <div className="bg-teal-50/40 backdrop-blur-3xl rounded-[2rem] border border-teal-200/30 overflow-hidden flex flex-col shadow-xl">
+        <div className="bg-teal-50/40 backdrop-blur-3xl rounded-4xl border border-teal-200/30 overflow-hidden flex flex-col shadow-xl">
           <div className="px-8 py-5 border-b border-teal-200/10 bg-teal-50/20 shrink-0 flex items-center justify-between">
             <h2 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Personnel Matrix</h2>
             <span className="text-[9px] font-black text-blue-700 bg-teal-50/60 backdrop-blur-md px-2.5 py-1 rounded-full border border-teal-200/30">
@@ -164,7 +164,7 @@ const SettingsPage: React.FC = () => {
 
         {/* System Diagnostics / Help */}
         <div className="flex flex-col gap-6 flex-1 overflow-hidden">
-          <div className="bg-teal-50/60 backdrop-blur-3xl rounded-[2rem] border border-teal-200/40 p-8 shadow-xl flex-1 flex flex-col min-h-0">
+          <div className="bg-teal-50/60 backdrop-blur-3xl rounded-4xl border border-teal-200/40 p-8 shadow-xl flex-1 flex flex-col min-h-0">
              <div className="flex items-center gap-3 mb-6 shrink-0">
                <div className="w-10 h-10 bg-indigo-600/10 rounded-xl flex items-center justify-center text-indigo-700 border border-white/30">
                  <AlertCircle size={22} />

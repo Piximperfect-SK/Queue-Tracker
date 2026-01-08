@@ -193,7 +193,7 @@ function App() {
                     onChange={(e) => setTempName(e.target.value)}
                     placeholder="Enter your full name"
                     disabled={isVerifying}
-                    className="w-full px-5 py-4 bg-teal-50/50 border border-teal-200/40 rounded-2xl focus:border-blue-500 focus:bg-teal-50/100 outline-none text-slate-900 font-black transition-all placeholder:text-slate-400"
+                    className="w-full px-5 py-4 bg-teal-50/50 border border-teal-200/40 rounded-2xl focus:border-blue-500 focus:bg-teal-50 outline-none text-slate-900 font-black transition-all placeholder:text-slate-400"
                     required
                   />
                 </div>
@@ -209,7 +209,7 @@ function App() {
                     onChange={(e) => setTempKey(e.target.value)}
                     placeholder="••••••••••••"
                     disabled={isVerifying}
-                    className="w-full px-5 py-4 bg-teal-50/50 border border-teal-200/40 rounded-2xl focus:border-blue-500 focus:bg-teal-50/100 outline-none text-slate-900 font-black transition-all placeholder:text-slate-400"
+                    className="w-full px-5 py-4 bg-teal-50/50 border border-teal-200/40 rounded-2xl focus:border-blue-500 focus:bg-teal-50 outline-none text-slate-900 font-black transition-all placeholder:text-slate-400"
                     required
                   />
                 </div>
@@ -267,7 +267,7 @@ function App() {
           <main className="flex-1 w-full max-w-full mx-auto px-3 py-2 overflow-hidden">
             <Routes>
               <Route path="/" element={<RosterPage />} />
-              <Route path="/tracker" element={<TrackerPage currentUser={currentUser!} />} />
+              <Route path="/tracker" element={<TrackerPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/logs" element={<LogMonitorPage />} />
             </Routes>

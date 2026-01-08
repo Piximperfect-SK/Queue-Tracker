@@ -1,8 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { MOCK_AGENTS, MOCK_ROSTER } from '../data/mockData';
-import { Plus, Minus, Phone, ShieldCheck, Calendar as CalendarIcon, FileText } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 import type { DailyStats, Agent, RosterEntry, ShiftType } from '../types';
-import { addLog, downloadLogsForDate, saveLogsFromServer, saveSingleLogFromServer } from '../utils/logger';
+import { addLog, saveLogsFromServer, saveSingleLogFromServer } from '../utils/logger';
 import { socket, syncData } from '../utils/socket';
 
 const getShiftColor = (shift: string) => {
@@ -19,8 +19,8 @@ const getShiftColor = (shift: string) => {
   }
 };
 
-const TrackerPage: React.FC<{ currentUser: string }> = ({ currentUser }) => {
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+const TrackerPage: React.FC = () => {
+  const [selectedDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [roster, setRoster] = useState<RosterEntry[]>([]);
   const [stats, setStats] = useState<DailyStats[]>([]);
@@ -209,23 +209,6 @@ const TrackerPage: React.FC<{ currentUser: string }> = ({ currentUser }) => {
     };
   };
 
-  const totals = useMemo(() => {
-    const dayStats = activeAgents.map(a => getAgentStats(a.id));
-    return dayStats.reduce((acc, curr) => ({
-      incidents: acc.incidents + curr.incidents,
-      sctasks: acc.sctasks + curr.sctasks,
-      calls: acc.calls + curr.calls
-    }), { incidents: 0, sctasks: 0, calls: 0 });
-  }, [stats, selectedDate, activeAgents]);
-
-  const resetDay = () => {
-    if (window.confirm('Are you sure you want to reset all stats for this day?')) {
-      const updated = stats.filter(s => s.date !== selectedDate);
-      saveStats(updated);
-      addLog('Reset Day', `All stats cleared for ${selectedDate}`);
-    }
-  };
-
   return (
     <div className="h-full flex flex-col gap-0 overflow-hidden p-0">
       {/* Tracker Table - Full Width */}
@@ -329,7 +312,7 @@ const TrackerPage: React.FC<{ currentUser: string }> = ({ currentUser }) => {
                     />
                   </td>
                   <td className="px-3 py-1 text-center">
-                    <div className="inline-flex items-center justify-center px-2 py-0.5 bg-blue-600 text-white rounded-lg font-semibold text-xs min-w-[40px] shadow-md shadow-blue-600/20">
+                    <div className="inline-flex items-center justify-center px-2 py-0.5 bg-blue-600 text-white rounded-lg font-semibold text-xs min-w-10 shadow-md shadow-blue-600/20">
                       {rowTotal}
                     </div>
                   </td>
