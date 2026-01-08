@@ -139,19 +139,20 @@ const TrackerPage: React.FC<{ currentUser: string }> = ({ currentUser }) => {
     syncData.updateStats(updatedStats);
   };
 
-  const { activeAgents, offlineAgents } = useMemo(() => {
-    const offDutyTypes = ['WO', 'ML', 'PL', 'EL', 'UL', 'CO', 'MID-LEAVE'];
+  const activeAgents = useMemo(() => {
+    const hiddenShifts = new Set(['WO', 'ML', 'PL', 'EL', 'UL', 'CO', 'MID-LEAVE']);
     const rosterForDay = roster.filter(r => r.date === selectedDate);
     
-    const all = rosterForDay.map(r => {
+    const visibleEntries = rosterForDay.filter(r => !hiddenShifts.has(r.shift));
+
+    const all = visibleEntries.map(r => {
       const agent = agents.find(a => a.id === r.agentId);
       if (!agent) return null;
       return {
         ...agent,
-        shift: r.shift as ShiftType,
-        isOffline: offDutyTypes.includes(r.shift)
+        shift: r.shift as ShiftType
       };
-    }).filter((a): a is (Agent & { shift: ShiftType; isOffline: boolean }) => a !== null);
+    }).filter((a): a is Agent & { shift: ShiftType } => a !== null);
 
     const shiftOrder: Record<string, number> = {
       '6AM-3PM': 0,
@@ -160,14 +161,9 @@ const TrackerPage: React.FC<{ currentUser: string }> = ({ currentUser }) => {
       '10PM-7AM': 3
     };
 
-    const activeAgentsSorted = all.filter(a => !a.isOffline).sort((a, b) => {
+    return all.sort((a, b) => {
       return (shiftOrder[a.shift] ?? 999) - (shiftOrder[b.shift] ?? 999);
     });
-
-    return {
-      activeAgents: activeAgentsSorted,
-      offlineAgents: all.filter(a => a.isOffline)
-    };
   }, [selectedDate, roster, agents]);
 
   const updateStat = (agentId: string, field: keyof DailyStats, value: any) => {
@@ -343,25 +339,6 @@ const TrackerPage: React.FC<{ currentUser: string }> = ({ currentUser }) => {
           </tbody>
         </table>
 
-        {/* Off-Shift Footer */}
-        {offlineAgents.length > 0 && (
-          <div className="px-3 py-2 border-t border-white/20 bg-white/20 backdrop-blur-sm">
-            <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Off-Shift ({offlineAgents.length})</p>
-            <div className="flex flex-wrap gap-1.5">
-              {offlineAgents.map(agent => {
-                const colors = getShiftColor(agent.shift);
-                return (
-                  <div key={agent.id} className="inline-flex items-center gap-1.5 px-2 py-1 bg-slate-100 border border-slate-200 rounded-lg">
-                    <span className="text-slate-900 font-semibold text-xs">{agent.name}</span>
-                    <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded border ${colors.border} ${colors.light} ${colors.text}`}>
-                      {agent.shift}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
