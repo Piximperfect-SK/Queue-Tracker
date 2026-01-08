@@ -20,6 +20,7 @@ function App() {
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
   const [authError, setAuthError] = useState<string | null>(null);
   const [isBackendDown, setIsBackendDown] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(() => new Date().toLocaleDateString('en-CA'));
 
   const handleLogout = () => {
     localStorage.removeItem('currentUser');
@@ -193,7 +194,7 @@ function App() {
                     onChange={(e) => setTempName(e.target.value)}
                     placeholder="Enter your full name"
                     disabled={isVerifying}
-                    className="w-full px-5 py-4 bg-teal-50/50 border border-teal-200/40 rounded-2xl focus:border-blue-500 focus:bg-teal-50/100 outline-none text-slate-900 font-black transition-all placeholder:text-slate-400"
+                    className="w-full px-5 py-4 bg-teal-50/50 border border-teal-200/40 rounded-2xl focus:border-blue-500 focus:bg-teal-50 outline-none text-slate-900 font-black transition-all placeholder:text-slate-400"
                     required
                   />
                 </div>
@@ -209,7 +210,7 @@ function App() {
                     onChange={(e) => setTempKey(e.target.value)}
                     placeholder="••••••••••••"
                     disabled={isVerifying}
-                    className="w-full px-5 py-4 bg-teal-50/50 border border-teal-200/40 rounded-2xl focus:border-blue-500 focus:bg-teal-50/100 outline-none text-slate-900 font-black transition-all placeholder:text-slate-400"
+                    className="w-full px-5 py-4 bg-teal-50/50 border border-teal-200/40 rounded-2xl focus:border-blue-500 focus:bg-teal-50 outline-none text-slate-900 font-black transition-all placeholder:text-slate-400"
                     required
                   />
                 </div>
@@ -259,15 +260,21 @@ function App() {
           <source src={bgVideo} type="video/mp4" />
         </video>
         
-        {/* Teal Overlay for Glassmorphism */}
-        <div className="absolute inset-0 bg-teal-50/40 backdrop-blur-[2px]" />
+        {/* Background Overlay for Glassmorphism */}
+        <div className="absolute inset-0 bg-white/5 backdrop-blur-[8px]" />
 
         <div className="relative z-10 flex flex-col h-full">
-          <Navbar currentUser={currentUser!} onLogout={handleLogout} onlineUsers={onlineUsers} />
+          <Navbar 
+            currentUser={currentUser!} 
+            onLogout={handleLogout} 
+            onlineUsers={onlineUsers} 
+            selectedDate={selectedDate}
+            setSelectedDate={setSelectedDate}
+          />
           <main className="flex-1 w-full max-w-full mx-auto px-3 py-2 overflow-hidden">
             <Routes>
-              <Route path="/" element={<RosterPage />} />
-              <Route path="/tracker" element={<TrackerPage currentUser={currentUser!} />} />
+              <Route path="/" element={<RosterPage selectedDate={selectedDate} setSelectedDate={setSelectedDate} />} />
+              <Route path="/tracker" element={<TrackerPage selectedDate={selectedDate} setSelectedDate={setSelectedDate} />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/logs" element={<LogMonitorPage />} />
             </Routes>

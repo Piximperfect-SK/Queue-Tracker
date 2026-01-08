@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { MOCK_AGENTS, SHIFTS, MOCK_ROSTER } from '../data/mockData';
-import { Calendar as CalendarIcon, GripVertical, FileSpreadsheet, Plus, X, Trash2, FileText, Database, AlertCircle } from 'lucide-react';
-import type { Agent, RosterEntry, ShiftType } from '../types';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import * as XLSX from 'xlsx';
+import { MOCK_AGENTS, SHIFTS, MOCK_ROSTER } from '../data/mockData';
+import { Calendar as CalendarIcon, GripVertical, Plus, X, Trash2, FileText, Database, AlertCircle } from 'lucide-react';
+import type { Agent, RosterEntry, ShiftType } from '../types';
 import { addLog, downloadLogsForDate, downloadAllLogs, saveLogsFromServer, saveSingleLogFromServer } from '../utils/logger';
 import { socket, syncData } from '../utils/socket';
 import {
@@ -25,22 +25,98 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 
 const ALL_SHIFT_TYPES: ShiftType[] = [
-  '6AM-3PM', '1PM-10PM', '2PM-11PM', '10PM-7AM', 
+  '6AM-3PM', '1PM-10PM', '2PM-11PM', '10PM-7AM', '12PM-9PM',
   'WO', 'ML', 'PL', 'EL', 'UL', 'CO', 'MID-LEAVE'
 ];
 
+type ImportFeedback = {
+  message: string;
+  tone: 'success' | 'warning' | 'error';
+};
+
+const normalizeCellValue = (value: unknown) => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value.trim();
+  return String(value).trim();
+};
+
+const parseExcelDate = (value: unknown) => {
+  if (typeof value === 'number') {
+    const parseDateCode = (XLSX as any).SSF?.parse_date_code;
+    if (typeof parseDateCode === 'function') {
+      const decoded = parseDateCode(value);
+      if (decoded?.y && decoded?.m && decoded?.d) {
+        const month = String(decoded.m).padStart(2, '0');
+        const day = String(decoded.d).padStart(2, '0');
+        return `${decoded.y}-${month}-${day}`;
+      }
+    }
+  }
+
+  const formatted = normalizeCellValue(value);
+  if (!formatted) return null;
+  
+  // If it's already YYYY-MM-DD, return as is
+  if (/^\d{4}-\d{2}-\d{2}$/.test(formatted)) return formatted;
+  
+  const parsed = new Date(formatted);
+  if (!Number.isNaN(parsed.getTime())) {
+    // Use local date components to avoid timezone shifts (e.g. midnight GMT+1 becoming previous day in UTC)
+    const y = parsed.getFullYear();
+    const m = String(parsed.getMonth() + 1).padStart(2, '0');
+    const d = String(parsed.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  return null;
+};
+
+const createAgentId = () => {
+  if (typeof crypto !== 'undefined' && typeof (crypto as Crypto).randomUUID === 'function') {
+    return (crypto as Crypto).randomUUID();
+  }
+  return `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+};
+
 const getShiftColor = (shift: string) => {
   switch (shift) {
-    case '6AM-3PM': return { bg: 'bg-sky-600', text: 'text-sky-600', light: 'bg-sky-50', border: 'border-sky-200', card: 'bg-sky-200' };
-    case '1PM-10PM': return { bg: 'bg-amber-600', text: 'text-amber-600', light: 'bg-amber-50', border: 'border-amber-200', card: 'bg-amber-200' };
-    case '2PM-11PM': return { bg: 'bg-orange-600', text: 'text-orange-600', light: 'bg-orange-50', border: 'border-orange-200', card: 'bg-orange-200' };
-    case '10PM-7AM': return { bg: 'bg-slate-700', text: 'text-slate-700', light: 'bg-slate-100', border: 'border-slate-300', card: 'bg-slate-400' };
+    case '6AM-3PM': return { bg: 'bg-blue-500', text: 'text-blue-600', light: 'bg-blue-50', border: 'border-blue-200', card: 'bg-[#bae6fd]' };
+    case '1PM-10PM': return { bg: 'bg-amber-500', text: 'text-amber-600', light: 'bg-amber-50', border: 'border-amber-200', card: 'bg-[#fef08a]' };
+    case '2PM-11PM': return { bg: 'bg-orange-600', text: 'text-orange-600', light: 'bg-orange-50', border: 'border-orange-200', card: 'bg-[#fed7aa]' };
+    case '10PM-7AM': return { bg: 'bg-slate-700', text: 'text-slate-700', light: 'bg-slate-100', border: 'border-slate-300', card: 'bg-[#94a3b8]' };
+    case '12PM-9PM': return { bg: 'bg-fuchsia-600', text: 'text-fuchsia-600', light: 'bg-fuchsia-50', border: 'border-fuchsia-200', card: 'bg-[#f5d0fe]' };
     case 'EL':
     case 'PL':
     case 'UL':
     case 'MID-LEAVE': return { bg: 'bg-rose-600', text: 'text-rose-600', light: 'bg-rose-50', border: 'border-rose-200', card: 'bg-rose-200' };
     default: return { bg: 'bg-slate-500', text: 'text-slate-500', light: 'bg-slate-50', border: 'border-slate-200', card: 'bg-slate-200' };
   }
+};
+
+const BLUEPRINT_CACHE_KEY = 'roster_blueprint';
+
+const mergeRosterEntries = (base: RosterEntry[], additions: RosterEntry[]) => {
+  const merged = [...base];
+  additions.forEach(entry => {
+    const idx = merged.findIndex(r => r.agentId === entry.agentId && r.date === entry.date);
+    if (idx > -1) merged[idx] = entry;
+    else merged.push(entry);
+  });
+  return merged;
+};
+
+const loadBlueprint = (): Record<string, RosterEntry[]> => {
+  try {
+    return JSON.parse(localStorage.getItem(BLUEPRINT_CACHE_KEY) || '{}');
+  } catch (error) {
+    console.warn('Invalid roster blueprint payload', error);
+    return {};
+  }
+};
+
+const applyBlueprint = (base: RosterEntry[]) => {
+  const blueprintEntries = Object.values(loadBlueprint()).flat();
+  if (!blueprintEntries.length) return base;
+  return mergeRosterEntries(base, blueprintEntries);
 };
 
 interface DroppableContainerProps {
@@ -55,7 +131,7 @@ const DroppableContainer: React.FC<DroppableContainerProps> = ({ id, children, c
   return (
     <div 
       ref={setNodeRef} 
-      className={`${className} ${isOver ? 'ring-2 ring-blue-500/50 bg-blue-500/5' : ''} transition-all duration-300 rounded-2xl`}
+      className={`${className} ${isOver ? 'ring-2 ring-blue-500/50 bg-blue-500/5' : ''} transition-all duration-300`}
     >
       {children}
     </div>
@@ -68,9 +144,10 @@ interface SortableAgentProps {
   colors: any;
   onShiftChange: (agentId: string, shift: ShiftType) => void;
   onDelete: (agentId: string) => void;
+  shiftOptions: ShiftType[];
 }
 
-const SortableAgent: React.FC<SortableAgentProps> = ({ agent, shift, colors, onShiftChange, onDelete }) => {
+const SortableAgent: React.FC<SortableAgentProps> = ({ agent, shift, colors, onShiftChange, onDelete, shiftOptions }) => {
   const {
     attributes,
     listeners,
@@ -97,23 +174,24 @@ const SortableAgent: React.FC<SortableAgentProps> = ({ agent, shift, colors, onS
     <li
       ref={setNodeRef}
       style={style}
-      className={`flex items-center justify-between px-2 py-1 rounded-lg transition-all group ${colors.card} backdrop-blur-md hover:opacity-90 shadow-md active:scale-[0.98] cursor-default flex-1 min-h-0 min-h-[36px] mb-0.5 last:mb-0`}
+      className={`flex items-center justify-between px-2.5 py-1.5 rounded-xl transition-all group ${colors.card} hover:opacity-95 shadow-sm active:scale-[0.98] cursor-default flex-1 min-h-[36px] mb-1.5 last:mb-0`}
     >
       <div className="flex items-center space-x-2 flex-1 min-w-0">
-        <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-black/50 hover:text-black transition-colors shrink-0">
-          <GripVertical size={12} />
+        <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-slate-800/40 hover:text-slate-900 transition-colors shrink-0">
+          <GripVertical size={14} />
         </div>
-        <div className="truncate flex-1 min-w-0 ml-0">
-          <span className="text-black font-semibold text-[12px] block leading-tight truncate">{agent.name}</span>
+        <div className="flex-1 min-w-0">
+          <span className="text-slate-900 font-bold text-[11px] block leading-tight whitespace-normal break-words">{agent.name}</span>
           {agent.isQH && (
-            <span className="text-[7px] font-semibold text-black/70 uppercase tracking-[0.05em] block truncate">QA</span>
+            <span className="text-[7px] font-bold text-slate-800/50 uppercase tracking-widest block mt-0.5">QA</span>
           )}
         </div>
       </div>
+
       <div className="flex items-center shrink-0 gap-2">
         <button
           onClick={handleDelete}
-          className="p-1 rounded-md text-red-600 hover:bg-red-500/20 hover:text-red-700 transition-all opacity-0 group-hover:opacity-100"
+          className="p-1 rounded-md text-red-600 hover:bg-white/30 transition-all opacity-0 group-hover:opacity-100"
           title="Delete Agent"
         >
           <Trash2 size={14} />
@@ -121,9 +199,9 @@ const SortableAgent: React.FC<SortableAgentProps> = ({ agent, shift, colors, onS
         <select 
           value={shift}
           onChange={(e) => onShiftChange(agent.id, e.target.value as ShiftType)}
-          className={`text-[9px] font-black bg-white/20 px-1 py-0.5 rounded-md border-none focus:ring-0 ${colors.text} cursor-pointer outline-none opacity-0 group-hover:opacity-100 transition-opacity uppercase tracking-widest`}
+          className={`text-[9px] font-black bg-white/30 px-1 py-0.5 rounded-md border-none focus:ring-0 ${colors.text} cursor-pointer outline-none opacity-0 group-hover:opacity-100 transition-opacity uppercase tracking-widest`}
         >
-          {ALL_SHIFT_TYPES.map(s => (
+          {shiftOptions.map(s => (
             <option key={s} value={s} className="bg-white text-slate-900 font-bold">{s}</option>
           ))}
         </select>
@@ -132,16 +210,53 @@ const SortableAgent: React.FC<SortableAgentProps> = ({ agent, shift, colors, onS
   );
 };
 
-const RosterPage: React.FC = () => {
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+interface RosterPageProps {
+  selectedDate: string;
+  setSelectedDate: (date: string) => void;
+}
+
+const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }) => {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [roster, setRoster] = useState<RosterEntry[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newAgentName, setNewAgentName] = useState('');
+  const [newAgentShift, setNewAgentShift] = useState<ShiftType>('Unassigned');
   const [isLeaveConfirmModalOpen, setIsLeaveConfirmModalOpen] = useState(false);
   const [pendingLeaveAssignment, setPendingLeaveAssignment] = useState<{ agentId: string; shift: ShiftType } | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importStatus, setImportStatus] = useState<ImportFeedback | null>(null);
+  const [isImportingRoster, setIsImportingRoster] = useState(false);
+  const [times, setTimes] = useState({ ist: '', uk: '' });
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    const updateClocks = () => {
+      const now = new Date();
+      const istFormat = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Kolkata',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+      const ukFormat = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Europe/London',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+      
+      const istStr = istFormat.format(now);
+      const ukStr = ukFormat.format(now);
+
+      setTimes({
+        ist: istStr.replace(/\s(AM|PM)/, '\u00A0\u00A0$1'),
+        uk: ukStr.replace(/\s(AM|PM)/, '\u00A0\u00A0$1')
+      });
+    };
+    updateClocks();
+    const timer = setInterval(updateClocks, 10000);
+    return () => clearInterval(timer);
+  }, []);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -154,6 +269,20 @@ const RosterPage: React.FC = () => {
     })
   );
 
+  const availableShifts = useMemo(() => {
+    const shiftSet = new Set(SHIFTS);
+    roster
+      .filter((entry) => entry.date === selectedDate)
+      .map((entry) => entry.shift)
+      .forEach((shift) => shiftSet.add(shift));
+    return Array.from(shiftSet);
+  }, [roster, selectedDate]);
+
+  const shiftPickerOptions = useMemo(() => {
+    const optionSet = new Set([...ALL_SHIFT_TYPES, ...availableShifts]);
+    return Array.from(optionSet);
+  }, [availableShifts]);
+
   useEffect(() => {
     const handleAgents = (data: any) => {
       if (data) {
@@ -163,8 +292,9 @@ const RosterPage: React.FC = () => {
     };
     const handleRoster = (data: any) => {
       if (data) {
-        setRoster(data);
-        localStorage.setItem('roster', JSON.stringify(data));
+        const merged = applyBlueprint(data);
+        setRoster(merged);
+        localStorage.setItem('roster', JSON.stringify(merged));
       }
     };
 
@@ -181,8 +311,9 @@ const RosterPage: React.FC = () => {
         localStorage.setItem('agents', JSON.stringify(db.agents));
       }
       if (db.roster) {
-        setRoster(db.roster);
-        localStorage.setItem('roster', JSON.stringify(db.roster));
+        const merged = applyBlueprint(db.roster);
+        setRoster(merged);
+        localStorage.setItem('roster', JSON.stringify(merged));
       }
       if (db.logs) {
         saveLogsFromServer(db.logs);
@@ -197,8 +328,8 @@ const RosterPage: React.FC = () => {
     else setAgents(MOCK_AGENTS);
 
     const savedRoster = localStorage.getItem('roster');
-    if (savedRoster) setRoster(JSON.parse(savedRoster));
-    else setRoster(MOCK_ROSTER);
+    const baseRoster = savedRoster ? JSON.parse(savedRoster) : MOCK_ROSTER;
+    setRoster(applyBlueprint(baseRoster));
 
     // CRITICAL: If the socket is already connected (e.g. from App.tsx),
     // we need to request the state manually because we missed the 'init' event
@@ -215,151 +346,42 @@ const RosterPage: React.FC = () => {
     };
   }, []);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      try {
-        const bstr = evt.target?.result;
-        const wb = XLSX.read(bstr, { type: 'binary', cellDates: true });
-        const wsname = wb.SheetNames[0];
-        const ws = wb.Sheets[wsname];
-        
-        // Read as 2D array (header: 1 ensures we get a simple array of arrays)
-        const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null }) as any[][];
-        console.log('Raw Excel Data:', data);
-
-        if (data.length < 2 || data[0].length < 2) {
-          alert('File structure incorrect. Need Dates in Row 1 and Agents in Column A.');
-          return;
-        }
-
-        // 1. Map Dates from the first row (Row 0), starting from Column B (Index 1)
-        const dateMap: { [colIdx: number]: string } = {};
-        const firstRow = data[0];
-        for (let j = 1; j < firstRow.length; j++) {
-          let val = firstRow[j];
-          if (!val) continue;
-
-          let dateStr = '';
-          if (val instanceof Date) {
-            dateStr = val.toISOString().split('T')[0];
-          } else {
-            // Try parsing string dates like "3rd January 2026"
-            const cleanVal = String(val).replace(/(\d+)(st|nd|rd|th)/, '$1');
-            const d = new Date(cleanVal);
-            if (!isNaN(d.getTime())) {
-              dateStr = d.toISOString().split('T')[0];
-            }
-          }
-          if (dateStr) dateMap[j] = dateStr;
-        }
-
-        console.log('Detected Dates:', dateMap);
-
-        // 2. Map Agents from the first column (Column 0) and process shifts
-        const newEntries: RosterEntry[] = [];
-        const unmatchedAgents = new Set<string>();
-
-        // Start from Row 1 to check all rows for agent names
-        for (let i = 1; i < data.length; i++) {
-          const row = data[i];
-          if (!row || !row[0]) continue;
-
-          const agentName = String(row[0]).trim();
-          // Skip header-like rows
-          if (agentName.toLowerCase().includes('names/dates') || 
-              agentName.toLowerCase() === 'saturday' || 
-              agentName.toLowerCase() === 'sunday' ||
-              agentName.toLowerCase() === 'monday' ||
-              agentName.toLowerCase() === 'tuesday' ||
-              agentName.toLowerCase() === 'wednesday' ||
-              agentName.toLowerCase() === 'thursday' ||
-              agentName.toLowerCase() === 'friday') continue;
-
-          const agent = agents.find(a => 
-            a.name.toLowerCase().replace(/\s+/g, '') === agentName.toLowerCase().replace(/\s+/g, '')
-          );
-
-          if (!agent) {
-            unmatchedAgents.add(agentName);
-            continue;
-          }
-
-          // For this agent, check every column that has a date
-          Object.keys(dateMap).forEach(colIdxStr => {
-            const j = parseInt(colIdxStr);
-            const date = dateMap[j];
-            const shiftValue = row[j];
-
-            if (date && shiftValue !== null && shiftValue !== undefined) {
-              let shift: ShiftType = 'WO';
-              const val = String(shiftValue).toUpperCase();
-
-              if (val.includes('06:00 AM')) shift = '6AM-3PM';
-              else if (val.includes('01:00 PM')) shift = '1PM-10PM';
-              else if (val.includes('02:00 PM')) shift = '2PM-11PM';
-              else if (val.includes('10:00 PM')) shift = '10PM-7AM';
-              else if (val === 'WO' || val === 'CO' || val === 'OFF') shift = 'WO';
-              
-              newEntries.push({
-                agentId: agent.id,
-                date: date,
-                shift: shift
-              });
-            }
-          });
-        }
-
-        if (newEntries.length > 0) {
-          const updatedRoster = [...roster];
-          newEntries.forEach(entry => {
-            const idx = updatedRoster.findIndex(r => r.agentId === entry.agentId && r.date === entry.date);
-            if (idx > -1) updatedRoster[idx] = entry;
-            else updatedRoster.push(entry);
-          });
-
-          setRoster(updatedRoster);
-          localStorage.setItem('roster', JSON.stringify(updatedRoster));
-          syncData.updateRoster(updatedRoster);
-          
-          addLog('Excel Import', `Imported ${newEntries.length} entries for ${Array.from(new Set(newEntries.map(e => e.agentId))).length} agents.`);
-          
-          let msg = `Imported ${newEntries.length} entries.`;
-          if (unmatchedAgents.size > 0) {
-            msg += `\n\nAgents not found: ${Array.from(unmatchedAgents).join(', ')}`;
-          }
-          alert(msg);
-        } else {
-          alert('No data imported. Ensure:\n1. Row 1 has dates (B1, C1...)\n2. Column A has Agent Names (A3, A4...)\n3. Names match exactly.');
-        }
-      } catch (err) {
-        console.error('Import Error:', err);
-        alert('Error processing file.');
-      }
-    };
-    reader.readAsBinaryString(file);
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  };
-
   const handleAddAgent = () => {
     if (!newAgentName.trim()) return;
 
+    const newAgentId = createAgentId();
     const newAgent: Agent = {
-      id: Date.now().toString(),
+      id: newAgentId,
       name: newAgentName.trim(),
       isQH: false
     };
 
     const updatedAgents = [...agents, newAgent];
     setAgents(updatedAgents);
+    
+    let logMsg = `Registered new agent: ${newAgent.name}`;
+
+    // Handle initial shift assignment if provided
+    let updatedRoster = [...roster];
+    if (newAgentShift && newAgentShift !== 'Unassigned') {
+      updatedRoster.push({
+        agentId: newAgentId,
+        date: selectedDate,
+        shift: newAgentShift
+      });
+      setRoster(updatedRoster);
+      localStorage.setItem('roster', JSON.stringify(updatedRoster));
+      syncData.updateRoster(updatedRoster);
+      logMsg += ` assigned to ${newAgentShift}`;
+    }
+
     localStorage.setItem('agents', JSON.stringify(updatedAgents));
     syncData.updateAgents(updatedAgents);
-    addLog('Add Agent', `Added new agent: ${newAgent.name}`);
+
     setNewAgentName('');
+    setNewAgentShift('Unassigned');
     setIsModalOpen(false);
+    addLog('Add Agent', logMsg, 'positive');
   };
 
   const LEAVE_TYPES = ['EL', 'PL', 'UL', 'MID-LEAVE', 'WO', 'ML', 'CO'];
@@ -407,8 +429,143 @@ const RosterPage: React.FC = () => {
     localStorage.setItem('roster', JSON.stringify(updatedRoster));
     syncData.updateAgents(updatedAgents);
     syncData.updateRoster(updatedRoster);
-    addLog('Delete Agent', `Permanently deleted agent: ${agentToDelete?.name || agentId}`);
+    addLog('Delete Agent', `Permanently deleted agent: ${agentToDelete?.name || agentId}`, 'negative');
   }
+
+  const handleRosterFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    importRosterFromFile(file);
+    event.target.value = '';
+  };
+
+  const importRosterFromFile = async (file: File) => {
+    setImportStatus(null);
+    setIsImportingRoster(true);
+
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+      const sheetName = workbook.SheetNames[0];
+      if (!sheetName) {
+        setImportStatus({ message: 'File contains no sheets.', tone: 'error' });
+        return;
+      }
+
+      const worksheet = workbook.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, { defval: '', raw: false });
+      if (!rows.length) {
+        setImportStatus({ message: 'File does not contain any rows.', tone: 'error' });
+        return;
+      }
+
+      const newAgents: Agent[] = [];
+      const parsedEntries: RosterEntry[] = [];
+      const rowErrors: string[] = [];
+      const agentLookup = new Map<string, string>();
+      agents.forEach((agent) => {
+        agentLookup.set(agent.name.trim().toLowerCase(), agent.id);
+      });
+
+      const extractEntry = (key: string, requiredTerms: string[], forbiddenTerms: string[] = []) => {
+        const normalizedKey = key.trim().toLowerCase();
+        const hasRequired = requiredTerms.every((term) => normalizedKey.includes(term));
+        const hasForbidden = forbiddenTerms.some((term) => normalizedKey.includes(term));
+        return hasRequired && !hasForbidden;
+      };
+
+      rows.forEach((row, rowIndex) => {
+        const rowEntries = Object.entries(row);
+        const isEmptyRow = rowEntries.every(([, value]) => normalizeCellValue(value) === '');
+        if (isEmptyRow) return;
+
+        const agentCell = rowEntries.find(([key]) => extractEntry(key, ['agent', 'name']))
+          ?? rowEntries.find(([key]) => extractEntry(key, ['name'], ['shift']))
+          ?? rowEntries.find(([key]) => extractEntry(key, ['personnel']));
+        const shiftCell = rowEntries.find(([key]) => extractEntry(key, ['shift']))
+          ?? rowEntries.find(([key]) => extractEntry(key, ['status']))
+          ?? rowEntries.find(([key]) => extractEntry(key, ['roster']));
+        const dateCell = rowEntries.find(([key]) => extractEntry(key, ['date']))
+          ?? rowEntries.find(([key]) => extractEntry(key, ['day']))
+          ?? rowEntries.find(([key]) => extractEntry(key, ['work']));
+
+        const agentName = normalizeCellValue(agentCell?.[1]);
+        const rawShiftValue = normalizeCellValue(shiftCell?.[1]);
+        const parsedDate = parseExcelDate(dateCell?.[1]);
+        const label = `Row ${rowIndex + 2}`;
+
+        if (!agentName) {
+          rowErrors.push(`${label}: Agent Name missing.`);
+          return;
+        }
+        if (!parsedDate) {
+          rowErrors.push(`${label}: Invalid or missing date.`);
+          return;
+        }
+        if (!rawShiftValue) {
+          rowErrors.push(`${label}: Shift value missing.`);
+          return;
+        }
+
+        // Normalize Shift: Upper case, no spaces, and try to match predefined types
+        let shiftValue = rawShiftValue.toUpperCase().replace(/\s+/g, '');
+        
+        // Handle common variations
+        if (shiftValue === 'OFF') shiftValue = 'WO';
+        if (shiftValue === 'WEEKOFF') shiftValue = 'WO';
+
+        // Try to find an exact match in our defined shifts (ignoring case/spaces)
+        const match = ALL_SHIFT_TYPES.find(s => 
+          s.toUpperCase().replace(/\s+/g, '') === shiftValue
+        );
+        if (match) shiftValue = match;
+
+        const lookupKey = agentName.toLowerCase();
+        let agentId = agentLookup.get(lookupKey);
+        if (!agentId) {
+          agentId = createAgentId();
+          agentLookup.set(lookupKey, agentId);
+          newAgents.push({ id: agentId, name: agentName, isQH: false });
+        }
+
+        parsedEntries.push({ agentId, date: parsedDate, shift: shiftValue });
+      });
+
+      if (!parsedEntries.length) {
+        setImportStatus({ message: 'No valid rows were found in the file.', tone: 'error' });
+        return;
+      }
+
+      const mergedRoster = mergeRosterEntries(roster, parsedEntries);
+      setRoster(mergedRoster);
+      localStorage.setItem('roster', JSON.stringify(mergedRoster));
+      syncData.updateRoster(mergedRoster);
+
+      if (newAgents.length) {
+        const updatedAgents = [...agents, ...newAgents];
+        setAgents(updatedAgents);
+        localStorage.setItem('agents', JSON.stringify(updatedAgents));
+        syncData.updateAgents(updatedAgents);
+      }
+
+      const datesFromImport = parsedEntries.map((entry) => entry.date).sort();
+      if (datesFromImport.length) {
+        setSelectedDate(datesFromImport[0]);
+      }
+
+      const summaryParts = [`Imported ${parsedEntries.length} row(s).`];
+      if (newAgents.length) summaryParts.push(`Added ${newAgents.length} new agent(s).`);
+      if (rowErrors.length) summaryParts.push(`Skipped ${rowErrors.length} row(s).`);
+      const tone: ImportFeedback['tone'] = rowErrors.length ? 'warning' : 'success';
+      setImportStatus({ message: `${summaryParts.join(' ')}${rowErrors.length ? ` First issue: ${rowErrors[0]}` : ''}`, tone });
+      addLog('Import Roster', `Imported ${parsedEntries.length} rows from ${file.name}`, 'positive');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown import failure.';
+      setImportStatus({ message: `Import failed: ${message}`, tone: 'error' });
+    } finally {
+      setIsImportingRoster(false);
+    }
+  };
 
   const handleLeaveConfirm = () => {
     if (pendingLeaveAssignment) {
@@ -439,7 +596,7 @@ const RosterPage: React.FC = () => {
     // Only allow delete if dragged horizontally (left/right)
     const isHorizontalDrag = Math.abs(delta.x) > Math.abs(delta.y);
 
-    if (SHIFTS.includes(overId as any)) {
+    if (availableShifts.includes(overId as ShiftType)) {
       updateShift(agentId, overId as ShiftType);
     } 
     else if (overId === 'OFF_DUTY') {
@@ -488,65 +645,118 @@ const RosterPage: React.FC = () => {
   };
 
   const activeAgent = activeId ? agents.find(a => a.id === activeId) : null;
-  const activeAgentShift = activeId ? roster.find(r => r.agentId === activeId && r.date === selectedDate)?.shift || 'Unassigned' : null;
 
   return (
-    <div className="h-full flex flex-col overflow-hidden px-2 pb-2">
-      {/* Header - Minimal Light */}
-      <div className="mb-6 flex flex-col md:flex-row justify-between items-center gap-4 shrink-0 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-xl">
-        <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-            <CalendarIcon size={16} className="text-white" />
+    <div className="h-full flex flex-col overflow-hidden px-4 pb-4">
+      {/* Header - Compact Integrated Bar */}
+      <div className="mb-3 mt-1 bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl flex justify-between items-center shrink-0 px-5 py-2 shadow-sm">
+        <div className="flex items-center space-x-6">
+          <div className="flex items-center space-x-4">
+            <div className="w-8 h-8 bg-white/10 rounded-xl flex items-center justify-center border border-white/20 shadow-sm">
+              <CalendarIcon size={16} className="text-white" />
+            </div>
+            <div className="flex flex-col">
+              <h1 className="text-lg font-black text-white tracking-tight leading-none uppercase">Roster Control</h1>
+              <p className="text-[8px] text-white/40 font-bold uppercase tracking-[0.25em] mt-0.5">Personnel Shift Board</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-lg font-semibold text-black tracking-tight leading-none">Roster Control</h1>
-            <p className="text-[8px] text-black/60 font-medium uppercase tracking-[0.1em] mt-0.5">Personnel Shift Board</p>
+
+          <div className="h-8 w-px bg-white/10" />
+
+          {/* Integrated Date Selector */}
+          <div className="flex items-center h-8 gap-1 bg-white/10 backdrop-blur-md px-2 rounded-xl border border-white/10">
+            <button 
+              onClick={() => {
+                const [y, m, d] = selectedDate.split('-').map(Number);
+                const dateObj = new Date(y, m - 1, d);
+                dateObj.setDate(dateObj.getDate() - 1);
+                setSelectedDate(dateObj.toLocaleDateString('en-CA'));
+              }}
+              className="p-1 hover:bg-white/10 rounded-lg transition-colors text-white/50 hover:text-white"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            
+            <div className="flex items-center gap-2 cursor-pointer group px-1 relative">
+              <span className="text-white font-black text-[10px] uppercase tracking-widest min-w-[80px] text-center">
+                {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
+              </span>
+              <input 
+                type="date" 
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="absolute inset-0 opacity-0 cursor-pointer z-10 w-full"
+              />
+            </div>
+
+            <button 
+              onClick={() => {
+                const [y, m, d] = selectedDate.split('-').map(Number);
+                const dateObj = new Date(y, m - 1, d);
+                dateObj.setDate(dateObj.getDate() + 1);
+                setSelectedDate(dateObj.toLocaleDateString('en-CA'));
+              }}
+              className="p-1 hover:bg-white/10 rounded-lg transition-colors text-white/50 hover:text-white"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Integrated Time Center */}
+          <div className="flex items-center bg-white/5 rounded-xl p-1 border border-white/10 overflow-hidden ml-2">
+            <div className="flex items-center gap-3 px-4 py-1.5 bg-white/10 rounded-lg">
+              <span className="text-[12px] font-black text-white uppercase tracking-tighter border-r border-white/10 pr-3">IST</span>
+              <span className="text-[15px] font-black text-white tabular-nums tracking-tighter leading-none">{times.ist}</span>
+            </div>
+            <div className="flex items-center gap-3 px-4 py-1.5 rounded-lg ml-0.5">
+              <span className="text-[12px] font-black text-white uppercase tracking-tighter border-r border-white/10 pr-3">GMT</span>
+              <span className="text-[15px] font-black text-white tabular-nums tracking-tighter leading-none">{times.uk}</span>
+            </div>
           </div>
         </div>
         
-        <div className="flex items-center space-x-2 bg-transparent p-0">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isImportingRoster}
+            className="px-4 py-1.5 rounded-xl font-black text-[9px] uppercase tracking-widest bg-white text-slate-900 hover:bg-slate-100 transition-all shadow-sm disabled:opacity-50"
+          >
+            {isImportingRoster ? 'Importing...' : 'Import Roster'}
+          </button>
           <input 
-            type="file" 
+            type="file"
             ref={fileInputRef}
-            onChange={handleFileUpload}
-            accept=".xlsx, .xls, .csv"
+            onChange={handleRosterFileChange}
+            accept=".xlsx,.xls,.csv"
             className="hidden"
           />
-          <div className="flex gap-1 shrink-0">
-            <button 
-              onClick={() => downloadLogsForDate(selectedDate)}
-              className="p-1.5 rounded-lg text-black hover:bg-black/5 transition-all"
-              title="Daily Logs"
-            >
-              <FileText size={14} />
-            </button>
-            <button 
-              onClick={() => downloadAllLogs()}
-              className="p-1.5 rounded-lg text-black hover:bg-black/5 transition-all"
-              title="Full Archive"
-            >
-              <Database size={14} />
-            </button>
-            <button 
-              onClick={() => fileInputRef.current?.click()}
-              className="p-1.5 rounded-lg text-black hover:bg-black/5 transition-all"
-              title="Import Excel"
-            >
-              <FileSpreadsheet size={14} />
-            </button>
-          </div>
-
-          <div className="flex items-center px-3 py-1.5 gap-2 bg-black/10 rounded-lg border border-black/20">
-            <CalendarIcon size={16} className="text-black" />
-            <input 
-              type="date" 
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="outline-none bg-transparent text-black text-[11px] font-bold uppercase tracking-widest cursor-pointer"
-            />
-          </div>
         </div>
       </div>
+
+      {importStatus && (
+        <div className={`mb-4 mx-2 p-3 rounded-2xl flex items-center justify-between backdrop-blur-md border animate-in fade-in slide-in-from-top-2 duration-300 ${
+          importStatus.tone === 'success' ? 'bg-green-500/20 border-green-500/30 text-green-200' :
+          importStatus.tone === 'warning' ? 'bg-amber-500/20 border-amber-500/30 text-amber-200' :
+          'bg-rose-500/20 border-rose-500/30 text-rose-200'
+        }`}>
+          <div className="flex items-center gap-3">
+            <div className={`w-2 h-2 rounded-full ${
+              importStatus.tone === 'success' ? 'bg-green-400' :
+              importStatus.tone === 'warning' ? 'bg-amber-400' :
+              'bg-rose-400'
+            }`} />
+            <span className="text-[11px] font-bold uppercase tracking-wider">{importStatus.message}</span>
+          </div>
+          <button onClick={() => setImportStatus(null)} className="p-1 hover:bg-white/10 rounded-lg transition-colors">
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
 
       <DndContext
         sensors={sensors}
@@ -557,103 +767,166 @@ const RosterPage: React.FC = () => {
         <div className="flex-1 flex overflow-hidden gap-4">
           {/* Main Roster Area */}
           <div className="flex-1 flex flex-col gap-4 overflow-hidden">
-            {/* Shifts Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 flex-1 overflow-hidden">
-              {SHIFTS.map((shift) => {
-                const colors = getShiftColor(shift);
-                const shiftAgents = getAgentsForShift(shift);
-                return (
-                  <div key={shift} className="bg-teal-50/40 backdrop-blur-xl rounded-2xl border border-teal-200/30 flex flex-col overflow-hidden group/column shadow-xl">
-                    <div className="px-4 py-2 flex justify-between items-center shrink-0 border-b border-teal-200/10 bg-teal-50/20">
+            {/* Shifts Grid - Horizontal all 5 shifts */}
+            <div className="flex-1 min-h-0">
+              <div className="grid grid-cols-5 gap-4 h-full">
+                {SHIFTS.map((shift) => {
+                  const colors = getShiftColor(shift);
+                  const shiftAgents = getAgentsForShift(shift);
+                  return (
+                    <div key={shift} className="bg-white/10 backdrop-blur-2xl rounded-[32px] border border-white/10 flex flex-col overflow-hidden group/column shadow-xl">
+                    <div className="px-5 py-6 flex justify-between items-center shrink-0">
                       <div className="flex items-center gap-2">
-                        <div className={`w-1.5 h-1.5 rounded-full ${colors.bg}`} />
-                        <span className={`text-[9px] font-semibold text-slate-800 uppercase tracking-wide`}>{shift}</span>
+                        <div className={`w-2 h-2 rounded-full ${colors.bg}`} />
+                        <span className={`text-[10px] font-normal text-white uppercase tracking-widest`}>{shift}</span>
                       </div>
-                      <span className={`text-[8px] font-semibold text-slate-700 bg-white/60 backdrop-blur-md px-1.5 py-0.5 rounded-full border border-white/30`}>
+                      <span className={`text-[10px] font-bold text-white bg-white/20 backdrop-blur-md w-6 h-6 flex items-center justify-center rounded-full border border-white/30 shadow-sm`}>
                         {shiftAgents.length}
                       </span>
                     </div>
-                    <DroppableContainer id={shift} className="p-1.5 overflow-y-auto">
-                      <SortableContext
-                        id={shift}
-                        items={shiftAgents.map(a => a.id)}
-                        strategy={verticalListSortingStrategy}
-                      >
-                        <ul className="flex flex-col gap-0.5">
-                          {shiftAgents.map(agent => (
-                            <SortableAgent 
-                              key={agent.id} 
-                              agent={agent} 
-                              shift={shift} 
-                              colors={colors} 
-                              onShiftChange={updateShift}
-                              onDelete={deleteAgentGlobally}
-                            />
-                          ))}
-                          {shiftAgents.length === 0 && (
-                            <li className="flex flex-col items-center justify-center p-3 opacity-30 shrink-0 border-2 border-dashed border-white/20 rounded-lg">
-                              <span className="text-[8px] font-semibold uppercase tracking-tight text-slate-500 italic">No Personnel</span>
-                            </li>
-                          )}
-                        </ul>
-                      </SortableContext>
-                    </DroppableContainer>
-                  </div>
-                );
-              })}
+                      <DroppableContainer id={shift} className="px-3 pb-6 overflow-y-auto flex-1 scrollbar-hide">
+                        <SortableContext
+                          id={shift}
+                          items={shiftAgents.map(a => a.id)}
+                          strategy={verticalListSortingStrategy}
+                        >
+                          <ul className="flex flex-col gap-3">
+                            {shiftAgents.map(agent => (
+                              <SortableAgent 
+                                key={agent.id} 
+                                agent={agent} 
+                                shift={shift} 
+                                colors={colors} 
+                                onShiftChange={updateShift}
+                                onDelete={deleteAgentGlobally}
+                                shiftOptions={shiftPickerOptions}
+                              />
+                            ))}
+                            {shiftAgents.length === 0 && (
+                            <li className="flex flex-col items-center justify-center p-8 opacity-40 shrink-0 border-2 border-dashed border-white/20 rounded-3xl mt-2">
+                              <span className="text-[9px] font-bold uppercase tracking-widest text-white/60">Empty</span>
+                              </li>
+                            )}
+                          </ul>
+                        </SortableContext>
+                      </DroppableContainer>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Leaves & Week Off Section */}
             {getOffDutyAgents().length > 0 && (
-              <div className="bg-white/20 backdrop-blur-xl rounded-xl border border-white/30 flex flex-col px-3 py-2 shadow-md">
-                <h3 className="text-xs font-semibold text-black uppercase tracking-widest mb-2">Leaves / Week Off</h3>
-                <div className="flex flex-wrap gap-1">
-                  {getOffDutyAgents().map(({ agent, reason }) => {
-                    const colors = getShiftColor(reason);
-                    return (
-                      <div key={agent.id} className={`${colors.card} px-2 py-1 rounded-lg flex items-center gap-1 shadow-sm`}>
-                        <span className="text-black font-semibold text-[11px] truncate">{agent.name}</span>
-                        <span className="text-[8px] font-semibold text-black/70 uppercase tracking-tight">{reason}</span>
-                      </div>
-                    );
-                  })}
-                </div>
+              <div className="bg-white/10 backdrop-blur-2xl rounded-3xl border border-white/20 flex flex-col px-5 py-4 shadow-xl">
+                <h3 className="text-[10px] font-bold text-white/60 uppercase tracking-[0.2em] mb-3 ml-1">Leaves / Week Off</h3>
+                <DroppableContainer id="OFF_DUTY" className="min-h-[40px]">
+                  <SortableContext
+                    id="OFF_DUTY"
+                    items={getOffDutyAgents().map(item => item.agent.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="flex flex-wrap gap-3">
+                      {getOffDutyAgents().map(({ agent, reason }) => (
+                        <div key={agent.id} className="w-56 shrink-0">
+                          <SortableAgent 
+                            agent={agent} 
+                            shift={reason} 
+                            colors={getShiftColor(reason)} 
+                            onShiftChange={updateShift}
+                            onDelete={deleteAgentGlobally}
+                            shiftOptions={shiftPickerOptions}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DroppableContainer>
               </div>
             )}
 
             {/* Unassigned Pool Section */}
-            <div className="bg-white/20 backdrop-blur-xl rounded-2xl border border-white/30 flex flex-col h-1/4 overflow-hidden shadow-xl">
-              <div className="px-5 py-2 border-b border-white/20 bg-white/10 flex items-center justify-between shrink-0">
-                <h2 className="text-xs font-semibold text-black uppercase tracking-widest">Unassigned Pool</h2>
-                <div className="flex items-center gap-2">
-                  <button 
-                    onClick={() => setIsModalOpen(true)}
-                    className="w-8 h-8 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center transition-all shadow-md active:scale-95"
-                    title="Add Agent"
-                  >
-                    <Plus size={16} />
-                  </button>
-                  <span className="bg-slate-900/20 text-black text-xs font-semibold px-2 py-1 rounded-md uppercase tracking-wider">
+            <div className="bg-white/10 backdrop-blur-2xl rounded-[32px] border border-white/20 flex flex-col h-auto max-h-[160px] shadow-xl relative z-40">
+              <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between shrink-0 rounded-t-[32px]">
+                <div className="flex items-center gap-3">
+                  <h2 className="text-[10px] font-bold text-white uppercase tracking-widest">Unassigned Pool</h2>
+                  <span className="bg-white/10 text-white/80 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border border-white/20">
                     {getUnassignedAgents().length} Personnel
                   </span>
                 </div>
+                
+                <div className="relative">
+                  <button 
+                    onClick={() => setIsModalOpen(!isModalOpen)}
+                    className={`w-10 h-10 ${isModalOpen ? 'bg-rose-500 text-white' : 'bg-white text-slate-900'} rounded-2xl flex items-center justify-center transition-all shadow-lg active:scale-95`}
+                    title="Add Agent"
+                  >
+                    <Plus size={20} className={`transition-transform duration-300 ${isModalOpen ? 'rotate-45' : ''}`} />
+                  </button>
+
+                  {isModalOpen && (
+                    <div className="absolute bottom-full right-0 mb-4 w-72 bg-teal-50/90 backdrop-blur-3xl rounded-[32px] border border-teal-200/30 shadow-2xl p-6 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                      <h3 className="text-sm font-black text-slate-800 tracking-tight mb-4 uppercase">Register Personnel</h3>
+                      
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Agent Name</label>
+                          <input 
+                            autoFocus
+                            value={newAgentName}
+                            onChange={(e) => setNewAgentName(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleAddAgent()}
+                            placeholder="Full Name"
+                            className="w-full px-4 py-2.5 bg-white/50 border border-teal-200/20 rounded-xl outline-none text-slate-800 font-bold text-xs"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Shift (Optional)</label>
+                          <select 
+                            value={newAgentShift}
+                            onChange={(e) => setNewAgentShift(e.target.value as ShiftType)}
+                            className="w-full px-4 py-2.5 bg-white/50 border border-teal-200/20 rounded-xl outline-none text-slate-800 font-bold text-xs appearance-none"
+                          >
+                            <option value="Unassigned">Unassigned Pool</option>
+                            {shiftPickerOptions.map(s => (
+                              <option key={s} value={s}>{s}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="flex gap-2 pt-2">
+                          <button 
+                            onClick={handleAddAgent}
+                            disabled={!newAgentName.trim()}
+                            className="flex-1 bg-blue-600 text-white font-black text-[10px] uppercase tracking-widest py-3 rounded-xl shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all disabled:opacity-30"
+                          >
+                            Confirm
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
-              <DroppableContainer id="UNASSIGNED" className="p-2 h-auto max-h-full overflow-auto">
+              <DroppableContainer id="UNASSIGNED" className="p-4 h-auto max-h-full overflow-auto scrollbar-hide">
                 <SortableContext
                   id="UNASSIGNED"
                   items={getUnassignedAgents().map(a => a.id)}
                   strategy={verticalListSortingStrategy}
                 >
-                  <div className="grid grid-cols-3 md:grid-cols-5 lg:grid-cols-8 gap-2 h-auto content-start pb-2">
+                  <div className="flex flex-wrap gap-3 h-auto content-start pb-2">
                     {getUnassignedAgents().map(agent => (
-                      <SortableAgent 
-                        key={agent.id} 
-                        agent={agent} 
-                        shift="Unassigned" 
-                        colors={{ bg: 'bg-blue-600', text: 'text-blue-600', light: 'bg-blue-100', border: 'border-blue-200', card: 'bg-blue-200' }} 
-                        onShiftChange={updateShift}
-                        onDelete={deleteAgentGlobally}
-                      />
+                      <div key={agent.id} className="w-56 shrink-0">
+                        <SortableAgent 
+                          agent={agent} 
+                          shift="Unassigned" 
+                          colors={{ bg: 'bg-blue-600', text: 'text-blue-600', light: 'bg-blue-100', border: 'border-blue-200', card: 'bg-white/40' }} 
+                          onShiftChange={updateShift}
+                          onDelete={deleteAgentGlobally}
+                          shiftOptions={shiftPickerOptions}
+                        />
+                      </div>
                     ))}
                   </div>
                 </SortableContext>
@@ -684,55 +957,52 @@ const RosterPage: React.FC = () => {
         )}
       </DndContext>
 
-      {/* Light Theme Add Agent Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 flex items-center justify-center z-[100] p-6">
-          <div className="absolute inset-0 bg-slate-900/20 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
-          <div className="bg-teal-50/60 backdrop-blur-3xl rounded-[2rem] border border-teal-200/30 shadow-2xl w-full max-w-md overflow-hidden relative animate-in fade-in zoom-in duration-200">
+      {/* Leave Confirmation Modal */}
+      {isLeaveConfirmModalOpen && pendingLeaveAssignment && (
+        <div className="fixed inset-0 flex items-center justify-center z-100 p-6">
+          <div className="absolute inset-0 bg-slate-900/20 backdrop-blur-sm" onClick={handleLeaveCancel} />
+          <div className="bg-rose-50/60 backdrop-blur-3xl rounded-4xl border border-rose-200/30 shadow-2xl w-full max-w-sm overflow-hidden relative animate-in fade-in zoom-in duration-200">
             <div className="p-8 pb-4">
               <div className="flex items-center justify-between mb-8">
-                <div className="w-12 h-12 bg-blue-500/10 rounded-2xl flex items-center justify-center border border-teal-200/20">
-                  <Plus size={24} className="text-blue-600" />
+                <div className="w-12 h-12 bg-rose-500/10 rounded-2xl flex items-center justify-center border border-rose-200/20">
+                  <AlertCircle size={24} className="text-rose-600" />
                 </div>
                 <button 
-                  onClick={() => setIsModalOpen(false)}
-                  className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-teal-50/40 rounded-full transition-all"
+                  onClick={handleLeaveCancel}
+                  className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-rose-50/40 rounded-full transition-all"
                 >
                   <X size={20} />
                 </button>
               </div>
-              <h3 className="text-2xl font-black text-slate-800 tracking-tight mb-2">Register Personnel</h3>
-              <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mb-8">Add new agent to global database</p>
+              <h3 className="text-2xl font-black text-slate-800 tracking-tight mb-2">Confirm Leave Assignment</h3>
+              <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mb-8">Assign this agent to leave status</p>
               
-              <div className="space-y-6">
-                <div className="group">
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1 group-focus-within:text-blue-600 transition-colors">
-                    Agent Name
-                  </label>
-                  <input 
-                    autoFocus
-                    type="text" 
-                    value={newAgentName}
-                    onChange={(e) => setNewAgentName(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleAddAgent()}
-                    placeholder="Enter full name"
-                    className="w-full px-5 py-4 bg-teal-50/30 backdrop-blur-md border border-teal-200/20 rounded-2xl focus:border-blue-500 focus:bg-teal-50/50 outline-none text-slate-800 font-bold transition-all placeholder:text-slate-400"
-                  />
+              <div className="space-y-4 mb-8">
+                <div className="p-4 bg-rose-100/30 rounded-xl border border-rose-200/20">
+                  <p className="text-[11px] text-slate-500 font-bold uppercase tracking-widest mb-2">Agent</p>
+                  <p className="text-lg font-black text-slate-800">{agents.find(a => a.id === pendingLeaveAssignment.agentId)?.name || 'Unknown'}</p>
+                </div>
+                <div className="p-4 bg-rose-100/30 rounded-xl border border-rose-200/20">
+                  <p className="text-[11px] text-slate-500 font-bold uppercase tracking-widest mb-2">Leave Type</p>
+                  <p className="text-lg font-black text-rose-600">{pendingLeaveAssignment.shift}</p>
+                </div>
+                <div className="p-4 bg-slate-100/30 rounded-xl border border-slate-200/20">
+                  <p className="text-[11px] text-slate-500 font-bold uppercase tracking-widest mb-2">Date</p>
+                  <p className="text-lg font-black text-slate-800">{new Date(selectedDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</p>
                 </div>
               </div>
             </div>
             
             <div className="p-8 pt-4 flex gap-4">
               <button 
-                onClick={() => setIsModalOpen(false)}
-                className="flex-1 px-6 py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest text-slate-500 hover:bg-teal-50/40 transition-all active:scale-95"
+                onClick={handleLeaveCancel}
+                className="flex-1 px-6 py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest text-slate-500 hover:bg-rose-50/40 transition-all active:scale-95"
               >
                 Cancel
               </button>
               <button 
-                onClick={handleAddAgent}
-                disabled={!newAgentName.trim()}
-                className="flex-1 px-6 py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest bg-blue-600 text-white hover:bg-blue-700 transition-all shadow-xl shadow-blue-600/20 active:scale-95 disabled:opacity-20"
+                onClick={handleLeaveConfirm}
+                className="flex-1 px-6 py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest bg-rose-600 text-white hover:bg-rose-700 transition-all shadow-xl shadow-rose-600/20 active:scale-95"
               >
                 Confirm
               </button>

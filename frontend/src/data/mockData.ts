@@ -15,12 +15,12 @@ export const MOCK_AGENTS: Agent[] = [
   { id: '12', name: 'Hardik Pandya', isQH: true },
 ];
 
-export const SHIFTS: ShiftType[] = ['6AM-3PM', '1PM-10PM', '2PM-11PM', '10PM-7AM'];
+export const SHIFTS: ShiftType[] = ['6AM-3PM', '1PM-10PM', '2PM-11PM', '10PM-7AM', '12PM-9PM'];
 
 // Sample Roster for a few days
 export const MOCK_ROSTER: RosterEntry[] = [];
 
-const today = new Date().toISOString().split('T')[0];
+const today = new Date().toLocaleDateString('en-CA');
 const dates = [today, '2026-01-05', '2026-01-06', '2026-01-07'];
 
 dates.forEach(date => {
@@ -28,7 +28,8 @@ dates.forEach(date => {
     let shift: ShiftType = '6AM-3PM';
     if (index >= 3 && index < 6) shift = '1PM-10PM';
     if (index >= 6 && index < 9) shift = '2PM-11PM';
-    if (index >= 9) shift = '10PM-7AM';
+    if (index >= 9 && index < 11) shift = '10PM-7AM';
+    if (index >= 11) shift = '12PM-9PM';
     
     // Add some variety (WO)
     if ((index + new Date(date).getDate()) % 7 === 0) {

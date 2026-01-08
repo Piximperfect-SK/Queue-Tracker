@@ -3,20 +3,24 @@ export interface LogEntry {
   user: string;
   action: string;
   details: string;
+  type?: 'positive' | 'negative' | 'neutral';
 }
 
-export type ShiftType = 
-  | '6AM-3PM' 
-  | '1PM-10PM' 
-  | '2PM-11PM' 
-  | '10PM-7AM' 
-  | 'WO' 
-  | 'ML' 
-  | 'PL' 
-  | 'EL' 
-  | 'UL' 
-  | 'CO' 
+export type StandardShiftType =
+  | '6AM-3PM'
+  | '1PM-10PM'
+  | '2PM-11PM'
+  | '10PM-7AM'
+  | '12PM-9PM'
+  | 'WO'
+  | 'ML'
+  | 'PL'
+  | 'EL'
+  | 'UL'
+  | 'CO'
   | 'MID-LEAVE';
+
+export type ShiftType = StandardShiftType | string;
 
 export interface Agent {
   id: string;
