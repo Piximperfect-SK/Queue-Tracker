@@ -57,7 +57,7 @@ const SettingsPage: React.FC = () => {
     const agent = agents.find(a => a.id === id);
     const updated = agents.map(a => a.id === id ? { ...a, isQH: !a.isQH } : a);
     saveAgents(updated);
-    addLog('Toggle QH', `${agent?.name}: ${agent?.isQH ? 'QH -> Standard' : 'Standard -> QH'}`);
+    addLog('Toggle QH', `${agent?.name}: ${agent?.isQH ? 'QH -> Standard' : 'Standard -> QH'}`, !agent?.isQH ? 'positive' : 'neutral');
   };
 
   const addAgent = () => {
@@ -67,14 +67,14 @@ const SettingsPage: React.FC = () => {
       isQH: false
     };
     saveAgents([...agents, newAgent]);
-    addLog('Add Agent', `Added new agent: ${newAgent.name}`);
+    addLog('Add Agent', `Added new agent: ${newAgent.name}`, 'positive');
   };
 
   const deleteAgent = (id: string) => {
     if (window.confirm('Are you sure you want to decommission this personnel?')) {
       const agent = agents.find(a => a.id === id);
       saveAgents(agents.filter(a => a.id !== id));
-      addLog('Delete Agent', `Deleted agent: ${agent?.name || id}`);
+      addLog('Delete Agent', `Deleted agent: ${agent?.name || id}`, 'negative');
     }
   };
 

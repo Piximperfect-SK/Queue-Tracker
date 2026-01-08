@@ -1,7 +1,7 @@
 import type { LogEntry } from '../types';
 import { syncData } from './socket';
 
-export const addLog = (action: string, details: string) => {
+export const addLog = (action: string, details: string, type: 'positive' | 'negative' | 'neutral' = 'neutral') => {
   const now = new Date();
   const dateStr = now.toISOString().split('T')[0];
   const logKey = `logs_${dateStr}`;
@@ -11,7 +11,8 @@ export const addLog = (action: string, details: string) => {
     timestamp: now.toLocaleTimeString(),
     user,
     action,
-    details
+    details,
+    type
   };
 
   syncData.addLog(newEntry);

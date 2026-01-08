@@ -61,11 +61,19 @@ const LogMonitorPage: React.FC = () => {
           </div>
         ) : (
           logs.map((log, i) => (
-            <div key={i} className="flex gap-3 group hover:bg-white/5 p-1 rounded transition-colors border-l border-transparent hover:border-white/20">
+            <div key={i} className="flex gap-3 px-1 py-0.5 group">
               <span className="text-slate-500 shrink-0 select-none">[{log.timestamp}]</span>
               <span className="text-blue-500 shrink-0 font-black">[{log.user}]</span>
-              <span className="text-white shrink-0 font-black uppercase tracking-wider">{log.action}:</span>
-              <span className="text-slate-300 break-all">{log.details}</span>
+              <span className={`shrink-0 font-black uppercase tracking-wider ${
+                log.type === 'positive' ? 'text-green-500' : 
+                log.type === 'negative' ? 'text-red-500' : 
+                'text-white'
+              }`}>{log.action}:</span>
+              <span className={`break-all font-medium ${
+                log.type === 'positive' ? 'text-green-500/90' : 
+                log.type === 'negative' ? 'text-red-500/90' : 
+                'text-slate-300'
+              }`}>{log.details}</span>
               {i === logs.length - 1 && (
                 <span className="w-1.5 h-4 bg-white animate-pulse inline-block align-middle ml-1" />
               )}

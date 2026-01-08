@@ -1,0 +1,12 @@
+Roster import instructions
+-------------------------
+1. Provide one agent per row with the following columns:
+   • Agent Name – the full display name (case-insensitive match). Unknown names are added to the roster automatically.
+   • Date – use YYYY-MM-DD or any Excel date value that resolves to the calendar day. Reduce to the seven consecutive days you intend to publish.
+   • Shift – use one of the supported shift labels (6AM-3PM, 1PM-10PM, 2PM-11PM, 10PM-7AM, 12PM-9PM) or a leave code (WO, ML, PL, EL, UL, CO, MID-LEAVE). Any other columns are ignored during importing.
+2. Each row is interpreted as a single agent on a single day. The importer automatically places the row on the correct shift column, creates missing shifts, and positions leave types under the leaves/WO section.
+3. After a successful import, the calendar picker jumps to the earliest date in the file so you can review that week; you can still navigate to any other day manually.
+4. Leave the file in CSV, XLSX, or XLS format and upload it from the roster header button labeled “Import Weekly Roster”.
+5. Missing shifts are filled with the same styling as the rest of the grid, so you only need to include the shift label that actually applies.
+
+Sample row: Nisha Nigam | 2026-01-09 | 1PM-10PM
