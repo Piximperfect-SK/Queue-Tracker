@@ -67,9 +67,10 @@ interface SortableAgentProps {
   shift: string;
   colors: any;
   onShiftChange: (agentId: string, shift: ShiftType) => void;
+  onDelete: (agentId: string) => void;
 }
 
-const SortableAgent: React.FC<SortableAgentProps> = ({ agent, shift, colors, onShiftChange }) => {
+const SortableAgent: React.FC<SortableAgentProps> = ({ agent, shift, colors, onShiftChange, onDelete }) => {
   const {
     attributes,
     listeners,
@@ -85,6 +86,11 @@ const SortableAgent: React.FC<SortableAgentProps> = ({ agent, shift, colors, onS
     opacity: isDragging ? 0.3 : 1,
     scale: isDragging ? 1.05 : 1,
     zIndex: isDragging ? 50 : 1,
+  };
+
+  const handleDelete = (event: React.MouseEvent) => {
+    event.stopPropagation();
+    onDelete(agent.id);
   };
 
   return (
@@ -104,7 +110,14 @@ const SortableAgent: React.FC<SortableAgentProps> = ({ agent, shift, colors, onS
           )}
         </div>
       </div>
-      <div className="flex items-center shrink-0">
+      <div className="flex items-center shrink-0 gap-2">
+        <button
+          onClick={handleDelete}
+          className="p-1 rounded-md text-red-600 hover:bg-red-500/20 hover:text-red-700 transition-all opacity-0 group-hover:opacity-100"
+          title="Delete Agent"
+        >
+          <Trash2 size={14} />
+        </button>
         <select 
           value={shift}
           onChange={(e) => onShiftChange(agent.id, e.target.value as ShiftType)}
@@ -382,6 +395,21 @@ const RosterPage: React.FC = () => {
     addLog('Update Shift', `${agent?.name || agentId}: ${oldShift} -> ${shift} (Date: ${selectedDate})`);
   };
 
+  function deleteAgentGlobally(agentId: string) {
+    const agentToDelete = agents.find(a => a.id === agentId);
+    const updatedAgents = agents.filter(a => a.id !== agentId);
+    const updatedRoster = roster.filter(r => r.agentId !== agentId);
+
+    setAgents(updatedAgents);
+    setRoster(updatedRoster);
+
+    localStorage.setItem('agents', JSON.stringify(updatedAgents));
+    localStorage.setItem('roster', JSON.stringify(updatedRoster));
+    syncData.updateAgents(updatedAgents);
+    syncData.updateRoster(updatedRoster);
+    addLog('Delete Agent', `Permanently deleted agent: ${agentToDelete?.name || agentId}`);
+  }
+
   const handleLeaveConfirm = () => {
     if (pendingLeaveAssignment) {
       executeShiftUpdate(pendingLeaveAssignment.agentId, pendingLeaveAssignment.shift);
@@ -423,19 +451,7 @@ const RosterPage: React.FC = () => {
       localStorage.setItem('roster', JSON.stringify(updatedRoster));
     }
     else if (overId === 'TRASH' && isHorizontalDrag) {
-      // Delete agent globally only if dragged horizontally
-      const agentToDelete = agents.find(a => a.id === agentId);
-      const updatedAgents = agents.filter(a => a.id !== agentId);
-      const updatedRoster = roster.filter(r => r.agentId !== agentId);
-      
-      setAgents(updatedAgents);
-      setRoster(updatedRoster);
-      
-      localStorage.setItem('agents', JSON.stringify(updatedAgents));
-      localStorage.setItem('roster', JSON.stringify(updatedRoster));
-      syncData.updateAgents(updatedAgents);
-      syncData.updateRoster(updatedRoster);
-      addLog('Delete Agent', `Permanently deleted agent: ${agentToDelete?.name || agentId}`);
+      deleteAgentGlobally(agentId);
     }
     else {
       const overAgentRoster = roster.find(r => r.agentId === overId && r.date === selectedDate);
@@ -571,6 +587,7 @@ const RosterPage: React.FC = () => {
                               shift={shift} 
                               colors={colors} 
                               onShiftChange={updateShift}
+                              onDelete={deleteAgentGlobally}
                             />
                           ))}
                           {shiftAgents.length === 0 && (
@@ -635,6 +652,7 @@ const RosterPage: React.FC = () => {
                         shift="Unassigned" 
                         colors={{ bg: 'bg-blue-600', text: 'text-blue-600', light: 'bg-blue-100', border: 'border-blue-200', card: 'bg-blue-200' }} 
                         onShiftChange={updateShift}
+                        onDelete={deleteAgentGlobally}
                       />
                     ))}
                   </div>

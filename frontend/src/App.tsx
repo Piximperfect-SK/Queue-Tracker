@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import RosterPage from './pages/RosterPage';
 import TrackerPage from './pages/TrackerPage';
@@ -8,6 +8,7 @@ import LogMonitorPage from './pages/LogMonitorPage';
 import { User, LogIn, ShieldAlert, Lock, Fingerprint, Loader2 } from 'lucide-react';
 import { syncData, socket } from './utils/socket';
 import bgVideo from './assets/video-background.mp4';
+import { addLog } from './utils/logger';
 
 function App() {
   const [currentUser, setCurrentUser] = useState<string | null>(localStorage.getItem('currentUser'));
@@ -245,6 +246,7 @@ function App() {
   // 3. Main App State
   return (
     <Router>
+      <NavigationLogger />
       <div className="h-screen w-full relative overflow-hidden font-sans selection:bg-blue-500/30 text-slate-800">
         {/* Background Video */}
         <video 
@@ -278,3 +280,14 @@ function App() {
 
 
 export default App;
+
+const NavigationLogger: React.FC = () => {
+  const location = useLocation();
+
+  useEffect(() => {
+    const pathWithSearch = `${location.pathname}${location.search || ''}`;
+    addLog('Navigate', `Visited ${pathWithSearch}`);
+  }, [location.pathname, location.search]);
+
+  return null;
+};

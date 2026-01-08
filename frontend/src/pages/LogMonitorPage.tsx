@@ -8,7 +8,6 @@ import { getLogsForDate } from '../utils/logger';
 const LogMonitorPage: React.FC = () => {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [isLive, setIsLive] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -29,10 +28,10 @@ const LogMonitorPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (isLive && scrollRef.current) {
+    if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [logs, isLive]);
+  }, [logs]);
 
   return (
     <div className="h-full bg-black text-white font-mono rounded-[2rem] border border-white/20 flex flex-col overflow-hidden select-none shadow-2xl">
@@ -47,12 +46,9 @@ const LogMonitorPage: React.FC = () => {
             <div className={`w-1.5 h-1.5 rounded-full ${socket.connected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
             <span>Link: {socket.connected ? 'OK' : 'LOST'}</span>
           </div>
-          <button 
-            onClick={() => setIsLive(!isLive)}
-            className={`px-3 py-1 border border-black transition-all ${!isLive ? 'bg-red-600 border-red-600 text-white' : 'hover:bg-black hover:text-white'}`}
-          >
-            {isLive ? 'STREEMING' : 'PAUSED'}
-          </button>
+          <span className="px-3 py-1 border border-black rounded-full bg-black/80 text-white tracking-[0.2em] text-[8px]">
+            LIVE
+          </span>
         </div>
       </div>
 
