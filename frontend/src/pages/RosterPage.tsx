@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MOCK_AGENTS, SHIFTS, MOCK_ROSTER } from '../data/mockData';
-import { Calendar as CalendarIcon, GripVertical, FileSpreadsheet, Plus, X, Trash2, FileText, Database, AlertCircle } from 'lucide-react';
+import { Calendar as CalendarIcon, GripVertical, Plus, X, Trash2, FileText, Database, AlertCircle } from 'lucide-react';
 import type { Agent, RosterEntry, ShiftType } from '../types';
-import * as XLSX from 'xlsx';
 import { addLog, downloadLogsForDate, downloadAllLogs, saveLogsFromServer, saveSingleLogFromServer } from '../utils/logger';
 import { socket, syncData } from '../utils/socket';
 import {
@@ -43,105 +42,32 @@ const getShiftColor = (shift: string) => {
   }
 };
 
-  const BLUEPRINT_CACHE_KEY = 'roster_blueprint';
+const BLUEPRINT_CACHE_KEY = 'roster_blueprint';
 
-  const SHIFT_PATTERNS: Array<[RegExp, ShiftType]> = [
-    [/6:?00\s*AM/i, '6AM-3PM'],
-    [/1:?00\s*PM/i, '1PM-10PM'],
-    [/2:?00\s*PM/i, '2PM-11PM'],
-    [/10:?00\s*PM/i, '10PM-7AM'],
-    [/\bWO\b|WEEK\s*OFF|OFF\b/i, 'WO'],
-    [/\bCO\b/i, 'CO'],
-    [/\bML\b|MATERNITY/i, 'ML'],
-    [/\bPL\b|PATERNITY/i, 'PL'],
-    [/\bEL\b|EARNED\s*LEAVE/i, 'EL'],
-    [/\bUL\b|UNPAID\s*LEAVE/i, 'UL'],
-    [/MID-?LEAVE/i, 'MID-LEAVE'],
-  ];
+const mergeRosterEntries = (base: RosterEntry[], additions: RosterEntry[]) => {
+  const merged = [...base];
+  additions.forEach(entry => {
+    const idx = merged.findIndex(r => r.agentId === entry.agentId && r.date === entry.date);
+    if (idx > -1) merged[idx] = entry;
+    else merged.push(entry);
+  });
+  return merged;
+};
 
-  const normalizeName = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, '');
+const loadBlueprint = (): Record<string, RosterEntry[]> => {
+  try {
+    return JSON.parse(localStorage.getItem(BLUEPRINT_CACHE_KEY) || '{}');
+  } catch (error) {
+    console.warn('Invalid roster blueprint payload', error);
+    return {};
+  }
+};
 
-  const detectShiftType = (value: string): ShiftType | null => {
-    const cleaned = value.trim();
-    if (!cleaned) return null;
-    for (const [pattern, shift] of SHIFT_PATTERNS) {
-      if (pattern.test(cleaned)) {
-        return shift;
-      }
-    }
-    return null;
-  };
-
-  const parseDateCell = (value: any): string | null => {
-    if (value instanceof Date) {
-      return value.toISOString().split('T')[0];
-    }
-    if (typeof value === 'number') {
-      const excelEpoch = new Date(Date.UTC(1899, 11, 30));
-      const millis = Math.round(value * 86400000);
-      const date = new Date(excelEpoch.getTime() + millis);
-      if (!isNaN(date.getTime())) {
-        return date.toISOString().split('T')[0];
-      }
-    }
-    if (typeof value === 'string') {
-      const cleaned = value.replace(/(\d+)(st|nd|rd|th)/gi, '$1').replace(/\s*-\s*/g, ' ').trim();
-      const parsed = new Date(cleaned);
-      if (!isNaN(parsed.getTime())) {
-        return parsed.toISOString().split('T')[0];
-      }
-    }
-    return null;
-  };
-
-  const findDateRowIndex = (data: any[][]): number => {
-    const rowsToInspect = Math.min(5, data.length);
-    for (let i = 0; i < rowsToInspect; i += 1) {
-      const row = data[i];
-      if (!row) continue;
-      let parsedCount = 0;
-      for (let j = 1; j < row.length; j += 1) {
-        if (parseDateCell(row[j])) parsedCount += 1;
-      }
-      if (parsedCount >= 2) return i;
-    }
-    return -1;
-  };
-
-  const mergeRosterEntries = (base: RosterEntry[], additions: RosterEntry[]) => {
-    const merged = [...base];
-    additions.forEach(entry => {
-      const idx = merged.findIndex(r => r.agentId === entry.agentId && r.date === entry.date);
-      if (idx > -1) merged[idx] = entry;
-      else merged.push(entry);
-    });
-    return merged;
-  };
-
-  const loadBlueprint = (): Record<string, RosterEntry[]> => {
-    try {
-      return JSON.parse(localStorage.getItem(BLUEPRINT_CACHE_KEY) || '{}');
-    } catch (error) {
-      console.warn('Invalid roster blueprint payload', error);
-      return {};
-    }
-  };
-
-  const applyBlueprint = (base: RosterEntry[]) => {
-    const blueprintEntries = Object.values(loadBlueprint()).flat();
-    if (!blueprintEntries.length) return base;
-    return mergeRosterEntries(base, blueprintEntries);
-  };
-
-  const persistBlueprintEntries = (entries: RosterEntry[]) => {
-    if (!entries.length) return;
-    const blueprint = loadBlueprint();
-    entries.forEach(entry => {
-      blueprint[entry.date] = (blueprint[entry.date] || []).filter(e => e.agentId !== entry.agentId);
-      blueprint[entry.date].push(entry);
-    });
-    localStorage.setItem(BLUEPRINT_CACHE_KEY, JSON.stringify(blueprint));
-  };
+const applyBlueprint = (base: RosterEntry[]) => {
+  const blueprintEntries = Object.values(loadBlueprint()).flat();
+  if (!blueprintEntries.length) return base;
+  return mergeRosterEntries(base, blueprintEntries);
+};
 
 interface DroppableContainerProps {
   id: string;
@@ -241,7 +167,6 @@ const RosterPage: React.FC = () => {
   const [newAgentName, setNewAgentName] = useState('');
   const [isLeaveConfirmModalOpen, setIsLeaveConfirmModalOpen] = useState(false);
   const [pendingLeaveAssignment, setPendingLeaveAssignment] = useState<{ agentId: string; shift: ShiftType } | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -316,123 +241,6 @@ const RosterPage: React.FC = () => {
       socket.off('init', handleInit);
     };
   }, []);
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      try {
-        const bstr = evt.target?.result;
-        const wb = XLSX.read(bstr, { type: 'binary', cellDates: true });
-        const wsname = wb.SheetNames[0];
-        const ws = wb.Sheets[wsname];
-        
-        // Read as 2D array (header: 1 ensures we get a simple array of arrays)
-        const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null }) as any[][];
-        console.log('Raw Excel Data:', data);
-
-        if (data.length < 2) {
-          alert('File structure incorrect. Need dates in the header row and agent names in column A.');
-          return;
-        }
-
-        const dateRowIdx = findDateRowIndex(data);
-        if (dateRowIdx < 0) {
-          alert('Could not detect the date row. Ensure the header row contains actual dates like "3rd January 2026".');
-          return;
-        }
-
-        const dateMap: { [colIdx: number]: string } = {};
-        const dateRow = data[dateRowIdx];
-        for (let j = 1; j < dateRow.length; j += 1) {
-          const parsedDate = parseDateCell(dateRow[j]);
-          if (parsedDate) {
-            dateMap[j] = parsedDate;
-          }
-        }
-
-        if (!Object.keys(dateMap).length) {
-          alert('No valid dates found in the header. Check that the row you expect contains calendar dates.');
-          return;
-        }
-
-        console.log('Detected Dates:', dateMap);
-
-        // 2. Map Agents from the first column (Column 0) and process shifts
-        const newEntries: RosterEntry[] = [];
-        const unmatchedAgents = new Set<string>();
-        const agentLookup = new Map(agents.map(agent => [normalizeName(agent.name), agent] as const));
-
-        // Start from Row 1 to check all rows for agent names
-        for (let i = 1; i < data.length; i++) {
-          const row = data[i];
-          if (!row || !row[0]) continue;
-
-            const agentName = String(row[0]).trim();
-          // Skip header-like rows
-          if (agentName.toLowerCase().includes('names/dates') || 
-              agentName.toLowerCase() === 'saturday' || 
-              agentName.toLowerCase() === 'sunday' ||
-              agentName.toLowerCase() === 'monday' ||
-              agentName.toLowerCase() === 'tuesday' ||
-              agentName.toLowerCase() === 'wednesday' ||
-              agentName.toLowerCase() === 'thursday' ||
-              agentName.toLowerCase() === 'friday') continue;
-
-          const agent = agentLookup.get(normalizeName(agentName));
-
-          if (!agent) {
-            unmatchedAgents.add(agentName);
-            continue;
-          }
-
-          // For this agent, check every column that has a date
-          Object.keys(dateMap).forEach(colIdxStr => {
-            const j = parseInt(colIdxStr);
-            const date = dateMap[j];
-            const shiftValue = row[j];
-
-            if (date && shiftValue !== null && shiftValue !== undefined) {
-              const shift = detectShiftType(String(shiftValue));
-              if (!shift) return;
-
-              newEntries.push({
-                agentId: agent.id,
-                date,
-                shift
-              });
-            }
-          });
-        }
-
-        if (newEntries.length > 0) {
-          const updatedRoster = mergeRosterEntries(roster, newEntries);
-
-          setRoster(updatedRoster);
-          localStorage.setItem('roster', JSON.stringify(updatedRoster));
-          syncData.updateRoster(updatedRoster);
-          persistBlueprintEntries(newEntries);
-          
-          addLog('Excel Import', `Imported ${newEntries.length} entries for ${Array.from(new Set(newEntries.map(e => e.agentId))).length} agents.`);
-          
-          let msg = `Imported ${newEntries.length} entries.`;
-          if (unmatchedAgents.size > 0) {
-            msg += `\n\nAgents not found: ${Array.from(unmatchedAgents).join(', ')}`;
-          }
-          alert(msg);
-        } else {
-          alert('No data imported. Ensure:\n1. Row 1 has dates (B1, C1...)\n2. Column A has Agent Names (A3, A4...)\n3. Names match exactly.');
-        }
-      } catch (err) {
-        console.error('Import Error:', err);
-        alert('Error processing file.');
-      }
-    };
-    reader.readAsBinaryString(file);
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  };
 
   const handleAddAgent = () => {
     if (!newAgentName.trim()) return;
@@ -594,13 +402,6 @@ const RosterPage: React.FC = () => {
         </div>
         
         <div className="flex items-center space-x-2 bg-transparent p-0">
-          <input 
-            type="file" 
-            ref={fileInputRef}
-            onChange={handleFileUpload}
-            accept=".xlsx, .xls, .csv"
-            className="hidden"
-          />
           <div className="flex gap-1 shrink-0">
             <button 
               onClick={() => downloadLogsForDate(selectedDate)}
@@ -615,13 +416,6 @@ const RosterPage: React.FC = () => {
               title="Full Archive"
             >
               <Database size={14} />
-            </button>
-            <button 
-              onClick={() => fileInputRef.current?.click()}
-              className="p-1.5 rounded-lg text-black hover:bg-black/5 transition-all"
-              title="Import Excel"
-            >
-              <FileSpreadsheet size={14} />
             </button>
           </div>
 
@@ -832,9 +626,9 @@ const RosterPage: React.FC = () => {
 
       {/* Leave Confirmation Modal */}
       {isLeaveConfirmModalOpen && pendingLeaveAssignment && (
-        <div className="fixed inset-0 flex items-center justify-center z-[100] p-6">
+        <div className="fixed inset-0 flex items-center justify-center z-100 p-6">
           <div className="absolute inset-0 bg-slate-900/20 backdrop-blur-sm" onClick={handleLeaveCancel} />
-          <div className="bg-rose-50/60 backdrop-blur-3xl rounded-[2rem] border border-rose-200/30 shadow-2xl w-full max-w-sm overflow-hidden relative animate-in fade-in zoom-in duration-200">
+          <div className="bg-rose-50/60 backdrop-blur-3xl rounded-4xl border border-rose-200/30 shadow-2xl w-full max-w-sm overflow-hidden relative animate-in fade-in zoom-in duration-200">
             <div className="p-8 pb-4">
               <div className="flex items-center justify-between mb-8">
                 <div className="w-12 h-12 bg-rose-500/10 rounded-2xl flex items-center justify-center border border-rose-200/20">
