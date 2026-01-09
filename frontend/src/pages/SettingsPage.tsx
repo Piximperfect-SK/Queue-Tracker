@@ -57,7 +57,7 @@ const SettingsPage: React.FC = () => {
     const agent = agents.find(a => a.id === id);
     const updated = agents.map(a => a.id === id ? { ...a, isQH: !a.isQH } : a);
     saveAgents(updated);
-    addLog('Toggle QH', `${agent?.name}: ${agent?.isQH ? 'QH -> Standard' : 'Standard -> QH'}`, !agent?.isQH ? 'positive' : 'neutral');
+    addLog('System', `${agent?.name}: ${agent?.isQH ? 'Queue Handler -> Standard' : 'Standard -> Queue Handler'}`, !agent?.isQH ? 'positive' : 'neutral');
   };
 
   const addAgent = () => {
@@ -126,35 +126,50 @@ const SettingsPage: React.FC = () => {
               {agents.length} Active IDs
             </span>
           </div>
-          <div className="overflow-hidden flex-1 p-6 scrollbar-hide">
-            <div className="space-y-2">
+          <div className="overflow-y-auto flex-1 p-6 scrollbar-hide max-h-[600px]">
+            <div className="space-y-4">
               {agents.map((agent) => (
-                <div key={agent.id} className="group bg-white/30 border border-white/20 rounded-xl p-2.5 flex items-center justify-between transition-all hover:bg-white/50 hover:border-white/40 shadow-sm backdrop-blur-md">
-                  <div className="flex items-center space-x-3 flex-1 ml-1">
-                    <div className="flex-1 min-w-0 leading-none">
+                <div key={agent.id} className="group bg-white/40 border border-white/30 rounded-2xl p-4 flex items-center justify-between transition-all hover:bg-white/60 hover:border-white/50 shadow-sm backdrop-blur-md">
+                  <div className="flex items-center space-x-4 flex-1">
+                    {/* Dedicated QH Toggle Button in front of name */}
+                    <button 
+                      onClick={() => toggleQH(agent.id)}
+                      className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all shrink-0 border shadow-sm group/btn ${
+                        agent.isQH 
+                          ? 'bg-blue-600 border-blue-500 text-white shadow-blue-200' 
+                          : 'bg-white border-slate-200 text-slate-300 hover:border-blue-300 hover:text-blue-500'
+                      }`}
+                      title={agent.isQH ? "Queue Handler Active" : "Assign Queue Handler"}
+                    >
+                      <ShieldCheck size={20} strokeWidth={agent.isQH ? 2.5 : 2} className={agent.isQH ? 'animate-pulse' : ''} />
+                    </button>
+
+                    <div className="flex-1 min-w-0">
                       <input 
                         type="text" 
                         value={agent.name}
                         onChange={(e) => updateAgentName(agent.id, e.target.value)}
-                        className="bg-transparent text-slate-900 font-black text-sm w-full focus:outline-none focus:text-blue-600 transition-colors"
+                        className="bg-transparent text-slate-900 font-black text-base w-full focus:outline-none focus:text-blue-600 transition-colors placeholder:text-slate-300"
+                        placeholder="Personnel Name"
                       />
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <button 
-                          onClick={() => toggleQH(agent.id)}
-                          className={`flex items-center space-x-1.5 px-1.5 py-0.5 rounded-md text-[7px] font-black uppercase tracking-widest transition-all ${agent.isQH ? 'bg-green-600/20 text-green-700 border border-green-500/30 backdrop-blur-md' : 'bg-black/5 text-slate-600 border border-black/5 hover:bg-black/10'}`}
-                        >
-                          <ShieldCheck size={8} />
-                          <span>{agent.isQH ? 'Quality Personnel' : 'Standard'}</span>
-                        </button>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className={`text-[8px] font-black uppercase tracking-[0.2em] px-2 py-0.5 rounded-md border ${
+                          agent.isQH 
+                            ? 'bg-blue-50 text-blue-600 border-blue-100' 
+                            : 'bg-slate-50 text-slate-400 border-slate-100'
+                        }`}>
+                          {agent.isQH ? 'Queue Handler' : 'Standard Personnel'}
+                        </span>
                       </div>
                     </div>
                   </div>
                   
                   <button 
                     onClick={() => deleteAgent(agent.id)}
-                    className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-500/10 rounded-lg transition-all"
+                    className="p-3 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all ml-2"
+                    title="Decommission"
                   >
-                    <Trash2 size={16} />
+                    <Trash2 size={18} />
                   </button>
                 </div>
               ))}
@@ -182,7 +197,7 @@ const SettingsPage: React.FC = () => {
                </div>
                <div className="bg-white/40 rounded-2xl p-6 border border-white/30 hover:bg-white/60 transition-all backdrop-blur-md">
                  <p className="text-slate-900 font-black text-[13px] mb-1.5 uppercase tracking-tighter">Personnel Hierarchy</p>
-                 <p className="text-slate-700 text-[12px] leading-relaxed font-bold">Quality Analysts (QH) enable priority identifiers across tracking matrices.</p>
+                 <p className="text-slate-700 text-[12px] leading-relaxed font-bold">Queue Handlers (QH) enable priority identifiers across tracking matrices.</p>
                </div>
              </div>
           </div>
