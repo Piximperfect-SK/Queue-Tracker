@@ -396,8 +396,8 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
                           {agent.name}
                         </span>
                         {agent.isQH && (
-                          <span className="text-[6px] font-black text-blue-400/80 uppercase tracking-[0.4em] mt-1">
-                            On Shift Agent
+                          <span className="text-[6px] font-black text-amber-400 uppercase tracking-[0.3em] mt-1 drop-shadow-[0_0_8px_rgba(245,158,11,0.5)]">
+                            Queue Handler (QH)
                           </span>
                         )}
                       </div>

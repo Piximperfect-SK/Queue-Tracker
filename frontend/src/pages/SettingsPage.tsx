@@ -57,7 +57,7 @@ const SettingsPage: React.FC = () => {
     const agent = agents.find(a => a.id === id);
     const updated = agents.map(a => a.id === id ? { ...a, isQH: !a.isQH } : a);
     saveAgents(updated);
-    addLog('System', `${agent?.name}: ${agent?.isQH ? 'On Shift Agent -> Standard' : 'Standard -> On Shift Agent'}`, !agent?.isQH ? 'positive' : 'neutral');
+    addLog('System', `${agent?.name}: ${agent?.isQH ? 'Queue Handler (QH) -> Standard' : 'Standard -> Queue Handler (QH)'}`, !agent?.isQH ? 'positive' : 'neutral');
   };
 
   const addAgent = () => {
@@ -136,10 +136,10 @@ const SettingsPage: React.FC = () => {
                       onClick={() => toggleQH(agent.id)}
                       className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all shrink-0 border shadow-sm group/btn ${
                         agent.isQH 
-                          ? 'bg-blue-600 border-blue-500 text-white shadow-blue-200' 
-                          : 'bg-white border-slate-200 text-slate-300 hover:border-blue-300 hover:text-blue-500'
+                          ? 'bg-amber-500 border-amber-600 text-white shadow-amber-200' 
+                          : 'bg-white border-slate-200 text-slate-300 hover:border-amber-300 hover:text-amber-500'
                       }`}
-                      title={agent.isQH ? "Agent On Shift" : "Assign to Shift"}
+                      title={agent.isQH ? "Queue Handler (QH)" : "Assign as QH"}
                     >
                       <ShieldCheck size={20} strokeWidth={agent.isQH ? 2.5 : 2} className={agent.isQH ? 'animate-pulse' : ''} />
                     </button>
@@ -155,10 +155,10 @@ const SettingsPage: React.FC = () => {
                       <div className="flex items-center gap-2 mt-1">
                         <span className={`text-[8px] font-black uppercase tracking-[0.2em] px-2 py-0.5 rounded-md border ${
                           agent.isQH 
-                            ? 'bg-blue-50 text-blue-600 border-blue-100' 
+                            ? 'bg-amber-50 text-amber-700 border-amber-200' 
                             : 'bg-slate-50 text-slate-400 border-slate-100'
                         }`}>
-                          {agent.isQH ? 'On Shift Agent' : 'Standard Agent'}
+                          {agent.isQH ? 'Queue Handler (QH)' : 'Standard Agent'}
                         </span>
                       </div>
                     </div>
@@ -197,7 +197,7 @@ const SettingsPage: React.FC = () => {
                </div>
                <div className="bg-white/40 rounded-2xl p-6 border border-white/30 hover:bg-white/60 transition-all backdrop-blur-md">
                  <p className="text-slate-900 font-black text-[13px] mb-1.5 uppercase tracking-tighter">Agent Hierarchy</p>
-                 <p className="text-slate-700 text-[12px] leading-relaxed font-bold">On Shift Agents enable priority identifiers across tracking matrices.</p>
+                 <p className="text-slate-700 text-[12px] leading-relaxed font-bold">Queue Handlers (QH) enable priority identifiers across tracking matrices.</p>
                </div>
              </div>
           </div>
