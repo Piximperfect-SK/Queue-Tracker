@@ -174,17 +174,14 @@ const SortableAgent: React.FC<SortableAgentProps> = ({ agent, shift, colors, onS
     <li
       ref={setNodeRef}
       style={style}
-      className={`flex items-center justify-between px-2.5 py-1.5 rounded-xl transition-all group ${colors.card} hover:opacity-95 shadow-sm active:scale-[0.98] cursor-default flex-1 min-h-[36px] mb-1.5 last:mb-0`}
+      className={`flex items-center justify-between px-2.5 py-1.5 rounded-xl transition-all group ${colors.card} hover:opacity-95 shadow-sm active:scale-[0.98] cursor-default flex-1 min-h-[36px]`}
     >
       <div className="flex items-center space-x-2 flex-1 min-w-0">
         <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-slate-800/40 hover:text-slate-900 transition-colors shrink-0">
           <GripVertical size={14} />
         </div>
         <div className="flex-1 min-w-0">
-          <span className="text-slate-900 font-bold text-[11px] block leading-tight whitespace-normal break-words">{agent.name}</span>
-          {agent.isQH && (
-            <span className="text-[7px] font-bold text-slate-800/50 uppercase tracking-widest block mt-0.5">QA</span>
-          )}
+          <span className="text-slate-900 font-semibold text-[11px] block leading-tight whitespace-normal break-words">{agent.name}</span>
         </div>
       </div>
 
@@ -656,8 +653,8 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
               <CalendarIcon size={16} className="text-white" />
             </div>
             <div className="flex flex-col">
-              <h1 className="text-lg font-black text-white tracking-tight leading-none uppercase">Roster Control</h1>
-              <p className="text-[8px] text-white/40 font-bold uppercase tracking-[0.25em] mt-0.5">Personnel Shift Board</p>
+              <h1 className="text-lg font-semibold text-white tracking-tight leading-none uppercase">Roster Control</h1>
+              <p className="text-[8px] text-white/40 font-medium uppercase tracking-[0.25em] mt-0.5">Personnel Shift Board</p>
             </div>
           </div>
 
@@ -680,7 +677,7 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
             </button>
             
             <div className="flex items-center gap-2 cursor-pointer group px-1 relative">
-              <span className="text-white font-black text-[10px] uppercase tracking-widest min-w-[80px] text-center">
+              <span className="text-white font-medium text-[10px] uppercase tracking-widest min-w-[80px] text-center">
                 {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
               </span>
               <input 
@@ -709,12 +706,12 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
           {/* Integrated Time Center */}
           <div className="flex items-center bg-white/5 rounded-xl p-1 border border-white/10 overflow-hidden ml-2">
             <div className="flex items-center gap-3 px-4 py-1.5 bg-white/10 rounded-lg">
-              <span className="text-[12px] font-black text-white uppercase tracking-tighter border-r border-white/10 pr-3">IST</span>
-              <span className="text-[15px] font-black text-white tabular-nums tracking-tighter leading-none">{times.ist}</span>
+              <span className="text-[12px] font-medium text-yellow-400 uppercase tracking-tighter border-r border-white/10 pr-3">IST</span>
+              <span className="text-[15px] font-medium text-white tabular-nums tracking-tighter leading-none">{times.ist}</span>
             </div>
             <div className="flex items-center gap-3 px-4 py-1.5 rounded-lg ml-0.5">
-              <span className="text-[12px] font-black text-white uppercase tracking-tighter border-r border-white/10 pr-3">GMT</span>
-              <span className="text-[15px] font-black text-white tabular-nums tracking-tighter leading-none">{times.uk}</span>
+              <span className="text-[12px] font-medium text-yellow-400 uppercase tracking-tighter border-r border-white/10 pr-3">GMT</span>
+              <span className="text-[15px] font-medium text-white tabular-nums tracking-tighter leading-none">{times.uk}</span>
             </div>
           </div>
         </div>
@@ -790,7 +787,7 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
                           items={shiftAgents.map(a => a.id)}
                           strategy={verticalListSortingStrategy}
                         >
-                          <ul className="flex flex-col gap-3">
+                          <ul className="flex flex-col gap-1.5">
                             {shiftAgents.map(agent => (
                               <SortableAgent 
                                 key={agent.id} 
@@ -826,7 +823,7 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
                     items={getOffDutyAgents().map(item => item.agent.id)}
                     strategy={verticalListSortingStrategy}
                   >
-                    <div className="flex flex-wrap gap-3">
+                    <div className="flex flex-wrap gap-2">
                       {getOffDutyAgents().map(({ agent, reason }) => (
                         <div key={agent.id} className="w-56 shrink-0">
                           <SortableAgent 
@@ -846,7 +843,7 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
             )}
 
             {/* Unassigned Pool Section */}
-            <div className="bg-white/10 backdrop-blur-2xl rounded-[32px] border border-white/20 flex flex-col h-auto max-h-[160px] shadow-xl relative z-40">
+            <div className="bg-white/10 backdrop-blur-2xl rounded-[32px] border border-white/20 flex flex-col h-auto max-h-[500px] shadow-xl relative z-40">
               <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between shrink-0 rounded-t-[32px]">
                 <div className="flex items-center gap-3">
                   <h2 className="text-[10px] font-bold text-white uppercase tracking-widest">Unassigned Pool</h2>
@@ -858,7 +855,7 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
                 <div className="relative">
                   <button 
                     onClick={() => setIsModalOpen(!isModalOpen)}
-                    className={`w-10 h-10 ${isModalOpen ? 'bg-rose-500 text-white' : 'bg-white text-slate-900'} rounded-2xl flex items-center justify-center transition-all shadow-lg active:scale-95`}
+                    className={`w-10 h-10 ${isModalOpen ? 'bg-rose-500 text-white' : 'bg-white text-slate-900'} rounded-2xl flex items-center justify-center transition-all shadow-lg active:scale-[0.98]`}
                     title="Add Agent"
                   >
                     <Plus size={20} className={`transition-transform duration-300 ${isModalOpen ? 'rotate-45' : ''}`} />
@@ -909,13 +906,13 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
                   )}
                 </div>
               </div>
-              <DroppableContainer id="UNASSIGNED" className="p-4 h-auto max-h-full overflow-auto scrollbar-hide">
+              <DroppableContainer id="UNASSIGNED" className="p-4 overflow-y-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
                 <SortableContext
                   id="UNASSIGNED"
                   items={getUnassignedAgents().map(a => a.id)}
                   strategy={verticalListSortingStrategy}
                 >
-                  <div className="flex flex-wrap gap-3 h-auto content-start pb-2">
+                  <div className="flex flex-wrap gap-2 h-auto content-start pb-2">
                     {getUnassignedAgents().map(agent => (
                       <div key={agent.id} className="w-56 shrink-0">
                         <SortableAgent 
