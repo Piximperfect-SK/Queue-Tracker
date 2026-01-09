@@ -8,6 +8,7 @@ import LogMonitorPage from './pages/LogMonitorPage';
 import { User, LogIn, ShieldAlert, Lock, Fingerprint, Loader2 } from 'lucide-react';
 import { syncData, socket } from './utils/socket';
 import bgVideo from './assets/video-background.mp4';
+import signinBg from './assets/videobackground-2.mp4';
 import { addLog } from './utils/logger';
 
 function App() {
@@ -160,7 +161,7 @@ function App() {
           playsInline
           className="absolute inset-0 w-full h-full object-cover scale-105"
         >
-          <source src={bgVideo} type="video/mp4" />
+          <source src={signinBg} type="video/mp4" />
         </video>
         <div className="absolute inset-0 bg-teal-50/20 backdrop-blur-[2px]" />
         
