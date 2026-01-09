@@ -654,7 +654,7 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
             </div>
             <div className="flex flex-col">
               <h1 className="text-lg font-semibold text-white tracking-tight leading-none uppercase">Roster Control</h1>
-              <p className="text-[8px] text-white/40 font-medium uppercase tracking-[0.25em] mt-0.5">Personnel Shift Board</p>
+              <p className="text-[8px] text-white/40 font-bold uppercase tracking-[0.25em] mt-0.5">Agent Shift Board</p>
             </div>
           </div>
 
@@ -848,7 +848,7 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
                 <div className="flex items-center gap-3">
                   <h2 className="text-[10px] font-bold text-white uppercase tracking-widest">Unassigned Pool</h2>
                   <span className="bg-white/10 text-white/80 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border border-white/20">
-                    {getUnassignedAgents().length} Personnel
+                    {getUnassignedAgents().length} Agents
                   </span>
                 </div>
                 
@@ -863,11 +863,11 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
 
                   {isModalOpen && (
                     <div className="absolute bottom-full right-0 mb-4 w-72 bg-teal-50/90 backdrop-blur-3xl rounded-[32px] border border-teal-200/30 shadow-2xl p-6 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                      <h3 className="text-sm font-black text-slate-800 tracking-tight mb-4 uppercase">Register Personnel</h3>
+                      <h3 className="text-sm font-black text-slate-800 tracking-tight mb-4 uppercase">Register Agent</h3>
                       
                       <div className="space-y-4">
                         <div>
-                          <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Agent Name</label>
+                          <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Full Name</label>
                           <input 
                             autoFocus
                             value={newAgentName}
