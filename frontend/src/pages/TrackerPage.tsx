@@ -388,25 +388,15 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
                 return (
                   <tr key={agent.id} className={`group border-b border-white/5 bg-white/5 backdrop-blur-md hover:bg-white/10 transition-all ${isDisabled ? 'opacity-30 grayscale' : ''}`}>
                     <td className="px-8 py-4 text-center min-w-[320px]">
-                      <div className="flex items-center justify-center">
-                        <div className="group/name flex items-center bg-white/5 backdrop-blur-sm rounded-full p-1 pr-8 border border-white/10 transition-all duration-500 hover:bg-white/15 hover:shadow-2xl hover:border-white/20 active:scale-[0.98]">
-                          {/* Profile Icon with Initials */}
-                          <div className="w-12 h-12 rounded-full bg-slate-900 flex items-center justify-center text-white font-black text-xl shadow-lg transition-all duration-500 group-hover/name:scale-105 group-hover/name:bg-blue-600 group-hover/name:rotate-[360deg]">
-                            {agent.name.charAt(0).toUpperCase()}
-                          </div>
-                          
-                          {/* Expanding Name Section */}
-                          <div className="flex flex-col items-start ml-4">
-                            <span className="text-2xl font-normal text-white leading-none whitespace-nowrap transition-all duration-700 ease-out group-hover/name:tracking-[0.15em] group-hover/name:text-blue-200 select-none">
-                              {agent.name}
-                            </span>
-                            {agent.isQH && (
-                              <span className="text-[7px] font-black text-blue-400/30 group-hover/name:text-blue-400/80 uppercase tracking-[0.4em] mt-1.5 transition-all duration-700">
-                                On Shift Agent
-                              </span>
-                            )}
-                          </div>
-                        </div>
+                      <div className="flex flex-col items-center transition-all duration-500 ease-out">
+                        <span className="text-2xl font-normal text-white leading-none whitespace-nowrap transition-all duration-700 ease-out group-hover:tracking-[0.2em] group-hover:scale-110 origin-center select-none">
+                          {agent.name}
+                        </span>
+                        {agent.isQH && (
+                          <span className="text-[7px] font-black text-blue-400/30 group-hover:text-blue-400/80 uppercase tracking-[0.4em] mt-2 transition-all duration-700">
+                            On Shift Agent
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="py-3 text-center">
