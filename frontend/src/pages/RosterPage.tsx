@@ -787,7 +787,7 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
                           items={shiftAgents.map(a => a.id)}
                           strategy={verticalListSortingStrategy}
                         >
-                          <ul className="flex flex-col gap-1.5">
+                          <ul className="flex flex-col gap-1">
                             {shiftAgents.map(agent => (
                               <SortableAgent 
                                 key={agent.id} 

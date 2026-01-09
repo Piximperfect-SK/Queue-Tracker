@@ -55,7 +55,7 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
         minute: '2-digit',
         hour12: true
       });
-      
+
       const istStr = istFormat.format(now);
       const ukStr = ukFormat.format(now);
 
@@ -100,7 +100,7 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
     socket.on('log_added', ({ dateStr, logEntry }) => {
       saveSingleLogFromServer(dateStr, logEntry);
     });
-    
+
     const handleInit = (db: any) => {
       if (db.agents) setAgents(db.agents);
       if (db.roster) setRoster(db.roster);
@@ -119,6 +119,15 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
     const savedStats = localStorage.getItem('stats');
     if (savedStats) {
       setStats(JSON.parse(savedStats));
+    } else {
+      setStats(MOCK_AGENTS.map(agent => ({
+        agentId: agent.id,
+        date: new Date().toLocaleDateString('en-CA'),
+        incidents: 0,
+        sctasks: 0,
+        calls: 0,
+        comments: ''
+      })));
     }
 
     if (socket.connected) {
@@ -169,7 +178,7 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
   const activeAgents = useMemo(() => {
     const hiddenShifts = new Set(['WO', 'ML', 'PL', 'EL', 'UL', 'CO', 'MID-LEAVE']);
     const rosterForDay = roster.filter(r => r.date === selectedDate);
-    
+
     const visibleEntries = rosterForDay.filter(r => !hiddenShifts.has(r.shift));
 
     const all = visibleEntries.map(r => {
@@ -198,31 +207,31 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
     const agent = agents.find(a => a.id === agentId);
     const existing = stats.find(s => s.agentId === agentId && s.date === selectedDate);
     let updated;
-    
-    const finalValue = (field === 'incidents' || field === 'sctasks' || field === 'calls') 
-      ? Number(value) || 0 
+
+    const finalValue = (field === 'incidents' || field === 'sctasks' || field === 'calls')
+      ? Number(value) || 0
       : value;
 
     const oldValue = existing ? existing[field] : (field === 'comments' ? '' : 0);
 
     if (existing) {
-      updated = stats.map(s => 
+      updated = stats.map(s =>
         (s.agentId === agentId && s.date === selectedDate) ? { ...s, [field]: finalValue } : s
       );
     } else {
-      updated = [...stats, { 
-        agentId, 
-        date: selectedDate, 
-        incidents: 0, 
-        sctasks: 0, 
-        calls: 0, 
+      updated = [...stats, {
+        agentId,
+        date: selectedDate,
+        incidents: 0,
+        sctasks: 0,
+        calls: 0,
         comments: '',
-        [field]: finalValue 
+        [field]: finalValue
       }];
     }
-    
+
     saveStats(updated);
-    
+
     let type: 'positive' | 'negative' | 'neutral' = 'neutral';
     if (field !== 'comments') {
       const numFinal = Number(finalValue);
@@ -236,13 +245,14 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
 
   const handleCallSubmit = () => {
     if (!callData.ticketNumber.trim()) return;
-    
-    const statsObj = getAgentStats(callData.agentId);
-    updateStat(callData.agentId, 'calls', statsObj.calls + 1);
-    
+
     const agent = agents.find(a => a.id === callData.agentId);
+    const statsObj = getAgentStats(callData.agentId);
+
+    updateStat(callData.agentId, 'calls', statsObj.calls + 1);
+
     addLog('Call Logged', `${agent?.name}: Ticket #${callData.ticketNumber} (${callData.type})`, 'positive');
-    
+
     setCallData({ agentId: '', ticketNumber: '', type: 'New' });
     setIsCallModalOpen(false);
   };
@@ -269,8 +279,8 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
               <ShieldCheck size={16} className="text-white" />
             </div>
             <div className="flex flex-col">
-              <h1 className="text-lg font-semibold text-white tracking-tight leading-none uppercase">Personnel Tracker</h1>
-              <p className="text-[8px] text-white/40 font-medium uppercase tracking-[0.25em] mt-0.5">Live Performance Board</p>
+              <h1 className="text-lg font-black text-white tracking-tight leading-none uppercase">Personnel Tracker</h1>
+              <p className="text-[8px] text-white/40 font-bold uppercase tracking-[0.25em] mt-0.5">Live Performance Board</p>
             </div>
           </div>
 
@@ -278,7 +288,7 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
 
           {/* Integrated Date Selector */}
           <div className="flex items-center h-8 gap-1 bg-white/10 backdrop-blur-md px-2 rounded-xl border border-white/10">
-            <button 
+            <button
               onClick={() => {
                 const [y, m, d] = selectedDate.split('-').map(Number);
                 const dateObj = new Date(y, m - 1, d);
@@ -291,18 +301,20 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" />
               </svg>
             </button>
-            
-            <div className="flex items-center gap-2 cursor-pointer group px-1 relative text-[10px] font-medium text-white uppercase tracking-widest min-w-[80px] text-center">
-              {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
-              <input 
-                type="date" 
+
+            <div className="flex items-center gap-2 cursor-pointer group px-1 relative">
+              <span className="text-white font-black text-[10px] uppercase tracking-widest min-w-[80px] text-center">
+                {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
+              </span>
+              <input
+                type="date"
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
                 className="absolute inset-0 opacity-0 cursor-pointer z-10 w-full"
               />
             </div>
 
-            <button 
+            <button
               onClick={() => {
                 const [y, m, d] = selectedDate.split('-').map(Number);
                 const dateObj = new Date(y, m - 1, d);
@@ -320,24 +332,24 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
           {/* Integrated Time Center */}
           <div className="flex items-center bg-white/5 rounded-xl p-1 border border-white/10 overflow-hidden ml-2">
             <div className="flex items-center gap-3 px-4 py-1.5 bg-white/10 rounded-lg">
-              <span className="text-[12px] font-medium text-yellow-400 uppercase tracking-tighter border-r border-white/10 pr-3">IST</span>
-              <span className="text-[15px] font-medium text-white tabular-nums tracking-tighter leading-none">{times.ist}</span>
+              <span className="text-[12px] font-black text-white uppercase tracking-tighter border-r border-white/10 pr-3">IST</span>
+              <span className="text-[15px] font-black text-white tabular-nums tracking-tighter leading-none">{times.ist}</span>
             </div>
             <div className="flex items-center gap-3 px-4 py-1.5 rounded-lg ml-0.5">
-              <span className="text-[12px] font-medium text-yellow-400 uppercase tracking-tighter border-r border-white/10 pr-3">GMT</span>
-              <span className="text-[15px] font-medium text-white tabular-nums tracking-tighter leading-none">{times.uk}</span>
+              <span className="text-[12px] font-black text-white uppercase tracking-tighter border-r border-white/10 pr-3">GMT</span>
+              <span className="text-[15px] font-black text-white tabular-nums tracking-tighter leading-none">{times.uk}</span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Tracker Table Container (Scrollable) */}
-      <div className="flex-1 min-h-0 bg-white/10 backdrop-blur-2xl rounded-[32px] border border-white/20 shadow-2xl overflow-hidden relative">
+      {/* Tracker Table - Full Width */}
+      <div className="flex-1 flex flex-col min-h-0 bg-white/10 backdrop-blur-2xl rounded-[32px] border border-white/20 shadow-2xl overflow-hidden relative">
         <div className="absolute inset-0 overflow-y-auto scrollbar-hide">
           <table className="w-full text-left border-collapse">
             <thead className="sticky top-0 z-10">
               <tr className="text-[10px] font-bold text-white/50 uppercase tracking-widest bg-slate-900/80 backdrop-blur-md border-b border-white/10">
-                <th className="px-6 py-4">Personnel</th>
+                <th className="px-6 py-4 text-center">Personnel</th>
                 <th className="px-6 py-4 text-center">Shift</th>
                 <th className="px-6 py-4 text-center">INC</th>
                 <th className="px-6 py-4 text-center">TASK</th>
@@ -347,105 +359,171 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
               </tr>
             </thead>
             <tbody>
-              {!activeAgents.length ? (
+              {activeAgents.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-20 text-center opacity-30">
-                    <ShieldCheck size={64} className="mx-auto mb-4 text-white" strokeWidth={1} />
-                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-white">No Personnel Active</p>
+                  <td colSpan={7} className="text-center py-20">
+                    <div className="flex flex-col items-center justify-center opacity-30">
+                      <ShieldCheck size={64} strokeWidth={1} className="text-white mb-4" />
+                      <p className="text-xs font-bold uppercase tracking-[0.2em] text-white">No Personnel Active</p>
+                    </div>
                   </td>
                 </tr>
               ) : activeAgents.map(agent => {
                 const agentStats = getAgentStats(agent.id);
-                const isDisabled = isShiftNearEnd(agent.shift);
+                const colors = getShiftColor(agent.shift);
                 const rowTotal = agentStats.incidents + agentStats.sctasks + agentStats.calls;
+                const isDisabled = isShiftNearEnd(agent.shift);
 
                 return (
-                  <tr key={agent.id} className={`border-b border-white/5 bg-white/5 backdrop-blur-md hover:bg-white/10 transition-all ${isDisabled ? 'opacity-30 grayscale' : ''}`}>
-                    <td className="px-6 py-3">
-                      <div className="flex flex-col">
-                        <span className="text-[13px] font-semibold text-white leading-tight">{agent.name}</span>
+                  <tr key={agent.id} className={`border-b border-white/5 bg-white/5 backdrop-blur-md hover:bg-white/10 transition-all duration-150 ${isDisabled ? 'opacity-30 grayscale' : ''}`}>
+                    <td className="px-4 py-2 text-center">
+                      <div className="flex flex-col items-center">
+                        <span className="font-bold text-white text-sm">{agent.name}</span>
                         {agent.isQH && (
                           <span className="text-[8px] font-black text-blue-400 uppercase tracking-[0.2em] mt-0.5">Queue Handler</span>
                         )}
                       </div>
                     </td>
-                    <td className="py-3 text-center">
-                      <span className={`inline-flex px-3 py-1 rounded-lg font-black text-[9px] uppercase tracking-widest border border-white/10 ${getShiftColor(agent.shift).light} ${getShiftColor(agent.shift).text} shadow-sm`}>
+                    <td className="px-4 py-2 text-center">
+                      <span className={`inline-flex px-2.5 py-1 rounded-full font-bold text-[10px] uppercase tracking-wider border border-white/20 ${colors.light} ${colors.text}`}>
                         {agent.shift}
                       </span>
                     </td>
-                    <td className="px-3 py-3">
-                      <div className="flex items-center justify-center gap-1.5">
-                        <button 
+                    <td className="px-3 py-1">
+                      <div className="flex items-center justify-center gap-1">
+                        <button
                           onClick={() => updateStat(agent.id, 'incidents', Math.max(0, agentStats.incidents - 1))}
                           disabled={isDisabled}
-                          className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 text-white transition-all disabled:opacity-50 font-black text-sm border border-white/10 shadow-sm"
+                          className="w-6 h-6 flex items-center justify-center rounded bg-white/20 hover:bg-white/30 text-white transition-all disabled:opacity-50 font-semibold text-xs"
                         >
                           −
                         </button>
-                        <span className="w-6 text-center font-black text-[13px] text-white">{agentStats.incidents}</span>
-                        <button 
+                        <span className="w-5 text-center font-bold text-xs text-white">{agentStats.incidents}</span>
+                        <button
                           onClick={() => updateStat(agent.id, 'incidents', agentStats.incidents + 1)}
                           disabled={isDisabled}
-                          className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 text-white transition-all disabled:opacity-50 font-black text-sm border border-white/10 shadow-sm"
+                          className="w-6 h-6 flex items-center justify-center rounded bg-white/20 hover:bg-white/30 text-white transition-all disabled:opacity-50 font-semibold text-xs"
                         >
                           +
                         </button>
                       </div>
                     </td>
-                    <td className="px-3 py-3">
-                      <div className="flex items-center justify-center gap-1.5">
-                        <button 
+                    <td className="px-3 py-1">
+                      <div className="flex items-center justify-center gap-1">
+                        <button
                           onClick={() => updateStat(agent.id, 'sctasks', Math.max(0, agentStats.sctasks - 1))}
                           disabled={isDisabled}
-                          className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 text-white transition-all disabled:opacity-50 font-black text-sm border border-white/10 shadow-sm"
+                          className="w-6 h-6 flex items-center justify-center rounded bg-white/20 hover:bg-white/30 text-white transition-all disabled:opacity-50 font-semibold text-xs"
                         >
                           −
                         </button>
-                        <span className="w-6 text-center font-black text-[13px] text-white">{agentStats.sctasks}</span>
-                        <button 
+                        <span className="w-5 text-center font-bold text-xs text-white">{agentStats.sctasks}</span>
+                        <button
                           onClick={() => updateStat(agent.id, 'sctasks', agentStats.sctasks + 1)}
                           disabled={isDisabled}
-                          className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 text-white transition-all disabled:opacity-50 font-black text-sm border border-white/10 shadow-sm"
+                          className="w-6 h-6 flex items-center justify-center rounded bg-white/20 hover:bg-white/30 text-white transition-all disabled:opacity-50 font-semibold text-xs"
                         >
                           +
                         </button>
                       </div>
                     </td>
-                    <td className="px-3 py-3">
-                      <div className="flex items-center justify-center gap-1.5">
-                        <button 
+                    <td className="px-3 py-1 relative">
+                      <div className="flex items-center justify-center gap-1">
+                        <button
                           onClick={() => updateStat(agent.id, 'calls', Math.max(0, agentStats.calls - 1))}
                           disabled={isDisabled}
-                          className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs text-center border border-white/10"
+                          className="w-6 h-6 flex items-center justify-center rounded bg-white/20 hover:bg-white/30 text-white transition-all disabled:opacity-50 font-semibold text-xs text-center"
                         >
                           −
                         </button>
-                        <span className="w-6 text-center font-black text-[13px] text-white">{agentStats.calls}</span>
-                        <button 
+                        <span className="w-5 text-center font-bold text-xs text-white">{agentStats.calls}</span>
+                        <button
                           onClick={() => {
                             setCallData({ ...callData, agentId: agent.id });
                             setIsCallModalOpen(true);
                           }}
                           disabled={isDisabled}
-                          className="w-7 h-7 flex items-center justify-center rounded-lg bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/20 text-sm text-center font-black border border-blue-400"
+                          className="w-6 h-6 flex items-center justify-center rounded bg-blue-500 hover:bg-blue-600 text-white transition-all disabled:opacity-50 font-semibold text-xs shadow-lg shadow-blue-500/20 text-center"
                         >
                           +
                         </button>
                       </div>
+
+                      {/* Popover Call Record - Anchored to Cell */}
+                      {isCallModalOpen && callData.agentId === agent.id && (
+                        <div className="absolute right-full top-0 mr-4 z-[100] animate-in slide-in-from-right-2 fade-in duration-200">
+                          <div className="relative bg-slate-800/90 backdrop-blur-2xl border border-white/20 rounded-[28px] w-[280px] overflow-hidden shadow-2xl shadow-black/50 ring-1 ring-white/10">
+                            {/* Header */}
+                            <div className="px-6 py-4 border-b border-white/10 flex justify-between items-center bg-white/5">
+                              <div className="flex items-center gap-3">
+                                <PhoneCall size={14} className="text-blue-400" />
+                                <h3 className="text-white font-black text-[10px] uppercase tracking-widest leading-none">Call Record</h3>
+                              </div>
+                              <button onClick={() => setIsCallModalOpen(false)} className="text-white/30 hover:text-white transition-colors">
+                                <X size={14} />
+                              </button>
+                            </div>
+
+                            {/* Body */}
+                            <div className="p-6 space-y-4">
+                              <div className="space-y-2 text-left">
+                                <label className="text-[9px] font-black text-white/40 uppercase tracking-widest ml-1">Ticket Number</label>
+                                <input
+                                  autoFocus
+                                  type="text"
+                                  placeholder="..."
+                                  value={callData.ticketNumber}
+                                  onChange={(e) => setCallData(prev => ({ ...prev, ticketNumber: e.target.value.toUpperCase() }))}
+                                  onKeyDown={(e) => e.key === 'Enter' && handleCallSubmit()}
+                                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white font-black text-sm placeholder:text-white/10 focus:outline-none focus:bg-white/10 focus:ring-1 focus:ring-white/30 transition-all uppercase tracking-widest"
+                                />
+                              </div>
+
+                              <div className="space-y-2 text-left">
+                                <label className="text-[9px] font-black text-white/40 uppercase tracking-widest ml-1">Type</label>
+                                <div className="grid grid-cols-2 gap-2 p-1 bg-black/20 rounded-xl">
+                                  <button
+                                    onClick={() => setCallData(prev => ({ ...prev, type: 'New' }))}
+                                    className={`py-2 rounded-lg font-black text-[8px] uppercase tracking-widest transition-all ${callData.type === 'New' ? 'bg-white text-slate-900 shadow-lg' : 'text-white/40'}`}
+                                  >
+                                    New
+                                  </button>
+                                  <button
+                                    onClick={() => setCallData(prev => ({ ...prev, type: 'Update' }))}
+                                    className={`py-2 rounded-lg font-black text-[8px] uppercase tracking-widest transition-all ${callData.type === 'Update' ? 'bg-white text-slate-900 shadow-lg' : 'text-white/40'}`}
+                                  >
+                                    Update
+                                  </button>
+                                </div>
+                              </div>
+
+                              <button
+                                onClick={handleCallSubmit}
+                                className="w-full bg-white text-slate-900 py-4 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl hover:bg-blue-50 transition-all active:scale-95 flex items-center justify-center gap-2"
+                              >
+                                <Check size={14} strokeWidth={4} className="text-blue-600" />
+                                Submit
+                              </button>
+                            </div>
+
+                            {/* Pointer Triangle */}
+                            <div className="absolute top-8 -right-2 w-4 h-4 bg-slate-800 border-r border-t border-white/20 rotate-45" />
+                          </div>
+                        </div>
+                      )}
                     </td>
-                    <td className="px-4 py-3">
-                      <input 
+                    <td className="px-2 py-1">
+                      <input
                         type="text"
-                        placeholder="Log status..."
+                        placeholder="Note..."
                         disabled={isDisabled}
                         value={agentStats.comments}
                         onChange={(e) => updateStat(agent.id, 'comments', e.target.value)}
-                        className="w-full px-3 py-1.5 text-xs text-white bg-black/20 border border-white/10 rounded-xl outline-none focus:ring-1 focus:ring-white/20 transition-all placeholder:text-white/20 disabled:opacity-50 font-medium"
+                        className="w-full px-2 py-0.5 text-xs text-white bg-white/10 border border-white/20 rounded-lg outline-none focus:bg-white/20 transition-all placeholder:text-white/40 disabled:opacity-50"
                       />
                     </td>
-                    <td className="px-6 py-3 text-center">
-                      <div className="inline-flex items-center justify-center px-3 py-1 bg-white text-slate-900 rounded-lg font-black text-[13px] min-w-[40px] shadow-xl">
+                    <td className="px-3 py-1 text-center">
+                      <div className="inline-flex items-center justify-center px-2 py-0.5 bg-white text-slate-900 rounded-lg font-black text-xs min-w-10 shadow-lg shadow-white/10">
                         {rowTotal}
                       </div>
                     </td>
@@ -456,55 +534,6 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
           </table>
         </div>
       </div>
-
-      {/* Call Modal - Centered Minimal Dark */}
-      {isCallModalOpen && (
-        <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsCallModalOpen(false)} />
-          <div className="relative bg-[#1e293b] border border-white/20 rounded-[32px] w-[280px] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
-            <div className="px-6 py-4 border-b border-white/10 flex justify-between items-center bg-white/5">
-              <div className="flex items-center gap-2">
-                <PhoneCall size={14} className="text-blue-400" />
-                <h3 className="text-white font-bold text-[10px] uppercase tracking-widest leading-none">Call Record</h3>
-              </div>
-              <button onClick={() => setIsCallModalOpen(false)} className="text-white/40 hover:text-white transition-colors">
-                <X size={16} />
-              </button>
-            </div>
-            <div className="p-6 space-y-6">
-              <div className="space-y-2">
-                <div className="flex justify-between items-center px-1">
-                  <label className="text-[9px] font-bold text-white/40 uppercase tracking-widest">Ticket Number</label>
-                  <span className="text-[7px] font-bold text-blue-400 uppercase tracking-widest">Required</span>
-                </div>
-                <input 
-                  autoFocus
-                  type="text"
-                  placeholder="EX: INC1234567"
-                  value={callData.ticketNumber}
-                  onChange={(e) => setCallData({...callData, ticketNumber: e.target.value.toUpperCase()})}
-                  onKeyDown={(e) => e.key === 'Enter' && handleCallSubmit()}
-                  className="w-full bg-slate-900 border border-white/10 rounded-2xl px-4 py-3 text-white font-semibold text-xs placeholder:text-white/10 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all uppercase tracking-widest shadow-inner"
-                />
-              </div>
-              <div className="space-y-3">
-                <label className="block text-[9px] font-bold text-white/40 uppercase tracking-widest px-1">Call Type</label>
-                <div className="grid grid-cols-2 gap-2 p-1 bg-black/40 rounded-2xl border border-white/5">
-                  <button onClick={() => setCallData({...callData, type: 'New'})} className={`py-2 rounded-xl font-bold text-[8px] uppercase tracking-widest transition-all ${callData.type === 'New' ? 'bg-white text-slate-900 shadow-lg' : 'text-white/30 hover:text-white/50'}`}>New</button>
-                  <button onClick={() => setCallData({...callData, type: 'Update'})} className={`py-2 rounded-xl font-bold text-[8px] uppercase tracking-widest transition-all ${callData.type === 'Update' ? 'bg-white text-slate-900 shadow-lg' : 'text-white/30 hover:text-white/50'}`}>Update</button>
-                </div>
-              </div>
-              <button 
-                onClick={handleCallSubmit}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-2xl font-bold text-[10px] uppercase tracking-[0.2em] shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 group"
-              >
-                <Check size={16} strokeWidth={3} />
-                Submit Record
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
