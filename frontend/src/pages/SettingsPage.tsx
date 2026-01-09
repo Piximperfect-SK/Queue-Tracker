@@ -63,18 +63,18 @@ const SettingsPage: React.FC = () => {
   const addAgent = () => {
     const newAgent: Agent = {
       id: Date.now().toString(),
-      name: 'New Personnel',
+      name: 'New Queue Handler',
       isQH: false
     };
     saveAgents([...agents, newAgent]);
-    addLog('Add Agent', `Added new agent: ${newAgent.name}`, 'positive');
+    addLog('Add Queue Handler', `Added new handler: ${newAgent.name}`, 'positive');
   };
 
   const deleteAgent = (id: string) => {
-    if (window.confirm('Are you sure you want to decommission this personnel?')) {
+    if (window.confirm('Are you sure you want to decommission this queue handler?')) {
       const agent = agents.find(a => a.id === id);
       saveAgents(agents.filter(a => a.id !== id));
-      addLog('Delete Agent', `Deleted agent: ${agent?.name || id}`, 'negative');
+      addLog('Delete Queue Handler', `Removed handler: ${agent?.name || id}`, 'negative');
     }
   };
 
@@ -118,10 +118,10 @@ const SettingsPage: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 flex-1 overflow-hidden min-h-0">
-        {/* Personnel Matrix */}
+        {/* Handler Matrix */}
         <div className="bg-teal-50/40 backdrop-blur-3xl rounded-4xl border border-teal-200/30 overflow-hidden flex flex-col shadow-xl">
           <div className="px-8 py-5 border-b border-teal-200/10 bg-teal-50/20 shrink-0 flex items-center justify-between">
-            <h2 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Personnel Matrix</h2>
+            <h2 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Handler Matrix</h2>
             <span className="text-[9px] font-black text-blue-700 bg-teal-50/60 backdrop-blur-md px-2.5 py-1 rounded-full border border-teal-200/30">
               {agents.length} Active IDs
             </span>
@@ -150,7 +150,7 @@ const SettingsPage: React.FC = () => {
                         value={agent.name}
                         onChange={(e) => updateAgentName(agent.id, e.target.value)}
                         className="bg-transparent text-slate-900 font-black text-base w-full focus:outline-none focus:text-blue-600 transition-colors placeholder:text-slate-300"
-                        placeholder="Personnel Name"
+                        placeholder="Full Name"
                       />
                       <div className="flex items-center gap-2 mt-1">
                         <span className={`text-[8px] font-black uppercase tracking-[0.2em] px-2 py-0.5 rounded-md border ${
@@ -158,7 +158,7 @@ const SettingsPage: React.FC = () => {
                             ? 'bg-blue-50 text-blue-600 border-blue-100' 
                             : 'bg-slate-50 text-slate-400 border-slate-100'
                         }`}>
-                          {agent.isQH ? 'Queue Handler' : 'Standard Personnel'}
+                          {agent.isQH ? 'Queue Handler' : 'Standard Handler'}
                         </span>
                       </div>
                     </div>
@@ -196,7 +196,7 @@ const SettingsPage: React.FC = () => {
                  <p className="text-slate-700 text-[12px] leading-relaxed font-bold">Log records are stored centrally. Use archive tools for compliance audits.</p>
                </div>
                <div className="bg-white/40 rounded-2xl p-6 border border-white/30 hover:bg-white/60 transition-all backdrop-blur-md">
-                 <p className="text-slate-900 font-black text-[13px] mb-1.5 uppercase tracking-tighter">Personnel Hierarchy</p>
+                 <p className="text-slate-900 font-black text-[13px] mb-1.5 uppercase tracking-tighter">Handler Hierarchy</p>
                  <p className="text-slate-700 text-[12px] leading-relaxed font-bold">Queue Handlers (QH) enable priority identifiers across tracking matrices.</p>
                </div>
              </div>

@@ -269,8 +269,8 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
               <ShieldCheck size={16} className="text-white" />
             </div>
             <div className="flex flex-col">
-              <h1 className="text-lg font-semibold text-white tracking-tight leading-none uppercase">Personnel Tracker</h1>
-              <p className="text-[8px] text-white/40 font-medium uppercase tracking-[0.25em] mt-0.5">Live Performance Board</p>
+              <h1 className="text-lg font-black text-white tracking-tight leading-none uppercase">Queue Handler Tracker</h1>
+              <p className="text-[8px] text-white/40 font-bold uppercase tracking-[0.25em] mt-0.5">Live Performance Board</p>
             </div>
           </div>
 
@@ -336,8 +336,8 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
         <div className="absolute inset-0 overflow-y-auto scrollbar-hide">
           <table className="w-full text-left border-collapse">
             <thead className="sticky top-0 z-10">
-              <tr className="text-[10px] font-bold text-white/50 uppercase tracking-widest bg-slate-900/80 backdrop-blur-md border-b border-white/10">
-                <th className="px-6 py-4">Personnel</th>
+              <tr className="text-[10px] font-bold text-white/50 uppercase tracking-widest bg-white/5 backdrop-blur-md border-b border-white/10">
+                <th className="px-6 py-4 text-center">Queue Handler</th>
                 <th className="px-6 py-4 text-center">Shift</th>
                 <th className="px-6 py-4 text-center">INC</th>
                 <th className="px-6 py-4 text-center">TASK</th>
@@ -351,7 +351,7 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
                 <tr>
                   <td colSpan={7} className="py-20 text-center opacity-30">
                     <ShieldCheck size={64} className="mx-auto mb-4 text-white" strokeWidth={1} />
-                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-white">No Personnel Active</p>
+                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-white">No Queue Handler Active</p>
                   </td>
                 </tr>
               ) : activeAgents.map(agent => {
