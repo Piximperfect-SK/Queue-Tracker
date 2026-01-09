@@ -171,7 +171,7 @@ function App() {
                 <Fingerprint size={28} className="text-white" />
               </div>
               <h1 className="text-2xl font-black text-slate-900 mb-1 tracking-tight">Access Gate</h1>
-              <p className="text-slate-600 text-[10px] font-black uppercase tracking-widest">Authorized Handlers Only</p>
+              <p className="text-slate-600 text-[10px] font-black uppercase tracking-widest">Authorized Agents Only</p>
             </div>
 
             <form onSubmit={handleLogin} className="space-y-6">

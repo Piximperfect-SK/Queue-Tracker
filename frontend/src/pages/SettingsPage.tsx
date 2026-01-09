@@ -57,24 +57,24 @@ const SettingsPage: React.FC = () => {
     const agent = agents.find(a => a.id === id);
     const updated = agents.map(a => a.id === id ? { ...a, isQH: !a.isQH } : a);
     saveAgents(updated);
-    addLog('System', `${agent?.name}: ${agent?.isQH ? 'Queue Handler -> Standard' : 'Standard -> Queue Handler'}`, !agent?.isQH ? 'positive' : 'neutral');
+    addLog('System', `${agent?.name}: ${agent?.isQH ? 'On Shift Agent -> Standard' : 'Standard -> On Shift Agent'}`, !agent?.isQH ? 'positive' : 'neutral');
   };
 
   const addAgent = () => {
     const newAgent: Agent = {
       id: Date.now().toString(),
-      name: 'New Queue Handler',
+      name: 'New Agent',
       isQH: false
     };
     saveAgents([...agents, newAgent]);
-    addLog('Add Queue Handler', `Added new handler: ${newAgent.name}`, 'positive');
+    addLog('Add Agent', `Added new agent: ${newAgent.name}`, 'positive');
   };
 
   const deleteAgent = (id: string) => {
-    if (window.confirm('Are you sure you want to decommission this queue handler?')) {
+    if (window.confirm('Are you sure you want to decommission this agent?')) {
       const agent = agents.find(a => a.id === id);
       saveAgents(agents.filter(a => a.id !== id));
-      addLog('Delete Queue Handler', `Removed handler: ${agent?.name || id}`, 'negative');
+      addLog('Delete Agent', `Removed agent: ${agent?.name || id}`, 'negative');
     }
   };
 
@@ -118,10 +118,10 @@ const SettingsPage: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 flex-1 overflow-hidden min-h-0">
-        {/* Handler Matrix */}
+        {/* Agent Matrix */}
         <div className="bg-teal-50/40 backdrop-blur-3xl rounded-4xl border border-teal-200/30 overflow-hidden flex flex-col shadow-xl">
           <div className="px-8 py-5 border-b border-teal-200/10 bg-teal-50/20 shrink-0 flex items-center justify-between">
-            <h2 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Handler Matrix</h2>
+            <h2 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Agent Matrix</h2>
             <span className="text-[9px] font-black text-blue-700 bg-teal-50/60 backdrop-blur-md px-2.5 py-1 rounded-full border border-teal-200/30">
               {agents.length} Active IDs
             </span>
@@ -139,7 +139,7 @@ const SettingsPage: React.FC = () => {
                           ? 'bg-blue-600 border-blue-500 text-white shadow-blue-200' 
                           : 'bg-white border-slate-200 text-slate-300 hover:border-blue-300 hover:text-blue-500'
                       }`}
-                      title={agent.isQH ? "Queue Handler Active" : "Assign Queue Handler"}
+                      title={agent.isQH ? "Agent On Shift" : "Assign to Shift"}
                     >
                       <ShieldCheck size={20} strokeWidth={agent.isQH ? 2.5 : 2} className={agent.isQH ? 'animate-pulse' : ''} />
                     </button>
@@ -158,7 +158,7 @@ const SettingsPage: React.FC = () => {
                             ? 'bg-blue-50 text-blue-600 border-blue-100' 
                             : 'bg-slate-50 text-slate-400 border-slate-100'
                         }`}>
-                          {agent.isQH ? 'Queue Handler' : 'Standard Handler'}
+                          {agent.isQH ? 'On Shift Agent' : 'Standard Agent'}
                         </span>
                       </div>
                     </div>
@@ -196,17 +196,17 @@ const SettingsPage: React.FC = () => {
                  <p className="text-slate-700 text-[12px] leading-relaxed font-bold">Log records are stored centrally. Use archive tools for compliance audits.</p>
                </div>
                <div className="bg-white/40 rounded-2xl p-6 border border-white/30 hover:bg-white/60 transition-all backdrop-blur-md">
-                 <p className="text-slate-900 font-black text-[13px] mb-1.5 uppercase tracking-tighter">Handler Hierarchy</p>
-                 <p className="text-slate-700 text-[12px] leading-relaxed font-bold">Queue Handlers (QH) enable priority identifiers across tracking matrices.</p>
+                 <p className="text-slate-900 font-black text-[13px] mb-1.5 uppercase tracking-tighter">Agent Hierarchy</p>
+                 <p className="text-slate-700 text-[12px] leading-relaxed font-bold">On Shift Agents enable priority identifiers across tracking matrices.</p>
                </div>
              </div>
           </div>
 
           <div className="bg-white/70 backdrop-blur-3xl rounded-[2.5rem] border border-white/50 p-8 flex flex-col items-center justify-center text-center shadow-2xl shrink-0">
             <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-black text-3xl shadow-xl shadow-blue-600/30 mb-4 shrink-0">
-              Q
+              P
             </div>
-            <p className="text-slate-900 font-black text-xl tracking-tight mb-1 uppercase">Queue Tracker</p>
+            <p className="text-slate-900 font-normal text-xl tracking-tight mb-1 uppercase">Productivity Tracker</p>
             <p className="text-[11px] text-slate-500 font-black uppercase tracking-[0.3em] mb-6">Version 4.0.0-Titanium</p>
             <div className="flex items-center gap-3 px-5 py-2.5 bg-green-500/15 backdrop-blur-md rounded-full border border-green-500/30 shadow-inner">
               <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_12px_rgba(34,197,94,0.6)]" />

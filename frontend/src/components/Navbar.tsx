@@ -32,8 +32,8 @@ const Navbar: React.FC<NavbarProps> = ({ currentUser, onLogout, onlineUsers, sel
       <div className="max-w-screen-2xl mx-auto px-6">
         <div className="flex justify-between h-14 items-center">
           <div className="flex items-center space-x-4">
-            <div className="w-9 h-9 bg-slate-900 rounded-xl flex items-center justify-center text-white font-black text-xl shadow-lg">Q</div>
-            <span className="text-lg font-bold text-slate-900 tracking-tight">QueueTracker</span>
+            <div className="w-9 h-9 bg-slate-900 rounded-xl flex items-center justify-center text-white font-black text-xl shadow-lg">P</div>
+            <span className="text-lg font-normal text-slate-900 tracking-tight">Productivity Tracker</span>
             
             <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ml-2 border transition-colors ${isConnected ? 'bg-green-500/10 text-green-700 border-green-500/30' : 'bg-red-500/10 text-red-700 border-red-500/30'}`}>
               <div className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-green-600 animate-pulse' : 'bg-red-600'}`} />
@@ -42,28 +42,33 @@ const Navbar: React.FC<NavbarProps> = ({ currentUser, onLogout, onlineUsers, sel
           </div>
           
           <div className="flex items-center space-x-4">
-            {/* Online Users Indicator - Hyper Compact */}
-            <div className="flex items-center gap-2 px-2 py-0.5 bg-slate-900/5 rounded-full border border-slate-900/10 mr-2">
-              <div className="flex -space-x-1.5">
+            {/* Online Users Indicator - Iconic Expansion */}
+            <div className="flex items-center gap-3.5 px-4 py-1.5 bg-slate-900/5 rounded-full border border-slate-900/10 mr-2 transition-all hover:bg-slate-900/10 shadow-sm cursor-default group/online">
+              <div className="flex items-center -space-x-3">
                 {[...new Set(onlineUsers.filter(u => u !== currentUser))].map((user, i) => (
                   <div 
                     key={i} 
-                    className="w-4 h-4 rounded-full flex items-center justify-center text-[7px] font-black text-white bg-slate-900 border border-white/20 shadow-sm"
-                    title={user}
+                    className="group/item flex items-center bg-slate-900 rounded-full border-2 border-white shadow-md transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] hover:z-30 hover:pr-4 hover:-space-x-0"
+                    style={{ position: 'relative' }}
                   >
-                    {user.charAt(0).toUpperCase()}
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-black text-white shrink-0">
+                      {user.charAt(0).toUpperCase()}
+                    </div>
+                    <span className="max-w-0 opacity-0 overflow-hidden text-[10px] font-black text-white uppercase tracking-widest transition-all duration-500 ease-out group-hover/item:max-w-[150px] group-hover/item:opacity-100 group-hover/item:ml-2">
+                      {user}
+                    </span>
                   </div>
                 ))}
-                {onlineUsers.length <= 1 && (
-                  <div className="w-4 h-4 rounded-full border border-dashed border-slate-400 flex items-center justify-center bg-transparent">
-                    <div className="w-0.5 h-0.5 bg-slate-400 rounded-full" />
+                {onlineUsers.filter(u => u !== currentUser).length === 0 && (
+                  <div className="w-8 h-8 rounded-full border-2 border-dashed border-slate-300 flex items-center justify-center bg-transparent group-hover/online:rotate-90 transition-transform duration-500">
+                    <div className="w-2.5 h-2.5 bg-slate-300 rounded-full animate-pulse" />
                   </div>
                 )}
               </div>
-              <div className="flex items-center gap-1 pr-0.5">
-                <div className={`w-1 h-1 rounded-full ${onlineUsers.length > 1 ? 'bg-green-600 animate-pulse' : 'bg-slate-400'}`} />
-                <span className="text-[8px] font-black text-slate-700 uppercase tracking-widest leading-none">
-                  {onlineUsers.length > 1 ? 'Live' : 'Solo'}
+              <div className="flex items-center gap-3 pl-1">
+                <div className={`w-3 h-3 rounded-full ${onlineUsers.filter(u => u !== currentUser).length > 0 ? 'bg-green-600 animate-pulse shadow-[0_0_12px_rgba(22,163,74,0.6)]' : 'bg-slate-400'}`} />
+                <span className="text-[12px] font-black text-slate-800 uppercase tracking-[0.2em] leading-none">
+                  {onlineUsers.filter(u => u !== currentUser).length > 0 ? 'Live' : 'Solo'}
                 </span>
               </div>
             </div>

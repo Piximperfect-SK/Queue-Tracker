@@ -166,6 +166,18 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
     syncData.updateStats(updatedStats);
   };
 
+  const getAgentStats = (agentId: string): DailyStats => {
+    const s = stats.find(s => s.agentId === agentId && s.date === selectedDate);
+    return {
+      agentId,
+      date: selectedDate,
+      incidents: Number(s?.incidents || 0),
+      sctasks: Number(s?.sctasks || 0),
+      calls: Number(s?.calls || 0),
+      comments: s?.comments || ''
+    };
+  };
+
   const activeAgents = useMemo(() => {
     const hiddenShifts = new Set(['WO', 'ML', 'PL', 'EL', 'UL', 'CO', 'MID-LEAVE']);
     const rosterForDay = roster.filter(r => r.date === selectedDate);
@@ -193,6 +205,16 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
       return (shiftOrder[a.shift] ?? 999) - (shiftOrder[b.shift] ?? 999);
     });
   }, [selectedDate, roster, agents]);
+
+  const totalStats = useMemo(() => {
+    return activeAgents.reduce((acc, agent) => {
+      const s = getAgentStats(agent.id);
+      acc.incidents += s.incidents;
+      acc.sctasks += s.sctasks;
+      acc.calls += s.calls;
+      return acc;
+    }, { incidents: 0, sctasks: 0, calls: 0 });
+  }, [activeAgents, stats, selectedDate]);
 
   const updateStat = (agentId: string, field: keyof DailyStats, value: any) => {
     const agent = agents.find(a => a.id === agentId);
@@ -247,18 +269,6 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
     setIsCallModalOpen(false);
   };
 
-  const getAgentStats = (agentId: string): DailyStats => {
-    const s = stats.find(s => s.agentId === agentId && s.date === selectedDate);
-    return {
-      agentId,
-      date: selectedDate,
-      incidents: Number(s?.incidents || 0),
-      sctasks: Number(s?.sctasks || 0),
-      calls: Number(s?.calls || 0),
-      comments: s?.comments || ''
-    };
-  };
-
   return (
     <div className="h-full flex flex-col gap-0 overflow-hidden p-0 px-2 pb-2 relative">
       {/* Header - Compact Integrated Bar */}
@@ -269,8 +279,8 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
               <ShieldCheck size={16} className="text-white" />
             </div>
             <div className="flex flex-col">
-              <h1 className="text-lg font-black text-white tracking-tight leading-none uppercase">Queue Handler Tracker</h1>
-              <p className="text-[8px] text-white/40 font-bold uppercase tracking-[0.25em] mt-0.5">Live Performance Board</p>
+              <h1 className="text-lg font-normal text-white tracking-tight leading-none uppercase">Productivity Tracker</h1>
+              <p className="text-[8px] text-white/90 font-bold uppercase tracking-[0.25em] mt-0.5">Live Performance Board</p>
             </div>
           </div>
 
@@ -285,7 +295,7 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
                 dateObj.setDate(dateObj.getDate() - 1);
                 setSelectedDate(dateObj.toLocaleDateString('en-CA'));
               }}
-              className="p-1 hover:bg-white/10 rounded-lg transition-colors text-white/50 hover:text-white"
+              className="p-1 hover:bg-white/10 rounded-lg transition-colors text-white/90 hover:text-white"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" />
@@ -309,7 +319,7 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
                 dateObj.setDate(dateObj.getDate() + 1);
                 setSelectedDate(dateObj.toLocaleDateString('en-CA'));
               }}
-              className="p-1 hover:bg-white/10 rounded-lg transition-colors text-white/50 hover:text-white"
+              className="p-1 hover:bg-white/10 rounded-lg transition-colors text-white/90 hover:text-white"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
@@ -320,13 +330,29 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
           {/* Integrated Time Center */}
           <div className="flex items-center bg-white/5 rounded-xl p-1 border border-white/10 overflow-hidden ml-2">
             <div className="flex items-center gap-3 px-4 py-1.5 bg-white/10 rounded-lg">
-              <span className="text-[12px] font-medium text-yellow-400 uppercase tracking-tighter border-r border-white/10 pr-3">IST</span>
+              <span className="text-[12px] font-medium text-white/90 uppercase tracking-tighter border-r border-white/10 pr-3">IST</span>
               <span className="text-[15px] font-medium text-white tabular-nums tracking-tighter leading-none">{times.ist}</span>
             </div>
             <div className="flex items-center gap-3 px-4 py-1.5 rounded-lg ml-0.5">
-              <span className="text-[12px] font-medium text-yellow-400 uppercase tracking-tighter border-r border-white/10 pr-3">GMT</span>
+              <span className="text-[12px] font-medium text-white/90 uppercase tracking-tighter border-r border-white/10 pr-3">GMT</span>
               <span className="text-[15px] font-medium text-white tabular-nums tracking-tighter leading-none">{times.uk}</span>
             </div>
+          </div>
+        </div>
+
+        {/* Dynamic Totals Center */}
+        <div className="flex items-center bg-white/90 backdrop-blur-xl rounded-2xl border border-white/20 overflow-hidden divide-x divide-slate-200/50 shadow-xl">
+          <div className="px-6 py-2 flex flex-col items-center min-w-[100px]">
+            <span className="text-[8px] font-black text-slate-900 uppercase tracking-[0.2em] mb-0.5">Total INC</span>
+            <span className="text-base font-black text-slate-900 tabular-nums leading-none tracking-tight">{totalStats.incidents}</span>
+          </div>
+          <div className="px-6 py-2 flex flex-col items-center min-w-[100px]">
+            <span className="text-[8px] font-black text-slate-900 uppercase tracking-[0.2em] mb-0.5">Total TASK</span>
+            <span className="text-base font-black text-slate-900 tabular-nums leading-none tracking-tight">{totalStats.sctasks}</span>
+          </div>
+          <div className="px-6 py-2 flex flex-col items-center min-w-[100px]">
+            <span className="text-[8px] font-black text-slate-900 uppercase tracking-[0.2em] mb-0.5">Total Calls</span>
+            <span className="text-base font-black text-slate-900 tabular-nums leading-none tracking-tight">{totalStats.calls}</span>
           </div>
         </div>
       </div>
@@ -336,8 +362,8 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
         <div className="absolute inset-0 overflow-y-auto scrollbar-hide">
           <table className="w-full text-left border-collapse">
             <thead className="sticky top-0 z-10">
-              <tr className="text-[10px] font-bold text-white/50 uppercase tracking-widest bg-white/5 backdrop-blur-md border-b border-white/10">
-                <th className="px-6 py-4 text-center">Queue Handler</th>
+              <tr className="text-[10px] font-bold text-white/90 uppercase tracking-widest bg-white/5 backdrop-blur-md border-b border-white/10">
+                <th className="px-6 py-4 text-center">On Shift Agents</th>
                 <th className="px-6 py-4 text-center">Shift</th>
                 <th className="px-6 py-4 text-center">INC</th>
                 <th className="px-6 py-4 text-center">TASK</th>
@@ -351,7 +377,7 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
                 <tr>
                   <td colSpan={7} className="py-20 text-center opacity-30">
                     <ShieldCheck size={64} className="mx-auto mb-4 text-white" strokeWidth={1} />
-                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-white">No Queue Handler Active</p>
+                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-white">No Agents on Shift</p>
                   </td>
                 </tr>
               ) : activeAgents.map(agent => {
@@ -360,13 +386,27 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
                 const rowTotal = agentStats.incidents + agentStats.sctasks + agentStats.calls;
 
                 return (
-                  <tr key={agent.id} className={`border-b border-white/5 bg-white/5 backdrop-blur-md hover:bg-white/10 transition-all ${isDisabled ? 'opacity-30 grayscale' : ''}`}>
-                    <td className="px-6 py-3">
-                      <div className="flex flex-col">
-                        <span className="text-[13px] font-semibold text-white leading-tight">{agent.name}</span>
-                        {agent.isQH && (
-                          <span className="text-[8px] font-black text-blue-400 uppercase tracking-[0.2em] mt-0.5">Queue Handler</span>
-                        )}
+                  <tr key={agent.id} className={`group border-b border-white/5 bg-white/5 backdrop-blur-md hover:bg-white/10 transition-all ${isDisabled ? 'opacity-30 grayscale' : ''}`}>
+                    <td className="px-8 py-4 text-center min-w-[320px]">
+                      <div className="flex items-center justify-center">
+                        <div className="group/name flex items-center bg-white/5 backdrop-blur-sm rounded-full p-1 pr-8 border border-white/10 transition-all duration-500 hover:bg-white/15 hover:shadow-2xl hover:border-white/20 active:scale-[0.98]">
+                          {/* Profile Icon with Initials */}
+                          <div className="w-12 h-12 rounded-full bg-slate-900 flex items-center justify-center text-white font-black text-xl shadow-lg transition-all duration-500 group-hover/name:scale-105 group-hover/name:bg-blue-600 group-hover/name:rotate-[360deg]">
+                            {agent.name.charAt(0).toUpperCase()}
+                          </div>
+                          
+                          {/* Expanding Name Section */}
+                          <div className="flex flex-col items-start ml-4">
+                            <span className="text-2xl font-normal text-white leading-none whitespace-nowrap transition-all duration-700 ease-out group-hover/name:tracking-[0.15em] group-hover/name:text-blue-200 select-none">
+                              {agent.name}
+                            </span>
+                            {agent.isQH && (
+                              <span className="text-[7px] font-black text-blue-400/30 group-hover/name:text-blue-400/80 uppercase tracking-[0.4em] mt-1.5 transition-all duration-700">
+                                On Shift Agent
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </td>
                     <td className="py-3 text-center">
