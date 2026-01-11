@@ -7,11 +7,9 @@ interface NavbarProps {
   currentUser: string;
   onLogout: () => void;
   onlineUsers: string[];
-  selectedDate: string;
-  setSelectedDate: (date: string) => void;
 }
 
-const Navbar: React.FC<NavbarProps> = ({ currentUser, onLogout, onlineUsers, selectedDate, setSelectedDate }) => {
+const Navbar: React.FC<NavbarProps> = ({ currentUser, onLogout, onlineUsers }) => {
   const [isConnected, setIsConnected] = useState(socket.connected);
 
   useEffect(() => {

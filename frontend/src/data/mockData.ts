@@ -1,6 +1,6 @@
-import type { Agent, ShiftType, RosterEntry } from '../types';
+import type { Handler, ShiftType, RosterEntry } from '../types';
 
-export const MOCK_AGENTS: Agent[] = [
+export const MOCK_HANDLERS: Handler[] = [
   { id: '1', name: 'Nadeer Muhammad', isQH: true },
   { id: '2', name: 'Santosh Guttedar', isQH: false },
   { id: '3', name: 'Nisha Nigam', isQH: true },
@@ -24,7 +24,7 @@ const today = new Date().toLocaleDateString('en-CA');
 const dates = [today, '2026-01-05', '2026-01-06', '2026-01-07'];
 
 dates.forEach(date => {
-  MOCK_AGENTS.forEach((agent, index) => {
+  MOCK_HANDLERS.forEach((handler, index) => {
     let shift: ShiftType = '6AM-3PM';
     if (index >= 3 && index < 6) shift = '1PM-10PM';
     if (index >= 6 && index < 9) shift = '2PM-11PM';
@@ -37,7 +37,7 @@ dates.forEach(date => {
     }
 
     MOCK_ROSTER.push({
-      agentId: agent.id,
+      handlerId: handler.id,
       date,
       shift
     });

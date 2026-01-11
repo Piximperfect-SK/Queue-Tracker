@@ -31,19 +31,19 @@ const LogMonitorPage: React.FC = () => {
   }, [logs]);
 
   return (
-    <div className="h-full bg-black text-white font-mono rounded-4xl border border-white/20 flex flex-col overflow-hidden select-none shadow-2xl">
+    <div className="h-full bg-white text-slate-950 font-mono rounded-4xl border border-white/40 flex flex-col overflow-hidden select-none shadow-xl">
       {/* Top Status Bar */}
-      <div className="bg-white text-black px-6 py-3 flex justify-between items-center shrink-0 border-b border-white/20">
+      <div className="bg-slate-950 text-white px-6 py-3 flex justify-between items-center shrink-0">
         <div className="flex items-center gap-4">
           <Terminal size={18} className="animate-pulse" />
           <h1 className="text-[10px] font-black uppercase tracking-[0.3em]">System Event Monitor v4.0</h1>
         </div>
         <div className="flex items-center gap-4 text-[9px] font-black uppercase tracking-widest">
-          <div className="flex items-center gap-2 px-2 py-1 bg-black/5 rounded">
-            <div className={`w-1.5 h-1.5 rounded-full ${socket.connected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+          <div className="flex items-center gap-2 px-2 py-1 bg-white/10 rounded">
+            <div className={`w-1.5 h-1.5 rounded-full ${socket.connected ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`} />
             <span>Link: {socket.connected ? 'OK' : 'LOST'}</span>
           </div>
-          <span className="px-3 py-1 border border-black rounded-full bg-black/80 text-white tracking-[0.2em] text-[8px]">
+          <span className="px-3 py-1 border border-white rounded-full bg-white/20 text-white tracking-[0.2em] text-[8px]">
             LIVE
           </span>
         </div>
@@ -52,7 +52,7 @@ const LogMonitorPage: React.FC = () => {
       {/* Main Log Area */}
       <div 
         ref={scrollRef}
-        className="flex-1 overflow-y-auto p-6 space-y-1.5 custom-scrollbar-dark text-[11px]"
+        className="flex-1 overflow-y-auto p-6 space-y-1.5 custom-scrollbar-light text-[11px] bg-slate-50/50"
       >
         {logs.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center opacity-20 gap-4">
@@ -62,20 +62,20 @@ const LogMonitorPage: React.FC = () => {
         ) : (
           logs.map((log, i) => (
             <div key={i} className="flex gap-3 px-1 py-0.5 group">
-              <span className="text-slate-500 shrink-0 select-none">[{log.timestamp}]</span>
-              <span className="text-blue-500 shrink-0 font-black">[{log.user}]</span>
+              <span className="text-slate-400 shrink-0 select-none">[{log.timestamp}]</span>
+              <span className="text-blue-600 shrink-0 font-black">[{log.user}]</span>
               <span className={`shrink-0 font-black uppercase tracking-wider ${
-                log.type === 'positive' ? 'text-green-500' : 
-                log.type === 'negative' ? 'text-red-500' : 
-                'text-white'
+                log.type === 'positive' ? 'text-green-600' : 
+                log.type === 'negative' ? 'text-red-600' : 
+                'text-slate-900'
               }`}>{log.action}:</span>
-              <span className={`break-all font-medium ${
-                log.type === 'positive' ? 'text-green-500/90' : 
-                log.type === 'negative' ? 'text-red-500/90' : 
-                'text-slate-300'
+              <span className={`break-all font-bold ${
+                log.type === 'positive' ? 'text-green-700/90' : 
+                log.type === 'negative' ? 'text-red-700/90' : 
+                'text-slate-700'
               }`}>{log.details}</span>
               {i === logs.length - 1 && (
-                <span className="w-1.5 h-4 bg-white animate-pulse inline-block align-middle ml-1" />
+                <span className="w-1.5 h-4 bg-slate-900 animate-pulse inline-block align-middle ml-1" />
               )}
             </div>
           ))
@@ -83,36 +83,36 @@ const LogMonitorPage: React.FC = () => {
       </div>
 
       {/* Footer / System Info */}
-      <div className="bg-zinc-900 border-t border-white/5 px-6 py-3 flex justify-between items-center shrink-0">
+      <div className="bg-slate-100 border-t border-slate-200 px-6 py-3 flex justify-between items-center shrink-0">
         <div className="flex gap-6">
           <div className="space-y-0.5">
             <p className="text-[7px] text-slate-500 font-black uppercase tracking-widest">Uplink ID</p>
-            <p className="text-[9px] font-black text-white">{socket.id?.slice(0, 12).toUpperCase() || 'OFFLINE'}</p>
+            <p className="text-[9px] font-black text-slate-900">{socket.id?.slice(0, 12).toUpperCase() || 'OFFLINE'}</p>
           </div>
           <div className="space-y-0.5">
             <p className="text-[7px] text-slate-500 font-black uppercase tracking-widest">Buffer</p>
-            <p className="text-[9px] font-black text-white">{logs.length}/100</p>
+            <p className="text-[9px] font-black text-slate-900">{logs.length}/100</p>
           </div>
         </div>
-        <div className="flex items-center gap-2 opacity-40">
-          <Zap size={10} className="text-yellow-500" />
-          <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Classified Access Only</p>
+        <div className="flex items-center gap-2 opacity-60">
+          <Zap size={10} className="text-amber-600" />
+          <p className="text-[8px] font-black uppercase tracking-widest text-slate-500">Classified Access Only</p>
         </div>
       </div>
 
       <style>{`
-        .custom-scrollbar-dark::-webkit-scrollbar {
+        .custom-scrollbar-light::-webkit-scrollbar {
           width: 4px;
         }
-        .custom-scrollbar-dark::-webkit-scrollbar-track {
-          background: #000;
+        .custom-scrollbar-light::-webkit-scrollbar-track {
+          background: #f8fafc;
         }
-        .custom-scrollbar-dark::-webkit-scrollbar-thumb {
-          background: #222;
+        .custom-scrollbar-light::-webkit-scrollbar-thumb {
+          background: #e2e8f0;
           border-radius: 10px;
         }
-        .custom-scrollbar-dark::-webkit-scrollbar-thumb:hover {
-          background: #444;
+        .custom-scrollbar-light::-webkit-scrollbar-thumb:hover {
+          background: #cbd5e1;
         }
       `}</style>
     </div>

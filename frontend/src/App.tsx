@@ -7,8 +7,8 @@ import SettingsPage from './pages/SettingsPage';
 import LogMonitorPage from './pages/LogMonitorPage';
 import { User, LogIn, ShieldAlert, Lock, Fingerprint, Loader2 } from 'lucide-react';
 import { syncData, socket } from './utils/socket';
-import bgVideo from './assets/video-background.mp4';
 import signinBg from './assets/videobackground-2.mp4';
+import bgImage from './assets/background.jpg';
 import { addLog } from './utils/logger';
 
 function App() {
@@ -116,10 +116,7 @@ function App() {
   if (isBackendDown) {
     return (
       <div className="h-screen w-screen bg-slate-50 flex items-center justify-center p-6 relative overflow-hidden font-sans">
-        <video autoPlay muted loop playsInline className="absolute inset-0 w-full h-full object-cover scale-105">
-          <source src={bgVideo} type="video/mp4" />
-        </video>
-        <div className="absolute inset-0 bg-white/20 backdrop-blur-[2px]" />
+        <img src={bgImage} alt="Background" className="absolute inset-0 w-full h-full object-cover scale-105" />
         
         <div className="w-full max-w-105 relative z-10">
           <div className="bg-white/60 backdrop-blur-3xl rounded-[2.5rem] border border-white/30 shadow-2xl overflow-hidden p-10 text-center animate-in fade-in zoom-in duration-500">
@@ -163,16 +160,16 @@ function App() {
         >
           <source src={signinBg} type="video/mp4" />
         </video>
-        <div className="absolute inset-0 bg-teal-50/20 backdrop-blur-[2px]" />
+        <div className="absolute inset-0 bg-white/20 backdrop-blur-[2px]" />
         
         <div className="w-full max-w-105 relative z-10">
-          <div className="bg-teal-50/80 backdrop-blur-3xl rounded-[2.5rem] border border-teal-200/50 shadow-2xl overflow-hidden p-10 animate-in fade-in zoom-in duration-500">
+          <div className="bg-white/80 backdrop-blur-3xl rounded-[2.5rem] border border-white/50 shadow-2xl overflow-hidden p-10 animate-in fade-in zoom-in duration-500">
             <div className="text-center mb-10">
-              <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-blue-600/40">
+              <div className="w-14 h-14 bg-slate-900 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-slate-900/40">
                 <Fingerprint size={28} className="text-white" />
               </div>
-              <h1 className="text-2xl font-black text-slate-900 mb-1 tracking-tight">Access Gate</h1>
-              <p className="text-slate-600 text-[10px] font-black uppercase tracking-widest">Authorized Agents Only</p>
+              <h1 className="text-2xl font-black text-slate-950 mb-1 tracking-tight">Access Gate</h1>
+              <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Authorized Handlers Only</p>
             </div>
 
             <form onSubmit={handleLogin} className="space-y-6">
@@ -195,7 +192,7 @@ function App() {
                     onChange={(e) => setTempName(e.target.value)}
                     placeholder="Enter your full name"
                     disabled={isVerifying}
-                    className="w-full px-5 py-4 bg-teal-50/50 border border-teal-200/40 rounded-2xl focus:border-blue-500 focus:bg-teal-50 outline-none text-slate-900 font-black transition-all placeholder:text-slate-400"
+                    className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:border-blue-600 focus:bg-white outline-none text-slate-950 font-black transition-all placeholder:text-slate-400"
                     required
                   />
                 </div>
@@ -211,7 +208,7 @@ function App() {
                     onChange={(e) => setTempKey(e.target.value)}
                     placeholder="••••••••••••"
                     disabled={isVerifying}
-                    className="w-full px-5 py-4 bg-teal-50/50 border border-teal-200/40 rounded-2xl focus:border-blue-500 focus:bg-teal-50 outline-none text-slate-900 font-black transition-all placeholder:text-slate-400"
+                    className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:border-blue-600 focus:bg-white outline-none text-slate-950 font-black transition-all placeholder:text-slate-400"
                     required
                   />
                 </div>
@@ -220,7 +217,7 @@ function App() {
               <button 
                 type="submit"
                 disabled={isVerifying}
-                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all shadow-xl shadow-blue-600/30 active:scale-[0.98] flex items-center justify-center gap-3"
+                className="w-full bg-slate-900 hover:bg-black disabled:bg-slate-300 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all shadow-xl active:scale-[0.98] flex items-center justify-center gap-3"
               >
                 {isVerifying ? (
                   <Loader2 size={18} className="animate-spin" />
@@ -234,8 +231,8 @@ function App() {
             </form>
 
             <div className="mt-8 text-center">
-              <div className="inline-flex items-center gap-3 px-4 py-2 bg-slate-900/5 rounded-full border border-slate-900/10">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+              <div className="inline-flex items-center gap-3 px-4 py-2 bg-slate-50 rounded-full border border-slate-200">
+                <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse" />
                 <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Secure Link Active</span>
               </div>
             </div>
@@ -249,28 +246,17 @@ function App() {
   return (
     <Router>
       <NavigationLogger />
-      <div className="h-screen w-full relative overflow-hidden font-sans selection:bg-blue-500/30 text-slate-800">
-        {/* Background Video */}
-        <video 
-          autoPlay 
-          muted 
-          loop 
-          playsInline
-          className="absolute inset-0 w-full h-full object-cover scale-105"
-        >
-          <source src={bgVideo} type="video/mp4" />
-        </video>
+      <div className="h-screen w-full relative overflow-hidden font-sans selection:bg-blue-500/30 text-slate-900">
+        {/* Background Image */}
+        <img src={bgImage} alt="Background" className="absolute inset-0 w-full h-full object-cover scale-105" />
         
-        {/* Background Overlay for Glassmorphism */}
-        <div className="absolute inset-0 bg-white/5 backdrop-blur-[8px]" />
+        {/* Background visible — overlay removed to expose wallpaper */}
 
         <div className="relative z-10 flex flex-col h-full">
           <Navbar 
             currentUser={currentUser!} 
             onLogout={handleLogout} 
             onlineUsers={onlineUsers} 
-            selectedDate={selectedDate}
-            setSelectedDate={setSelectedDate}
           />
           <main className="flex-1 w-full max-w-full mx-auto px-3 py-2 overflow-hidden">
             <Routes>
