@@ -1,17 +1,17 @@
   import React, { useState, useMemo, useEffect } from 'react';
     import { MOCK_HANDLERS, MOCK_ROSTER } from '../data/mockData';
-    import { ShieldCheck, PhoneCall, X, Check } from 'lucide-react';
+    import { ShieldCheck, PhoneCall, X, Check, Calendar } from 'lucide-react';
     import type { DailyStats, Handler, RosterEntry, ShiftType } from '../types';
     import { addLog, saveLogsFromServer, saveSingleLogFromServer } from '../utils/logger';
     import { socket, syncData } from '../utils/socket';
 
     const getShiftColor = (shift: string) => {
       switch (shift) {
-        case '6AM-3PM': return { bg: 'bg-blue-500', text: 'text-blue-600', light: 'bg-blue-50', border: 'border-blue-200', rowBg: 'bg-blue-50/10' };
-        case '1PM-10PM': return { bg: 'bg-amber-500', text: 'text-amber-600', light: 'bg-amber-50', border: 'border-amber-200', rowBg: 'bg-amber-50/10' };
-        case '2PM-11PM': return { bg: 'bg-orange-600', text: 'text-orange-600', light: 'bg-orange-50', border: 'border-orange-200', rowBg: 'bg-orange-50/10' };
-        case '10PM-7AM': return { bg: 'bg-slate-700', text: 'text-slate-700', light: 'bg-slate-100', border: 'border-slate-300', rowBg: 'bg-slate-50/10' };
-        case '12PM-9PM': return { bg: 'bg-fuchsia-600', text: 'text-fuchsia-600', light: 'bg-fuchsia-50', border: 'border-fuchsia-200', rowBg: 'bg-fuchsia-50/10' };
+        case '6AM-3PM': return { bg: 'bg-[#00ADB5]', text: 'text-[#00ADB5]', light: 'bg-[#00ADB5]/10', border: 'border-[#00ADB5]/30', rowBg: 'bg-[#00ADB5]/5' };
+        case '12PM-9PM': return { bg: 'bg-[#00ADB5]', text: 'text-[#00ADB5]', light: 'bg-[#00ADB5]/15', border: 'border-[#00ADB5]/40', rowBg: 'bg-[#00ADB5]/8' };
+        case '1PM-10PM': return { bg: 'bg-[#393E46]', text: 'text-[#393E46]', light: 'bg-[#393E46]/10', border: 'border-[#393E46]/30', rowBg: 'bg-[#393E46]/5' };
+        case '2PM-11PM': return { bg: 'bg-[#393E46]', text: 'text-[#393E46]', light: 'bg-[#393E46]/15', border: 'border-[#393E46]/40', rowBg: 'bg-[#393E46]/8' };
+        case '10PM-7AM': return { bg: 'bg-[#222831]', text: 'text-[#222831]', light: 'bg-[#222831]/10', border: 'border-[#222831]/30', rowBg: 'bg-[#222831]/5' };
         case 'EL':
         case 'PL':
         case 'UL':
@@ -26,9 +26,18 @@
     }
 
     const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate }) => {
-      const [handlers, setHandlers] = useState<Handler[]>([]);
-      const [roster, setRoster] = useState<RosterEntry[]>([]);
-      const [stats, setStats] = useState<DailyStats[]>([]);
+      const [handlers, setHandlers] = useState<Handler[]>(() => {
+        const saved = localStorage.getItem('handlers');
+        return saved ? JSON.parse(saved) as Handler[] : MOCK_HANDLERS;
+      });
+      const [roster, setRoster] = useState<RosterEntry[]>(() => {
+        const saved = localStorage.getItem('roster');
+        return saved ? JSON.parse(saved) as RosterEntry[] : MOCK_ROSTER;
+      });
+      const [stats, setStats] = useState<DailyStats[]>(() => {
+        const saved = localStorage.getItem('stats');
+        return saved ? JSON.parse(saved) as DailyStats[] : [];
+      });
       const [currentTime, setCurrentTime] = useState(new Date());
       const [times, setTimes] = useState({ ist: '', uk: '' });
 
@@ -75,24 +84,24 @@
       }, []);
 
       useEffect(() => {
-        const handleHandlers = (data: any) => {
-          if (data) {
-            setHandlers(data);
-            localStorage.setItem('handlers', JSON.stringify(data));
-          }
-        };
-        const handleRoster = (data: any) => {
-          if (data) {
-            setRoster(data);
-            localStorage.setItem('roster', JSON.stringify(data));
-          }
-        };
-        const handleStats = (data: any) => {
-          if (data) {
-            setStats(data);
-            localStorage.setItem('stats', JSON.stringify(data));
-          }
-        };
+          const handleHandlers = (data: Handler[]) => {
+            if (data) {
+              setHandlers(data);
+              localStorage.setItem('handlers', JSON.stringify(data));
+            }
+          };
+          const handleRoster = (data: RosterEntry[]) => {
+            if (data) {
+              setRoster(data);
+              localStorage.setItem('roster', JSON.stringify(data));
+            }
+          };
+          const handleStats = (data: DailyStats[]) => {
+            if (data) {
+              setStats(data);
+              localStorage.setItem('stats', JSON.stringify(data));
+            }
+          };
 
         socket.on('handlers_updated', handleHandlers);
         socket.on('roster_updated', handleRoster);
@@ -102,25 +111,28 @@
         });
     
         const handleInit = (db: any) => {
-          if (db.handlers) setHandlers(db.handlers);
-          else if (db.agents) setHandlers(db.agents);
-          if (db.roster) setRoster(db.roster);
-          if (db.stats) setStats(db.stats);
+          if (!db) return;
+          if (Array.isArray(db.handlers)) {
+            setHandlers(db.handlers as Handler[]);
+            localStorage.setItem('handlers', JSON.stringify(db.handlers));
+          } else if (Array.isArray(db.agents)) {
+            setHandlers(db.agents as Handler[]);
+            localStorage.setItem('handlers', JSON.stringify(db.agents));
+          }
+          if (Array.isArray(db.roster)) {
+            setRoster(db.roster as RosterEntry[]);
+            localStorage.setItem('roster', JSON.stringify(db.roster));
+          }
+          if (Array.isArray(db.stats)) {
+            setStats(db.stats as DailyStats[]);
+            localStorage.setItem('stats', JSON.stringify(db.stats));
+          }
           if (db.logs) saveLogsFromServer(db.logs);
         };
 
         socket.on('init', handleInit);
 
-        const savedHandlers = localStorage.getItem('handlers');
-        setHandlers(savedHandlers ? JSON.parse(savedHandlers) : MOCK_HANDLERS);
-
-        const savedRoster = localStorage.getItem('roster');
-        setRoster(savedRoster ? JSON.parse(savedRoster) : MOCK_ROSTER);
-
-        const savedStats = localStorage.getItem('stats');
-        if (savedStats) {
-          setStats(JSON.parse(savedStats));
-        }
+        // initial loading handled by lazy initializers above
 
         if (socket.connected) {
           socket.emit('get_initial_data');
@@ -278,11 +290,11 @@
           <div className="mb-3 mt-1 bg-white/40 backdrop-blur-xl border border-white/40 rounded-2xl flex justify-between items-center shrink-0 px-5 py-2 shadow-sm">
             <div className="flex items-center space-x-6">
               <div className="flex items-center space-x-4">
-                <div className="w-8 h-8 bg-slate-900 rounded-xl flex items-center justify-center border border-white/20 shadow-lg">
+                <div className="w-8 h-8 bg-[#393E46] rounded-xl flex items-center justify-center border border-[#393E46] shadow-lg">
                   <ShieldCheck size={16} className="text-white" />
                 </div>
                 <div className="flex flex-col">
-                  <h1 className="text-lg font-black text-slate-950 tracking-tight leading-none uppercase">Productivity Tracker</h1>
+                  <h1 className="text-lg font-black text-[#222831] tracking-tight leading-none uppercase">Productivity Tracker</h1>
                   <p className="text-[8px] text-slate-500 font-bold uppercase tracking-[0.25em] mt-0.5">Live Performance Board</p>
                 </div>
               </div>
@@ -333,11 +345,11 @@
               {/* Integrated Time Center */}
               <div className="flex items-center bg-white/20 rounded-xl p-1 border border-slate-200 overflow-hidden ml-2">
                 <div className="flex items-center gap-3 px-4 py-1.5 bg-white/60 rounded-lg shadow-sm">
-                  <span className="text-[12px] font-black text-blue-600 uppercase tracking-tighter border-r border-slate-200 pr-3">IST</span>
-                  <span className="text-[15px] font-black text-black tabular-nums tracking-tighter leading-none">{times.ist}</span>
+                  <span className="text-[12px] font-black text-[#00ADB5] uppercase tracking-tighter border-r border-slate-200 pr-3">IST</span>
+                  <span className="text-[15px] font-black text-[#222831] tabular-nums tracking-tighter leading-none">{times.ist}</span>
                 </div>
                 <div className="flex items-center gap-3 px-4 py-1.5 rounded-lg ml-0.5">
-                  <span className="text-[12px] font-black text-amber-600 uppercase tracking-tighter border-r border-slate-200 pr-3">GMT</span>
+                  <span className="text-[12px] font-black text-[#393E46] uppercase tracking-tighter border-r border-slate-200 pr-3">GMT</span>
                   <span className="text-[15px] font-black text-black tabular-nums tracking-tighter leading-none">{times.uk}</span>
                 </div>
               </div>
@@ -345,34 +357,52 @@
 
             {/* Dynamic Totals Center */}
             <div className="flex items-center bg-white/90 backdrop-blur-xl rounded-2xl border border-white/20 overflow-hidden divide-x divide-slate-200/50 shadow-xl">
-              <div className="px-6 py-2 flex flex-col items-center min-w-25">
-                <span className="text-[8px] font-black text-slate-900 uppercase tracking-[0.2em] mb-0.5">Total INC</span>
-                <span className="text-base font-black text-slate-900 tabular-nums leading-none tracking-tight">{totalStats.incidents}</span>
+                <div className="px-6 py-2 flex flex-col items-center min-w-25">
+                <span className="text-[8px] font-black text-[#00ADB5] uppercase tracking-[0.2em] mb-0.5">Total INC</span>
+                <span className="text-base font-black text-[#222831] tabular-nums leading-none tracking-tight">{totalStats.incidents}</span>
               </div>
               <div className="px-6 py-2 flex flex-col items-center min-w-25">
-                <span className="text-[8px] font-black text-slate-900 uppercase tracking-[0.2em] mb-0.5">Total TASK</span>
-                <span className="text-base font-black text-slate-900 tabular-nums leading-none tracking-tight">{totalStats.sctasks}</span>
+                <span className="text-[8px] font-black text-[#393E46] uppercase tracking-[0.2em] mb-0.5">Total TASK</span>
+                <span className="text-base font-black text-[#222831] tabular-nums leading-none tracking-tight">{totalStats.sctasks}</span>
               </div>
               <div className="px-6 py-2 flex flex-col items-center min-w-25">
-                <span className="text-[8px] font-black text-slate-900 uppercase tracking-[0.2em] mb-0.5">Total Calls</span>
-                <span className="text-base font-black text-slate-900 tabular-nums leading-none tracking-tight">{totalStats.calls}</span>
+                <span className="text-[8px] font-black text-[#00ADB5] uppercase tracking-[0.2em] mb-0.5">Total Calls</span>
+                <span className="text-base font-black text-[#222831] tabular-nums leading-none tracking-tight">{totalStats.calls}</span>
               </div>
             </div>
           </div>
 
           {/* Tracker Table Container (Scrollable) */}
           <div className="flex-1 min-h-0 bg-white/40 backdrop-blur-2xl rounded-4xl border border-white/40 shadow-xl overflow-hidden relative">
-            <div className="absolute inset-0 overflow-y-auto scrollbar-hide">
-              <table className="w-full text-left border-collapse">
-                <thead className="sticky top-0 z-10">
-                  <tr className="text-[10px] font-black text-black uppercase tracking-widest bg-white/60 backdrop-blur-md border-b border-white/20">
-                    <th className="px-6 py-2.5 text-center border-r border-slate-200">On Shift Handlers</th>
+            <div className="absolute inset-0 overflow-y-auto overflow-x-hidden scrollbar-hide rounded-2xl">
+              <table className="w-full text-left border-separate" style={{ borderSpacing: 0 }}>
+                <thead>
+                  <tr className="sticky top-0 z-30">
+                    <th colSpan={7} className="px-4 py-2 bg-white/5 border border-slate-200 rounded-3xl">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 bg-[#222831] rounded-lg flex items-center justify-center text-white shadow-sm">
+                            <Calendar size={18} />
+                          </div>
+                          <div>
+                            <div className="text-[11px] font-black uppercase tracking-widest text-[#222831]">Handler Matrix</div>
+                            <div className="text-[9px] text-slate-500 font-bold">Queue Handler Board</div>
+                          </div>
+                        </div>
+                        <div>
+                          <button className="px-3 py-1.5 bg-[#222831] text-white rounded-lg font-black text-xs shadow">IMPORT ROSTER</button>
+                        </div>
+                      </div>
+                    </th>
+                  </tr>
+                  <tr className="sticky z-20" style={{ top: 52 }}>
+                    <th className="px-6 py-2.5 text-center border-r border-slate-200 first:rounded-tl-2xl">On Shift Handlers</th>
                     <th className="px-6 py-2.5 text-center border-r border-slate-200">Shift</th>
                     <th className="px-6 py-2.5 text-center border-r border-slate-200">INC</th>
                     <th className="px-6 py-2.5 text-center border-r border-slate-200">TASK</th>
                     <th className="px-6 py-2.5 text-center border-r border-slate-200">CALL</th>
                     <th className="px-6 py-2.5 text-center border-r border-slate-200">Notes</th>
-                    <th className="px-6 py-2.5 text-center">Total</th>
+                    <th className="px-6 py-2.5 text-center last:rounded-tr-2xl">Total</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -461,7 +491,7 @@
                                 setIsCallModalOpen(true);
                               }}
                               disabled={isDisabled}
-                              className="w-6 h-6 flex items-center justify-center rounded-lg bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/20 text-xs text-center font-black border border-blue-400"
+                              className="w-6 h-6 flex items-center justify-center rounded-lg bg-[#00ADB5] hover:bg-[#00ADB5]/80 text-white shadow-lg shadow-[#00ADB5]/20 text-xs text-center font-black border border-[#00ADB5]/60"
                             >
                               +
                             </button>
@@ -478,7 +508,7 @@
                           />
                         </td>
                         <td className="px-4 py-2 text-center">
-                          <div className="inline-flex items-center justify-center px-2 py-0.5 bg-slate-900 text-white rounded-md font-black text-xs min-w-7.5 shadow-lg shadow-slate-900/10">
+                          <div className="inline-flex items-center justify-center px-2 py-0.5 bg-[#222831] text-white rounded-md font-black text-xs min-w-7.5 shadow-lg shadow-[#222831]/10">
                             {rowTotal}
                           </div>
                         </td>
@@ -498,11 +528,11 @@
                 {/* Header */}
                 <div className="px-8 pt-8 pb-4 flex justify-between items-center">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
-                      <PhoneCall size={18} className="text-blue-600" />
+                    <div className="w-10 h-10 rounded-2xl bg-[#00ADB5]/10 border border-[#00ADB5]/20 flex items-center justify-center">
+                      <PhoneCall size={18} className="text-[#00ADB5]" />
                     </div>
                     <div>
-                      <h3 className="text-slate-950 font-black text-xs uppercase tracking-[0.2em] leading-none">Call Record</h3>
+                      <h3 className="text-[#222831] font-black text-xs uppercase tracking-[0.2em] leading-none">Call Record</h3>
                       <p className="text-[7px] text-slate-500 font-bold uppercase tracking-widest mt-1">Logging productivity...</p>
                     </div>
                   </div>
@@ -516,7 +546,7 @@
                   <div className="space-y-3">
                     <div className="flex justify-between items-center px-1">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">Ticket Number</label>
-                      <span className="text-[8px] font-black text-blue-600 uppercase tracking-widest bg-blue-500/10 px-2 py-0.5 rounded-full">Required</span>
+                      <span className="text-[8px] font-black text-[#00ADB5] uppercase tracking-widest bg-[#00ADB5]/10 px-2 py-0.5 rounded-full">Required</span>
                     </div>
                     <div className="relative group">
                       <input 
@@ -537,13 +567,13 @@
                     <div className="grid grid-cols-2 gap-2 p-1.5 bg-slate-100 rounded-[22px] border border-slate-200 shadow-inner">
                       <button 
                         onClick={() => setCallData({...callData, type: 'New'})} 
-                        className={`py-3 rounded-2xl font-black text-[9px] uppercase tracking-[0.2em] transition-all duration-300 ${callData.type === 'New' ? 'bg-white text-slate-950 shadow-md scale-[1.02]' : 'text-slate-400 hover:text-slate-600 hover:bg-white/50'}`}
+                        className={`py-3 rounded-2xl font-black text-[9px] uppercase tracking-[0.2em] transition-all duration-300 ${callData.type === 'New' ? 'bg-white text-[#222831] shadow-md scale-[1.02]' : 'text-slate-400 hover:text-slate-600 hover:bg-white/50'}`}
                       >
                         New
                       </button>
                       <button 
                         onClick={() => setCallData({...callData, type: 'Update'})} 
-                        className={`py-3 rounded-2xl font-black text-[9px] uppercase tracking-[0.2em] transition-all duration-300 ${callData.type === 'Update' ? 'bg-white text-slate-950 shadow-md scale-[1.02]' : 'text-slate-400 hover:text-slate-600 hover:bg-white/50'}`}
+                        className={`py-3 rounded-2xl font-black text-[9px] uppercase tracking-[0.2em] transition-all duration-300 ${callData.type === 'Update' ? 'bg-white text-[#222831] shadow-md scale-[1.02]' : 'text-slate-400 hover:text-slate-600 hover:bg-white/50'}`}
                       >
                         Update
                       </button>
@@ -553,7 +583,7 @@
                   {/* Submit Button */}
                   <button 
                     onClick={handleCallSubmit}
-                    className="w-full bg-slate-900 hover:bg-black text-white pt-5 pb-5 rounded-3xl font-black text-xs uppercase tracking-[0.3em] shadow-lg transition-all active:scale-[0.97] flex items-center justify-center gap-3 group"
+                    className="w-full bg-[#222831] hover:bg-[#222831]/90 text-white pt-5 pb-5 rounded-3xl font-black text-xs uppercase tracking-[0.3em] shadow-lg transition-all active:scale-[0.97] flex items-center justify-center gap-3 group"
                   >
                     <Check size={18} strokeWidth={4} className="group-hover:scale-125 transition-transform" />
                     Submit Record

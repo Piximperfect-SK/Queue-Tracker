@@ -25,7 +25,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
  
 const ALL_SHIFT_TYPES: ShiftType[] = [
-  '6AM-3PM', '1PM-10PM', '2PM-11PM', '10PM-7AM', '12PM-9PM',
+  '6AM-3PM', '12PM-9PM', '1PM-10PM', '2PM-11PM', '10PM-7AM',
   'WO', 'ML', 'PL', 'EL', 'UL', 'CO', 'MID-LEAVE'
 ];
 
@@ -79,11 +79,11 @@ const createAgentId = () => {
 
 const getShiftColor = (shift: string) => {
   switch (shift) {
-    case '6AM-3PM': return { bg: 'bg-blue-500', text: 'text-blue-600', light: 'bg-blue-50', border: 'border-blue-200', card: 'bg-[#bae6fd]' };
-    case '1PM-10PM': return { bg: 'bg-amber-500', text: 'text-amber-600', light: 'bg-amber-50', border: 'border-amber-200', card: 'bg-[#fef08a]' };
-    case '2PM-11PM': return { bg: 'bg-orange-600', text: 'text-orange-600', light: 'bg-orange-50', border: 'border-orange-200', card: 'bg-[#fed7aa]' };
-    case '10PM-7AM': return { bg: 'bg-slate-700', text: 'text-slate-700', light: 'bg-slate-100', border: 'border-slate-300', card: 'bg-[#94a3b8]' };
-    case '12PM-9PM': return { bg: 'bg-fuchsia-600', text: 'text-fuchsia-600', light: 'bg-fuchsia-50', border: 'border-fuchsia-200', card: 'bg-[#f5d0fe]' };
+    case '6AM-3PM': return { bg: 'bg-[#00ADB5]', text: 'text-[#00ADB5]', light: 'bg-[#00ADB5]/10', border: 'border-[#00ADB5]/30', card: 'bg-[#00ADB5]/20' };
+    case '1PM-10PM': return { bg: 'bg-[#393E46]', text: 'text-[#393E46]', light: 'bg-[#393E46]/10', border: 'border-[#393E46]/30', card: 'bg-[#393E46]/20' };
+    case '2PM-11PM': return { bg: 'bg-[#393E46]', text: 'text-[#393E46]', light: 'bg-[#393E46]/15', border: 'border-[#393E46]/40', card: 'bg-[#393E46]/25' };
+    case '10PM-7AM': return { bg: 'bg-[#222831]', text: 'text-[#222831]', light: 'bg-[#222831]/10', border: 'border-[#222831]/30', card: 'bg-[#222831]/15' };
+    case '12PM-9PM': return { bg: 'bg-[#00ADB5]', text: 'text-[#00ADB5]', light: 'bg-[#00ADB5]/15', border: 'border-[#00ADB5]/40', card: 'bg-[#00ADB5]/25' };
     case 'EL':
     case 'PL':
     case 'UL':
@@ -213,14 +213,25 @@ interface RosterPageProps {
 }
 
 const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }) => {
-  const [handlers, setHandlers] = useState<Handler[]>([]);
-  const [roster, setRoster] = useState<RosterEntry[]>([]);
+  const [handlers, setHandlers] = useState<Handler[]>(() => {
+    const saved = localStorage.getItem('handlers');
+    return saved ? JSON.parse(saved) as Handler[] : MOCK_HANDLERS;
+  });
+  const [roster, setRoster] = useState<RosterEntry[]>(() => {
+    const saved = localStorage.getItem('roster');
+    const base = saved ? JSON.parse(saved) as RosterEntry[] : MOCK_ROSTER;
+    return applyBlueprint(base);
+  });
   const [activeId, setActiveId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newHandlerName, setNewHandlerName] = useState('');
-  const [newHandlerShift, setNewHandlerShift] = useState<ShiftType>('Unassigned');
-  const [isLeaveConfirmModalOpen, setIsLeaveConfirmModalOpen] = useState(false);
-  const [pendingLeaveAssignment, setPendingLeaveAssignment] = useState<{ handlerId: string; shift: ShiftType } | null>(null);
+  const [newHandlerShift, setNewHandlerShift] = useState<ShiftType>(SHIFTS[0]);
+  const [leaveOperation, setLeaveOperation] = useState<{
+    type: 'assign' | 'remove';
+    handlerId: string;
+    fromShift?: ShiftType;
+    toShift?: ShiftType | 'UNASSIGNED';
+  } | null>(null);
   const [importStatus, setImportStatus] = useState<ImportFeedback | null>(null);
   const [isImportingRoster, setIsImportingRoster] = useState(false);
   const [times, setTimes] = useState({ ist: '', uk: '' });
@@ -281,13 +292,13 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
   }, [availableShifts]);
 
   useEffect(() => {
-    const handleHandlers = (data: any) => {
+    const handleHandlers = (data: Handler[]) => {
       if (data) {
         setHandlers(data);
         localStorage.setItem('handlers', JSON.stringify(data));
       }
     };
-    const handleRoster = (data: any) => {
+    const handleRoster = (data: RosterEntry[]) => {
       if (data) {
         const merged = applyBlueprint(data);
         setRoster(merged);
@@ -302,16 +313,16 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
     });
     
     const handleInit = (db: any) => {
-      console.log('Received INIT data from server');
-      if (db.handlers) {
-        setHandlers(db.handlers);
+      if (!db) return;
+      if (Array.isArray(db.handlers)) {
+        setHandlers(db.handlers as Handler[]);
         localStorage.setItem('handlers', JSON.stringify(db.handlers));
-      } else if (db.agents) {
-        setHandlers(db.agents);
+      } else if (Array.isArray(db.agents)) {
+        setHandlers(db.agents as Handler[]);
         localStorage.setItem('handlers', JSON.stringify(db.agents));
       }
-      if (db.roster) {
-        const merged = applyBlueprint(db.roster);
+      if (Array.isArray(db.roster)) {
+        const merged = applyBlueprint(db.roster as RosterEntry[]);
         setRoster(merged);
         localStorage.setItem('roster', JSON.stringify(merged));
       }
@@ -322,14 +333,7 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
 
     socket.on('init', handleInit);
 
-    // Initial load from localStorage as fallback
-    const savedHandlers = localStorage.getItem('handlers');
-    if (savedHandlers) setHandlers(JSON.parse(savedHandlers));
-    else setHandlers(MOCK_HANDLERS);
-
-    const savedRoster = localStorage.getItem('roster');
-    const baseRoster = savedRoster ? JSON.parse(savedRoster) : MOCK_ROSTER;
-    setRoster(applyBlueprint(baseRoster));
+    // initial data loaded via lazy initializers above
 
     // CRITICAL: If the socket is already connected (e.g. from App.tsx),
     // we need to request the state manually because we missed the 'init' event
@@ -379,7 +383,7 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
     syncData.updateHandlers(updatedHandlers);
 
     setNewHandlerName('');
-    setNewHandlerShift('Unassigned');
+    setNewHandlerShift(SHIFTS[0]);
     setIsModalOpen(false);
     addLog('Add Handler', logMsg, 'positive');
   };
@@ -387,14 +391,13 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
   const LEAVE_TYPES = ['EL', 'PL', 'UL', 'MID-LEAVE', 'WO', 'ML', 'CO'];
 
   const updateShift = (handlerId: string, shift: ShiftType) => {
-    // Check if this is a leave type assignment
+    // If assigning to a leave type, require confirmation
     if (LEAVE_TYPES.includes(shift)) {
-      setPendingLeaveAssignment({ handlerId, shift });
-      setIsLeaveConfirmModalOpen(true);
+      setLeaveOperation({ type: 'assign', handlerId, toShift: shift });
       return;
     }
 
-    // Execute normal shift update
+    // Normal update
     executeShiftUpdate(handlerId, shift);
   };
 
@@ -568,16 +571,32 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
   };
 
   const handleLeaveConfirm = () => {
-    if (pendingLeaveAssignment) {
-      executeShiftUpdate(pendingLeaveAssignment.handlerId, pendingLeaveAssignment.shift);
-      setPendingLeaveAssignment(null);
-      setIsLeaveConfirmModalOpen(false);
+    if (!leaveOperation) return;
+
+    if (leaveOperation.type === 'assign' && leaveOperation.toShift) {
+      executeShiftUpdate(leaveOperation.handlerId, leaveOperation.toShift as ShiftType);
     }
+
+    if (leaveOperation.type === 'remove') {
+      // Removing from leave: either unassign or place into target shift
+      const to = leaveOperation.toShift;
+      if (to === 'UNASSIGNED') {
+        const updatedRoster = roster.filter(r => !(r.handlerId === leaveOperation.handlerId && r.date === selectedDate));
+        setRoster(updatedRoster);
+        localStorage.setItem('roster', JSON.stringify(updatedRoster));
+        syncData.updateRoster(updatedRoster);
+        const handler = handlers.find(a => a.id === leaveOperation.handlerId);
+        addLog('Update Shift', `${handler?.name || leaveOperation.handlerId}: ${leaveOperation.fromShift} -> Unassigned (Date: ${selectedDate})`);
+      } else if (to && to !== 'UNASSIGNED') {
+        executeShiftUpdate(leaveOperation.handlerId, to as ShiftType);
+      }
+    }
+
+    setLeaveOperation(null);
   };
 
   const handleLeaveCancel = () => {
-    setPendingLeaveAssignment(null);
-    setIsLeaveConfirmModalOpen(false);
+    setLeaveOperation(null);
   };
 
   const handleDragStart = (event: DragStartEvent) => {
@@ -596,10 +615,33 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
     // Only allow delete if dragged horizontally (left/right)
     const isHorizontalDrag = Math.abs(delta.x) > Math.abs(delta.y);
 
+    // Find current roster entry for this handler on selected date
+    const currentEntry = roster.find(r => r.handlerId === handlerId && r.date === selectedDate);
+
+    // If the handler is currently on leave and is being dragged out, require confirmation to remove
+    if (currentEntry && LEAVE_TYPES.includes(currentEntry.shift)) {
+      // If dropping onto OFF_DUTY and same leave type, do nothing
+      if (overId === 'OFF_DUTY') {
+        return;
+      }
+
+      // Determine target: shift or unassigned
+      if (availableShifts.includes(overId as ShiftType)) {
+        const targetShift = overId as ShiftType;
+        if (targetShift === currentEntry.shift) return; // no-op
+        setLeaveOperation({ type: 'remove', handlerId, fromShift: currentEntry.shift, toShift: targetShift });
+        return;
+      }
+
+      if (overId === 'UNASSIGNED') {
+        setLeaveOperation({ type: 'remove', handlerId, fromShift: currentEntry.shift, toShift: 'UNASSIGNED' });
+        return;
+      }
+    }
+
     if (availableShifts.includes(overId as ShiftType)) {
       updateShift(handlerId, overId as ShiftType);
-    } 
-    else if (overId === 'OFF_DUTY') {
+    } else if (overId === 'OFF_DUTY') {
       updateShift(handlerId, 'WO');
     }
     else if (overId === 'UNASSIGNED') {
@@ -652,11 +694,11 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
       <div className="mb-3 mt-1 bg-white/40 backdrop-blur-xl border border-white/40 rounded-2xl flex justify-between items-center shrink-0 px-5 py-2 shadow-sm">
         <div className="flex items-center space-x-6">
           <div className="flex items-center space-x-4">
-            <div className="w-8 h-8 bg-black/5 rounded-xl flex items-center justify-center border border-slate-200 shadow-sm">
-              <CalendarIcon size={16} className="text-slate-950" />
+            <div className="w-8 h-8 bg-[#393E46] rounded-xl flex items-center justify-center border border-[#393E46] shadow-sm">
+              <CalendarIcon size={16} className="text-white" />
             </div>
             <div className="flex flex-col">
-              <h1 className="text-lg font-black text-slate-950 tracking-tight leading-none uppercase">Handler Matrix</h1>
+              <h1 className="text-lg font-black text-[#222831] tracking-tight leading-none uppercase">Handler Matrix</h1>
               <p className="text-[8px] text-slate-500 font-bold uppercase tracking-[0.25em] mt-0.5">Queue Handler Board</p>
             </div>
           </div>
@@ -709,13 +751,13 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
           {/* Integrated Time Center */}
           <div className="flex items-center bg-black/5 rounded-xl p-1 border border-slate-200 overflow-hidden ml-2">
             <div className="flex items-center gap-3 px-4 py-1.5 bg-white/60 rounded-lg">
-              <span className="text-[12px] font-black text-blue-600 uppercase tracking-tighter border-r border-slate-200 pr-3">IST</span>
-              <span className="text-[15px] font-black text-slate-950 tabular-nums tracking-tighter leading-none">{times.ist}</span>
-            </div>
-            <div className="flex items-center gap-3 px-4 py-1.5 rounded-lg ml-0.5">
-              <span className="text-[12px] font-black text-blue-600 uppercase tracking-tighter border-r border-slate-200 pr-3">GMT</span>
-              <span className="text-[15px] font-black text-slate-950 tabular-nums tracking-tighter leading-none">{times.uk}</span>
-            </div>
+                <span className="text-[12px] font-black text-[#00ADB5] uppercase tracking-tighter border-r border-slate-200 pr-3">IST</span>
+                <span className="text-[15px] font-black text-[#222831] tabular-nums tracking-tighter leading-none">{times.ist}</span>
+              </div>
+              <div className="flex items-center gap-3 px-4 py-1.5 rounded-lg ml-0.5">
+                <span className="text-[12px] font-black text-[#393E46] uppercase tracking-tighter border-r border-slate-200 pr-3">GMT</span>
+                <span className="text-[15px] font-black text-[#222831] tabular-nums tracking-tighter leading-none">{times.uk}</span>
+              </div>
           </div>
         </div>
         
@@ -723,7 +765,7 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={isImportingRoster}
-            className="px-4 py-1.5 rounded-xl font-black text-[9px] uppercase tracking-widest bg-slate-900 text-white hover:bg-black transition-all shadow-md disabled:opacity-50"
+            className="px-4 py-1.5 rounded-xl font-black text-[9px] uppercase tracking-widest bg-[#222831] text-white hover:bg-[#222831]/90 transition-all shadow-md disabled:opacity-50"
           >
             {isImportingRoster ? 'Importing...' : 'Import Roster'}
           </button>
@@ -740,13 +782,13 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
       {importStatus && (
         <div className={`mb-4 mx-2 p-3 rounded-2xl flex items-center justify-between backdrop-blur-md border animate-in fade-in slide-in-from-top-2 duration-300 shadow-sm ${
           importStatus.tone === 'success' ? 'bg-green-100 border-green-200 text-green-700' :
-          importStatus.tone === 'warning' ? 'bg-amber-100 border-amber-200 text-amber-700' :
+          importStatus.tone === 'warning' ? 'bg-[#00ADB5]/10 border-[#00ADB5]/30 text-[#00ADB5]' :
           'bg-rose-100 border-rose-200 text-rose-700'
         }`}>
           <div className="flex items-center gap-3">
             <div className={`w-2 h-2 rounded-full ${
               importStatus.tone === 'success' ? 'bg-green-500' :
-              importStatus.tone === 'warning' ? 'bg-amber-500' :
+              importStatus.tone === 'warning' ? 'bg-[#00ADB5]' :
               'bg-rose-500'
             }`} />
             <span className="text-[11px] font-black uppercase tracking-wider">{importStatus.message}</span>
@@ -765,190 +807,158 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
         onDragEnd={handleDragEnd}
       >
         <div className="flex-1 flex overflow-hidden gap-4">
-          {/* Main Roster Area */}
           <div className="flex-1 flex flex-col gap-4 overflow-hidden">
-            {/* Shifts Grid - Horizontal all 5 shifts */}
             <div className="flex-1 min-h-0">
-              <div className="overflow-auto bg-white rounded-2xl p-2 text-black min-h-0 border border-slate-300">
-                <table className="w-full table-fixed border-collapse">
-                  <thead>
-                    <tr className="text-[10px] font-black text-slate-900 uppercase tracking-widest border-b-2 border-slate-300">
-                      {SHIFTS.map(shift => {
-                        const colors = getShiftColor(shift);
-                        const shiftHandlers = getHandlersForShift(shift);
-                        return (
-                          <th key={shift} className={`px-4 py-3 text-left border-r border-slate-300 ${colors.light}`}>
-                            <div className="flex items-center justify-between">
-                              <span className="inline-block">{shift}</span>
-                              <div className="flex items-center gap-3">
-                                <div className={`w-2.5 h-2.5 rounded-full ${colors.bg}`} />
-                                <span className="text-[12px] font-black text-slate-900">{shiftHandlers.length}</span>
+              <div className="flex flex-col h-full min-h-0 bg-white rounded-2xl p-2 text-black border border-slate-300">
+                <div className="flex-1 overflow-auto">
+                  <table className="w-full table-fixed border-collapse">
+                    <thead>
+                      <tr className="text-[10px] font-black text-slate-900 uppercase tracking-widest border-b-2 border-slate-300">
+                        {SHIFTS.map(shift => {
+                          const colors = getShiftColor(shift);
+                          const shiftHandlers = getHandlersForShift(shift);
+                          return (
+                            <th key={shift} className={`px-4 py-3 text-left border-r border-slate-300 ${colors.light}`}>
+                              <div className="flex items-center justify-between">
+                                <span className="inline-block">{shift}</span>
+                                <div className="flex items-center gap-3">
+                                  <div className={`w-2.5 h-2.5 rounded-full ${colors.bg}`} />
+                                  <span className="text-[12px] font-black text-slate-900">{shiftHandlers.length}</span>
+                                </div>
                               </div>
+                            </th>
+                          );
+                        })}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        {SHIFTS.map((shift) => {
+                          const colors = getShiftColor(shift);
+                          const shiftHandlers = getHandlersForShift(shift);
+                          return (
+                            <td key={shift} className="align-top px-2 pb-3 border-r border-slate-300">
+                              <div className="sr-only">{shift}</div>
+                              <DroppableContainer id={shift} className="px-0 pt-3 pb-3 overflow-y-auto scrollbar-hide">
+                                <SortableContext
+                                  id={shift}
+                                  items={shiftHandlers.map(a => a.id)}
+                                  strategy={verticalListSortingStrategy}
+                                >
+                                  <ul className="flex flex-col gap-1.5">
+                                    {shiftHandlers.map(handler => (
+                                      <SortableHandler 
+                                        key={handler.id} 
+                                        handler={handler} 
+                                        shift={shift} 
+                                        colors={colors} 
+                                        onShiftChange={updateShift}
+                                        onDelete={deleteHandlerGlobally}
+                                        shiftOptions={shiftPickerOptions}
+                                      />
+                                    ))}
+                                    {shiftHandlers.length === 0 && (
+                                      <li className="flex flex-col items-center justify-center p-4 opacity-80 shrink-0 border-2 border-dashed border-slate-200 rounded-3xl mt-2 bg-transparent">
+                                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Empty</span>
+                                      </li>
+                                    )}
+                                  </ul>
+                                </SortableContext>
+                              </DroppableContainer>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="flex-shrink-0 bg-white rounded-b-3xl border-t border-slate-200 flex flex-col h-auto shadow-inner mt-4 text-black">
+                  <div className="px-6 py-4 flex items-center justify-between shrink-0 rounded-b-3xl">
+                    <div className="flex items-center gap-3">
+                      <h2 className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Leaves / Week Off</h2>
+                      <span className="bg-black/5 text-slate-600 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider border border-slate-200">
+                        {getOffDutyHandlers().length} Handlers
+                      </span>
+                    </div>
+
+                    <div className="relative">
+                      <button 
+                        onClick={() => setIsModalOpen(!isModalOpen)}
+                        className={`w-10 h-10 ${isModalOpen ? 'bg-rose-500 text-white shadow-rose-500/30' : 'bg-[#393E46] text-white shadow-[#393E46]/30'} rounded-2xl flex items-center justify-center transition-all shadow-lg active:scale-[0.98]`}
+                        title="Register Handler"
+                      >
+                        <Plus size={20} className={`transition-transform duration-300 ${isModalOpen ? 'rotate-45' : ''}`} />
+                      </button>
+
+                      {isModalOpen && (
+                        <div className="absolute bottom-full right-0 mb-4 w-72 bg-white border border-slate-200 shadow-2xl rounded-4xl p-6 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                          <h3 className="text-sm font-black text-[#222831] tracking-tight mb-4 uppercase">Register Handler</h3>
+                          <div className="space-y-4">
+                            <div>
+                              <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Full Name</label>
+                              <input 
+                                autoFocus
+                                value={newHandlerName}
+                                onChange={(e) => setNewHandlerName(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && handleAddHandler()}
+                                placeholder="Full Name"
+                                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-slate-900 font-bold text-xs"
+                              />
                             </div>
-                          </th>
-                        );
-                      })}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      {SHIFTS.map((shift) => {
-                        const colors = getShiftColor(shift);
-                        const shiftHandlers = getHandlersForShift(shift);
-                        return (
-                          <td key={shift} className="align-top px-2 pb-3 border-r border-slate-300">
-                            <div className="sr-only">{shift}</div>
 
-                            <DroppableContainer id={shift} className="px-0 pt-3 pb-3 overflow-y-auto scrollbar-hide">
-                              <SortableContext
-                                id={shift}
-                                items={shiftHandlers.map(a => a.id)}
-                                strategy={verticalListSortingStrategy}
+                            <div>
+                              <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Shift (Required)</label>
+                              <select 
+                                value={newHandlerShift}
+                                onChange={(e) => setNewHandlerShift(e.target.value as ShiftType)}
+                                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-slate-900 font-bold text-xs appearance-none"
                               >
-                                <ul className="flex flex-col gap-1.5">
-                                  {shiftHandlers.map(handler => (
-                                    <SortableHandler 
-                                      key={handler.id} 
-                                      handler={handler} 
-                                      shift={shift} 
-                                      colors={colors} 
-                                      onShiftChange={updateShift}
-                                      onDelete={deleteHandlerGlobally}
-                                      shiftOptions={shiftPickerOptions}
-                                    />
-                                  ))}
-                                  {shiftHandlers.length === 0 && (
-                                    <li className="flex flex-col items-center justify-center p-4 opacity-80 shrink-0 border-2 border-dashed border-white/30 rounded-3xl mt-2 bg-transparent">
-                                      <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Empty</span>
-                                    </li>
-                                  )}
-                                </ul>
-                              </SortableContext>
-                            </DroppableContainer>
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
+                                {shiftPickerOptions.map(s => (
+                                  <option key={s} value={s}>{s}</option>
+                                ))}
+                              </select>
+                            </div>
 
-            {/* Leaves & Week Off Section */}
-            {getOffDutyHandlers().length > 0 && (
-              <div className="bg-white/70 backdrop-blur-2xl rounded-3xl border border-white/30 flex flex-col px-5 py-4 shadow-xl text-black">
-                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3 ml-1">Leaves / Week Off</h3>
-                <DroppableContainer id="OFF_DUTY" className="min-h-10">
-                  <SortableContext
-                    id="OFF_DUTY"
-                    items={getOffDutyHandlers().map(item => item.handler.id)}
-                    strategy={verticalListSortingStrategy}
-                  >
-                    <div className="flex flex-wrap gap-2">
-                      {getOffDutyHandlers().map(({ handler, reason }) => (
-                        <div key={handler.id} className="w-56 shrink-0">
-                          <SortableHandler 
-                            handler={handler} 
-                            shift={reason} 
-                            colors={getShiftColor(reason)} 
-                            onShiftChange={updateShift}
-                            onDelete={deleteHandlerGlobally}
-                            shiftOptions={shiftPickerOptions}
-                          />
+                            <div className="flex gap-2 pt-2">
+                              <button 
+                                onClick={handleAddHandler}
+                                disabled={!newHandlerName.trim() || !newHandlerShift}
+                                className="flex-1 bg-[#222831] text-white font-black text-[10px] uppercase tracking-widest py-3 rounded-xl shadow-lg shadow-[#222831]/20 hover:bg-[#222831]/90 transition-all disabled:opacity-30"
+                              >
+                                Confirm
+                              </button>
+                            </div>
+                          </div>
                         </div>
-                      ))}
+                      )}
                     </div>
-                  </SortableContext>
-                </DroppableContainer>
-              </div>
-            )}
-
-            {/* Unassigned Pool Section */}
-            <div className="bg-white/70 backdrop-blur-2xl rounded-4xl border border-white/30 flex flex-col h-auto max-h-125 shadow-xl relative z-40 text-black">
-              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0 rounded-t-4xl">
-                <div className="flex items-center gap-3">
-                  <h2 className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Unassigned Pool</h2>
-                  <span className="bg-black/5 text-slate-600 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider border border-slate-200">
-                    {getUnassignedHandlers().length} Handlers
-                  </span>
-                </div>
-                
-                <div className="relative">
-                  <button 
-                    onClick={() => setIsModalOpen(!isModalOpen)}
-                    className={`w-10 h-10 ${isModalOpen ? 'bg-rose-500 text-white shadow-rose-500/30' : 'bg-slate-900 text-white shadow-slate-900/30'} rounded-2xl flex items-center justify-center transition-all shadow-lg active:scale-[0.98]`}
-                    title="Register Handler"
-                  >
-                    <Plus size={20} className={`transition-transform duration-300 ${isModalOpen ? 'rotate-45' : ''}`} />
-                  </button>
-
-                  {isModalOpen && (
-                    <div className="absolute bottom-full right-0 mb-4 w-72 bg-white border border-slate-200 shadow-2xl rounded-4xl p-6 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                      <h3 className="text-sm font-black text-slate-950 tracking-tight mb-4 uppercase">Register Handler</h3>
-                      
-                      <div className="space-y-4">
-                        <div>
-                          <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Full Name</label>
-                          <input 
-                            autoFocus
-                            value={newHandlerName}
-                            onChange={(e) => setNewHandlerName(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleAddHandler()}
-                            placeholder="Full Name"
-                            className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-slate-900 font-bold text-xs"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Shift (Optional)</label>
-                          <select 
-                            value={newHandlerShift}
-                            onChange={(e) => setNewHandlerShift(e.target.value as ShiftType)}
-                            className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-slate-900 font-bold text-xs appearance-none"
-                          >
-                            <option value="Unassigned">Unassigned Pool</option>
-                            {shiftPickerOptions.map(s => (
-                              <option key={s} value={s}>{s}</option>
-                            ))}
-                          </select>
-                        </div>
-
-                        <div className="flex gap-2 pt-2">
-                          <button 
-                            onClick={handleAddHandler}
-                            disabled={!newHandlerName.trim()}
-                            className="flex-1 bg-slate-900 text-white font-black text-[10px] uppercase tracking-widest py-3 rounded-xl shadow-lg shadow-slate-900/20 hover:bg-black transition-all disabled:opacity-30"
-                          >
-                            Confirm
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-              <DroppableContainer id="UNASSIGNED" className="p-4 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
-                <SortableContext
-                  id="UNASSIGNED"
-                  items={getUnassignedHandlers().map(a => a.id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  <div className="flex flex-wrap gap-2 h-auto content-start pb-2">
-                    {getUnassignedHandlers().map(handler => (
-                      <div key={handler.id} className="w-56 shrink-0">
-                        <SortableHandler 
-                          handler={handler} 
-                          shift="Unassigned" 
-                          colors={{ bg: 'bg-blue-600', text: 'text-blue-600', light: 'bg-blue-100', border: 'border-blue-200', card: 'bg-white/60' }} 
-                          onShiftChange={updateShift}
-                          onDelete={deleteHandlerGlobally}
-                          shiftOptions={shiftPickerOptions}
-                        />
-                      </div>
-                    ))}
                   </div>
-                </SortableContext>
-              </DroppableContainer>
+
+                  <DroppableContainer id="OFF_DUTY" className="p-4 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
+                    <SortableContext
+                      id="OFF_DUTY"
+                      items={getOffDutyHandlers().map(item => item.handler.id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      <div className="flex flex-wrap gap-2 h-auto content-start pb-2">
+                        {getOffDutyHandlers().map(({ handler, reason }) => (
+                          <div key={handler.id} className="w-56 shrink-0">
+                            <SortableHandler 
+                              handler={handler} 
+                              shift={reason} 
+                              colors={getShiftColor(reason)} 
+                              onShiftChange={updateShift}
+                              onDelete={deleteHandlerGlobally}
+                              shiftOptions={shiftPickerOptions}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </SortableContext>
+                  </DroppableContainer>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -958,8 +968,8 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
             <div className={`flex items-center justify-between p-4 rounded-2xl border border-slate-200 bg-white/60 backdrop-blur-2xl shadow-2xl scale-110 w-64`}>
               <div className="flex items-center space-x-3 ml-2">
                 <div>
-                  <span className="text-slate-950 font-black text-sm block leading-tight">{activeHandler.name}</span>
-                  <span className="text-[8px] font-black text-blue-600 uppercase tracking-widest mt-1 block">Relocating...</span>
+                  <span className="text-[#222831] font-black text-sm block leading-tight">{activeHandler.name}</span>
+                  <span className="text-[8px] font-black text-[#393E46] uppercase tracking-widest mt-1 block">Relocating...</span>
                 </div>
               </div>
             </div>
@@ -976,14 +986,14 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
       </DndContext>
 
       {/* Leave Confirmation Modal */}
-      {isLeaveConfirmModalOpen && pendingLeaveAssignment && (
+      {leaveOperation && (
         <div className="fixed inset-0 flex items-center justify-center z-100 p-6">
           <div className="absolute inset-0 bg-white/20 backdrop-blur-sm" onClick={handleLeaveCancel} />
           <div className="bg-white/90 backdrop-blur-3xl rounded-4xl border border-slate-200 shadow-2xl w-full max-w-sm overflow-hidden relative animate-in fade-in zoom-in duration-200">
             <div className="p-8 pb-4">
               <div className="flex items-center justify-between mb-8">
-                <div className="w-12 h-12 bg-rose-500/10 rounded-2xl flex items-center justify-center border border-rose-100">
-                  <AlertCircle size={24} className="text-rose-600" />
+                <div className="w-12 h-12 bg-[#00ADB5]/10 rounded-2xl flex items-center justify-center border border-[#00ADB5]/20">
+                  <AlertCircle size={24} className="text-[#00ADB5]" />
                 </div>
                 <button 
                   onClick={handleLeaveCancel}
@@ -992,18 +1002,31 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
                   <X size={20} />
                 </button>
               </div>
-              <h3 className="text-2xl font-black text-slate-950 tracking-tight mb-2">Confirm Leave Assignment</h3>
-              <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mb-8">Assign this handler to leave status</p>
+              <h3 className="text-2xl font-black text-[#222831] tracking-tight mb-2">
+                {leaveOperation.type === 'assign' ? 'Confirm Leave Assignment' : 'Confirm Remove From Leave'}
+              </h3>
+              <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mb-8">
+                {leaveOperation.type === 'assign' ? 'Assign this handler to leave status' : 'Remove this handler from leave status?'}
+              </p>
               
               <div className="space-y-4 mb-8">
-                <div className="p-4 bg-rose-50 rounded-xl border border-rose-100">
+                <div className="p-4 bg-[#00ADB5]/10 rounded-xl border border-[#00ADB5]/20">
                   <p className="text-[11px] text-slate-400 font-bold uppercase tracking-widest mb-2">Handler</p>
-                  <p className="text-lg font-black text-slate-900">{handlers.find(a => a.id === pendingLeaveAssignment.handlerId)?.name || 'Unknown'}</p>
+                  <p className="text-lg font-black text-slate-900">{handlers.find(a => a.id === leaveOperation.handlerId)?.name || 'Unknown'}</p>
                 </div>
-                <div className="p-4 bg-rose-50 rounded-xl border border-rose-100">
-                  <p className="text-[11px] text-slate-400 font-bold uppercase tracking-widest mb-2">Leave Type</p>
-                  <p className="text-lg font-black text-rose-600">{pendingLeaveAssignment.shift}</p>
-                </div>
+                {leaveOperation.type === 'assign' && (
+                  <div className="p-4 bg-[#00ADB5]/10 rounded-xl border border-[#00ADB5]/20">
+                    <p className="text-[11px] text-slate-400 font-bold uppercase tracking-widest mb-2">Leave Type</p>
+                    <p className="text-lg font-black text-[#00ADB5]">{leaveOperation.toShift}</p>
+                  </div>
+                )}
+                {leaveOperation.type === 'remove' && (
+                  <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                    <p className="text-[11px] text-slate-400 font-bold uppercase tracking-widest mb-2">Current Leave</p>
+                    <p className="text-lg font-black text-slate-900">{leaveOperation.fromShift}</p>
+                    <p className="text-sm text-slate-500 mt-2">This will be replaced by: {leaveOperation.toShift === 'UNASSIGNED' ? 'Unassigned' : leaveOperation.toShift}</p>
+                  </div>
+                )}
                 <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
                   <p className="text-[11px] text-slate-400 font-bold uppercase tracking-widest mb-2">Date</p>
                   <p className="text-lg font-black text-slate-900">{new Date(selectedDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</p>
@@ -1020,7 +1043,7 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
               </button>
               <button 
                 onClick={handleLeaveConfirm}
-                className="flex-1 px-6 py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest bg-slate-900 text-white hover:bg-black transition-all shadow-xl shadow-slate-900/20 active:scale-95"
+                className="flex-1 px-6 py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest bg-[#222831] text-white hover:bg-[#222831]/90 transition-all shadow-xl shadow-[#222831]/20 active:scale-95"
               >
                 Confirm
               </button>

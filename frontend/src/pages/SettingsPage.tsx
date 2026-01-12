@@ -84,11 +84,11 @@ const SettingsPage: React.FC = () => {
       {/* Header - Light Minimal */}
       <div className="mb-10 flex flex-col xl:flex-row justify-between items-center gap-6 shrink-0 mt-2">
         <div className="flex items-center space-x-4">
-          <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center shadow-lg shadow-slate-900/20">
+          <div className="w-10 h-10 bg-[#393E46] rounded-xl flex items-center justify-center shadow-lg shadow-[#393E46]/20">
             <SettingsIcon size={22} className="text-white" />
           </div>
           <div>
-            <h1 className="text-2xl font-black text-slate-950 tracking-tight leading-none uppercase">System Control</h1>
+            <h1 className="text-2xl font-black text-[#222831] tracking-tight leading-none uppercase">System Control</h1>
             <p className="text-[9px] text-slate-500 font-black uppercase tracking-[0.2em] mt-1.5">Management & Logistics</p>
           </div>
         </div>
@@ -108,9 +108,9 @@ const SettingsPage: React.FC = () => {
             <Database size={16} className="text-indigo-600" />
             <span>Archive</span>
           </button>
-          <button 
+          <button
             onClick={addHandler}
-            className="flex-1 xl:flex-none flex items-center justify-center space-x-2 bg-slate-900 text-white px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-black transition-all shadow-lg active:scale-95"
+            className="flex-1 xl:flex-none flex items-center justify-center space-x-2 bg-[#222831] text-white px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-[#222831]/90 transition-all shadow-lg active:scale-95"
           >
             <UserPlus size={16} />
             <span>Deploy New</span>
@@ -122,8 +122,8 @@ const SettingsPage: React.FC = () => {
         {/* Handler Matrix */}
         <div className="bg-white/40 backdrop-blur-3xl rounded-4xl border border-white/40 overflow-hidden flex flex-col shadow-xl">
           <div className="px-8 py-5 border-b border-slate-100 bg-white/40 shrink-0 flex items-center justify-between">
-            <h2 className="text-[10px] font-black text-slate-950 uppercase tracking-widest">Handler Matrix</h2>
-            <span className="text-[9px] font-black text-blue-700 bg-black/5 px-2.5 py-1 rounded-full border border-slate-200">
+            <h2 className="text-[10px] font-black text-[#222831] uppercase tracking-widest">Handler Matrix</h2>
+            <span className="text-[9px] font-black text-[#00ADB5] bg-black/5 px-2.5 py-1 rounded-full border border-slate-200">
               {handlers.length} Active IDs
             </span>
           </div>
@@ -137,8 +137,8 @@ const SettingsPage: React.FC = () => {
                       onClick={() => toggleQH(handler.id)}
                       className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all shrink-0 border shadow-sm group/btn ${
                         handler.isQH 
-                          ? 'bg-amber-500 border-amber-600 text-white shadow-amber-200' 
-                          : 'bg-white border-slate-200 text-slate-300 hover:border-amber-300 hover:text-amber-500'
+                          ? 'bg-[#00ADB5] border-[#00ADB5] text-white shadow-[#00ADB5]/20' 
+                          : 'bg-white border-slate-200 text-slate-300 hover:border-[#00ADB5]/60 hover:text-[#00ADB5]'
                       }`}
                       title={handler.isQH ? "Queue Handler (QH)" : "Assign as QH"}
                     >
@@ -156,7 +156,7 @@ const SettingsPage: React.FC = () => {
                       <div className="flex items-center gap-2 mt-1">
                         <span className={`text-[8px] font-black uppercase tracking-[0.2em] px-2 py-0.5 rounded-md border ${
                           handler.isQH 
-                            ? 'bg-amber-50 text-amber-700 border-amber-200' 
+                            ? 'bg-[#00ADB5]/10 text-[#00ADB5] border-[#00ADB5]/20' 
                             : 'bg-black/5 text-slate-400 border-slate-200'
                         }`}>
                           {handler.isQH ? 'Queue Handler (QH)' : 'Standard Handler'}

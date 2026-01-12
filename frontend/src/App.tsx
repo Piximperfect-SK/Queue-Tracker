@@ -12,7 +12,10 @@ import bgImage from './assets/background.jpg';
 import { addLog } from './utils/logger';
 
 function App() {
-  const [currentUser, setCurrentUser] = useState<string | null>(localStorage.getItem('currentUser'));
+  const [currentUser, setCurrentUser] = useState<string | null>(() => {
+    const saved = localStorage.getItem('currentUser');
+    return saved === 'Guest' ? null : saved;
+  });
   const [accessKey, setAccessKey] = useState<string>(localStorage.getItem('teamAccessKey') || '');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
@@ -31,13 +34,8 @@ function App() {
     setIsAuthenticated(false);
   };
 
-  useEffect(() => {
-    // PREVENT "Guest" from sticking around in localStorage from old versions
-    const savedUser = localStorage.getItem('currentUser');
-    if (savedUser === 'Guest') {
-      handleLogout();
-    }
-  }, []);
+  // Note: initial 'Guest' cleanup is handled in the lazy initializer above
+  // to avoid calling setState synchronously inside an effect.
 
   useEffect(() => {
     const handleConnect = () => {

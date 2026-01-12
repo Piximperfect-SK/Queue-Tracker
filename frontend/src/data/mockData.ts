@@ -15,7 +15,7 @@ export const MOCK_HANDLERS: Handler[] = [
   { id: '12', name: 'Hardik Pandya', isQH: true },
 ];
 
-export const SHIFTS: ShiftType[] = ['6AM-3PM', '1PM-10PM', '2PM-11PM', '10PM-7AM', '12PM-9PM'];
+export const SHIFTS: ShiftType[] = ['6AM-3PM', '12PM-9PM', '1PM-10PM', '2PM-11PM', '10PM-7AM'];
 
 // Sample Roster for a few days
 export const MOCK_ROSTER: RosterEntry[] = [];
