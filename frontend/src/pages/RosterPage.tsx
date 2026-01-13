@@ -227,6 +227,8 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
   });
   const [activeId, setActiveId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [newAgentName, setNewAgentName] = useState('');
+  const [newAgentIsQH, setNewAgentIsQH] = useState(false);
   const [leaveOperation, setLeaveOperation] = useState<{
     type: 'assign' | 'remove';
     handlerId: string;
@@ -562,6 +564,27 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
 
   const handleLeaveCancel = () => {
     setLeaveOperation(null);
+  };
+
+  const handleAddAgentConfirm = () => {
+    const name = newAgentName.trim();
+    if (!name) return;
+    const id = createAgentId();
+    const newHandler: Handler = { id, name, isQH: newAgentIsQH };
+    const updatedHandlers = [...handlers, newHandler];
+    setHandlers(updatedHandlers);
+    localStorage.setItem('handlers', JSON.stringify(updatedHandlers));
+    syncData.updateHandlers(updatedHandlers);
+    addLog('Register Agent', `Registered agent: ${name}`, 'positive');
+    setNewAgentName('');
+    setNewAgentIsQH(false);
+    setIsModalOpen(false);
+  };
+
+  const handleAddAgentCancel = () => {
+    setNewAgentName('');
+    setNewAgentIsQH(false);
+    setIsModalOpen(false);
   };
 
   const handleDragStart = (event: DragStartEvent) => {
@@ -970,6 +993,67 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
                 className="flex-1 px-6 py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest bg-[#222831] text-white hover:bg-[#222831]/90 transition-all shadow-xl shadow-[#222831]/20 active:scale-95"
               >
                 Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Register Agent Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 flex items-center justify-center z-100 p-6">
+          <div className="absolute inset-0 bg-white/20 backdrop-blur-sm" onClick={handleAddAgentCancel} />
+          <div className="bg-white/90 backdrop-blur-3xl rounded-4xl border border-slate-200 shadow-2xl w-full max-w-sm overflow-hidden relative animate-in fade-in zoom-in duration-200">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="w-12 h-12 bg-[#393E46]/10 rounded-2xl flex items-center justify-center border border-[#393E46]/20">
+                  <CalendarIcon size={24} className="text-[#393E46]" />
+                </div>
+                <button 
+                  onClick={handleAddAgentCancel}
+                  className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-full transition-all"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <h3 className="text-2xl font-black text-[#222831] tracking-tight mb-2">Register Agent</h3>
+              <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mb-6">Add a new agent to the roster</p>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] text-slate-400 font-bold uppercase tracking-widest">Name</label>
+                  <input
+                    value={newAgentName}
+                    onChange={(e) => setNewAgentName(e.target.value)}
+                    className="mt-2 w-full px-4 py-3 rounded-2xl border border-slate-200 bg-white/80 focus:outline-none"
+                    placeholder="Agent name"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="text-[11px] text-slate-400 font-bold uppercase tracking-widest">Quick Hire</label>
+                    <p className="text-xs text-slate-500">Mark agent as quick-hire (optional)</p>
+                  </div>
+                  <div>
+                    <input type="checkbox" checked={newAgentIsQH} onChange={(e) => setNewAgentIsQH(e.target.checked)} className="w-5 h-5" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 pt-4 flex gap-4">
+              <button 
+                onClick={handleAddAgentCancel}
+                className="flex-1 px-6 py-3 rounded-2xl font-black text-[11px] uppercase tracking-widest text-slate-500 hover:bg-slate-50 transition-all active:scale-95"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleAddAgentConfirm}
+                className="flex-1 px-6 py-3 rounded-2xl font-black text-[11px] uppercase tracking-widest bg-[#222831] text-white hover:bg-[#222831]/90 transition-all shadow-xl shadow-[#222831]/20 active:scale-95"
+              >
+                Register
               </button>
             </div>
           </div>
