@@ -361,19 +361,10 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
       firstNavRef.current = false;
       return;
     }
-    const user = localStorage.getItem('currentUser') || 'Unknown User';
     // Save a NAVIGATE log under the date we navigated to
     addLogForDate(selectedDate, 'NAVIGATE', `Visited ${selectedDate}`);
     // Also add a regular log for today about navigation action
-    // (so monitoring for today still shows recent navigation events)
-    try {
-      // reuse existing addLog to record in today's logs as well
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const { addLog } = require('../utils/logger');
-      addLog('NAVIGATE', `Visited ${selectedDate}`);
-    } catch (_e) {
-      // ignore
-    }
+    addLog('NAVIGATE', `Visited ${selectedDate}`);
   }, [selectedDate]);
 
   
@@ -618,7 +609,7 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
 
   const handleAddAgentCancel = () => {
     setNewAgentName('');
-    setNewAgentIsQH(false);
+    setNewAgentShift('');
     setIsModalOpen(false);
   };
 
@@ -870,7 +861,7 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
                             const colors = getShiftColor(shift);
                             const shiftHandlers = getHandlersForShift(shift);
                             return (
-                              <td key={shift} className="align-top px-2 pb-3 border-r border-slate-300 h-full align-top">
+                              <td key={shift} className="align-top px-2 pb-3 border-r border-slate-300 h-full">
                                 <div className="sr-only">{shift}</div>
                                 <DroppableContainer id={shift} className="px-0 pt-3 pb-3 h-full">
                                   <SortableContext
