@@ -1,27 +1,28 @@
 import React, { useState, useEffect } from 'react';
-import { MOCK_AGENTS } from '../data/mockData';
+import { MOCK_HANDLERS } from '../data/mockData';
 import { UserPlus, Trash2, ShieldCheck, FileText, Database, Settings as SettingsIcon, AlertCircle } from 'lucide-react';
-import type { Agent } from '../types';
+import type { Handler } from '../types';
 import { addLog, downloadLogsForDate, downloadAllLogs, saveLogsFromServer, saveSingleLogFromServer } from '../utils/logger';
 import { socket, syncData } from '../utils/socket';
 
 const SettingsPage: React.FC = () => {
-  const [agents, setAgents] = useState<Agent[]>([]);
+  const [handlers, setHandlers] = useState<Handler[]>([]);
 
   useEffect(() => {
-    const handleAgents = (data: any) => {
-      setAgents(data);
-      localStorage.setItem('agents', JSON.stringify(data));
+    const handleHandlers = (data: any) => {
+      setHandlers(data);
+      localStorage.setItem('handlers', JSON.stringify(data));
     };
 
-    socket.on('agents_updated', handleAgents);
+    socket.on('handlers_updated', handleHandlers);
     socket.on('log_added', ({ dateStr, logEntry }) => {
       saveSingleLogFromServer(dateStr, logEntry);
     });
     socket.on('init', (db) => {
-      if (db.agents && db.agents.length) {
-        setAgents(db.agents);
-        localStorage.setItem('agents', JSON.stringify(db.agents));
+      if ((db.handlers || db.agents) && (db.handlers?.length || db.agents?.length)) {
+        const data = db.handlers || db.agents;
+        setHandlers(data);
+        localStorage.setItem('handlers', JSON.stringify(data));
       }
       if (db.logs) {
         saveLogsFromServer(db.logs);
@@ -29,52 +30,52 @@ const SettingsPage: React.FC = () => {
     });
 
     // Initial load from localStorage as fallback
-    const savedAgents = localStorage.getItem('agents');
-    if (savedAgents) setAgents(JSON.parse(savedAgents));
-    else setAgents(MOCK_AGENTS);
+    const savedHandlers = localStorage.getItem('handlers');
+    if (savedHandlers) setHandlers(JSON.parse(savedHandlers));
+    else setHandlers(MOCK_HANDLERS);
 
     return () => {
-      socket.off('agents_updated', handleAgents);
+      socket.off('handlers_updated', handleHandlers);
       socket.off('init');
     };
   }, []);
 
-  const saveAgents = (updatedAgents: Agent[]) => {
-    setAgents(updatedAgents);
-    localStorage.setItem('agents', JSON.stringify(updatedAgents));
-    syncData.updateAgents(updatedAgents);
+  const saveHandlers = (updatedHandlers: Handler[]) => {
+    setHandlers(updatedHandlers);
+    localStorage.setItem('handlers', JSON.stringify(updatedHandlers));
+    syncData.updateHandlers(updatedHandlers);
   };
 
-  const updateAgentName = (id: string, name: string) => {
-    const agent = agents.find(a => a.id === id);
-    const oldName = agent?.name || '';
-    const updated = agents.map(a => a.id === id ? { ...a, name } : a);
-    saveAgents(updated);
-    addLog('Update Agent Name', `${oldName} -> ${name}`);
+  const updateHandlerName = (id: string, name: string) => {
+    const handler = handlers.find(a => a.id === id);
+    const oldName = handler?.name || '';
+    const updated = handlers.map(a => a.id === id ? { ...a, name } : a);
+    saveHandlers(updated);
+    addLog('Update Handler Name', `${oldName} -> ${name}`);
   };
 
   const toggleQH = (id: string) => {
-    const agent = agents.find(a => a.id === id);
-    const updated = agents.map(a => a.id === id ? { ...a, isQH: !a.isQH } : a);
-    saveAgents(updated);
-    addLog('System', `${agent?.name}: ${agent?.isQH ? 'Queue Handler (QH) -> Standard' : 'Standard -> Queue Handler (QH)'}`, !agent?.isQH ? 'positive' : 'neutral');
+    const handler = handlers.find(a => a.id === id);
+    const updated = handlers.map(a => a.id === id ? { ...a, isQH: !a.isQH } : a);
+    saveHandlers(updated);
+    addLog('System', `${handler?.name}: ${handler?.isQH ? 'Queue Handler (QH) -> Standard' : 'Standard -> Queue Handler (QH)'}`, !handler?.isQH ? 'positive' : 'neutral');
   };
 
-  const addAgent = () => {
-    const newAgent: Agent = {
+  const addHandler = () => {
+    const newHandler: Handler = {
       id: Date.now().toString(),
-      name: 'New Agent',
+      name: 'New Handler',
       isQH: false
     };
-    saveAgents([...agents, newAgent]);
-    addLog('Add Agent', `Added new agent: ${newAgent.name}`, 'positive');
+    saveHandlers([...handlers, newHandler]);
+    addLog('Add Handler', `Added new handler: ${newHandler.name}`, 'positive');
   };
 
-  const deleteAgent = (id: string) => {
-    if (window.confirm('Are you sure you want to decommission this agent?')) {
-      const agent = agents.find(a => a.id === id);
-      saveAgents(agents.filter(a => a.id !== id));
-      addLog('Delete Agent', `Removed agent: ${agent?.name || id}`, 'negative');
+  const deleteHandler = (id: string) => {
+    if (window.confirm('Are you sure you want to decommission this handler?')) {
+      const handler = handlers.find(a => a.id === id);
+      saveHandlers(handlers.filter(a => a.id !== id));
+      addLog('Delete Handler', `Removed handler: ${handler?.name || id}`, 'negative');
     }
   };
 
@@ -83,33 +84,33 @@ const SettingsPage: React.FC = () => {
       {/* Header - Light Minimal */}
       <div className="mb-10 flex flex-col xl:flex-row justify-between items-center gap-6 shrink-0 mt-2">
         <div className="flex items-center space-x-4">
-          <div className="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center shadow-lg shadow-slate-800/20">
+          <div className="w-10 h-10 bg-[#393E46] rounded-xl flex items-center justify-center shadow-lg shadow-[#393E46]/20">
             <SettingsIcon size={22} className="text-white" />
           </div>
           <div>
-            <h1 className="text-2xl font-black text-slate-800 tracking-tight leading-none">System Control</h1>
-            <p className="text-[9px] text-slate-400 font-black uppercase tracking-[0.2em] mt-1.5">Management & Logistics</p>
+            <h1 className="text-2xl font-black text-[#222831] tracking-tight leading-none uppercase">System Control</h1>
+            <p className="text-[9px] text-slate-500 font-black uppercase tracking-[0.2em] mt-1.5">Management & Logistics</p>
           </div>
         </div>
         
         <div className="flex gap-3 w-full xl:w-auto">
           <button 
             onClick={() => downloadLogsForDate(new Date().toISOString().split('T')[0])}
-            className="flex-1 xl:flex-none flex items-center justify-center space-x-2 bg-white/30 backdrop-blur-md border border-white/20 text-slate-600 px-5 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-white/40 transition-all shadow-sm active:scale-95"
+            className="flex-1 xl:flex-none flex items-center justify-center space-x-2 bg-white/40 backdrop-blur-md border border-white/40 text-slate-600 px-5 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-white/60 transition-all shadow-sm active:scale-95"
           >
-            <FileText size={16} className="text-blue-500" />
+            <FileText size={16} className="text-blue-600" />
             <span>Daily Logs</span>
           </button>
           <button 
             onClick={() => downloadAllLogs()}
-            className="flex-1 xl:flex-none flex items-center justify-center space-x-2 bg-white/30 backdrop-blur-md border border-white/20 text-slate-600 px-5 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-white/40 transition-all shadow-sm active:scale-95"
+            className="flex-1 xl:flex-none flex items-center justify-center space-x-2 bg-white/40 backdrop-blur-md border border-white/40 text-slate-600 px-5 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-white/60 transition-all shadow-sm active:scale-95"
           >
-            <Database size={16} className="text-indigo-500" />
+            <Database size={16} className="text-indigo-600" />
             <span>Archive</span>
           </button>
-          <button 
-            onClick={addAgent}
-            className="flex-1 xl:flex-none flex items-center justify-center space-x-2 bg-blue-600 text-white px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/20 active:scale-95"
+          <button
+            onClick={addHandler}
+            className="flex-1 xl:flex-none flex items-center justify-center space-x-2 bg-[#222831] text-white px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-[#222831]/90 transition-all shadow-lg active:scale-95"
           >
             <UserPlus size={16} />
             <span>Deploy New</span>
@@ -118,54 +119,54 @@ const SettingsPage: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 flex-1 overflow-hidden min-h-0">
-        {/* Agent Matrix */}
-        <div className="bg-teal-50/40 backdrop-blur-3xl rounded-4xl border border-teal-200/30 overflow-hidden flex flex-col shadow-xl">
-          <div className="px-8 py-5 border-b border-teal-200/10 bg-teal-50/20 shrink-0 flex items-center justify-between">
-            <h2 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Agent Matrix</h2>
-            <span className="text-[9px] font-black text-blue-700 bg-teal-50/60 backdrop-blur-md px-2.5 py-1 rounded-full border border-teal-200/30">
-              {agents.length} Active IDs
+        {/* Handler Matrix */}
+        <div className="bg-white/40 backdrop-blur-3xl rounded-4xl border border-white/40 overflow-hidden flex flex-col shadow-xl">
+          <div className="px-8 py-5 border-b border-slate-100 bg-white/40 shrink-0 flex items-center justify-between">
+            <h2 className="text-[10px] font-black text-[#222831] uppercase tracking-widest">Handler Matrix</h2>
+            <span className="text-[9px] font-black text-[#00ADB5] bg-black/5 px-2.5 py-1 rounded-full border border-slate-200">
+              {handlers.length} Active IDs
             </span>
           </div>
-          <div className="overflow-y-auto flex-1 p-6 scrollbar-hide max-h-[600px]">
+          <div className="overflow-y-auto flex-1 p-6 scrollbar-hide">
             <div className="space-y-4">
-              {agents.map((agent) => (
-                <div key={agent.id} className="group bg-white/40 border border-white/30 rounded-2xl p-4 flex items-center justify-between transition-all hover:bg-white/60 hover:border-white/50 shadow-sm backdrop-blur-md">
+              {handlers.map((handler) => (
+                <div key={handler.id} className="group bg-white/40 border border-white/40 rounded-2xl p-4 flex items-center justify-between transition-all hover:bg-white/60 hover:border-white/50 shadow-sm backdrop-blur-md">
                   <div className="flex items-center space-x-4 flex-1">
                     {/* Dedicated QH Toggle Button in front of name */}
                     <button 
-                      onClick={() => toggleQH(agent.id)}
+                      onClick={() => toggleQH(handler.id)}
                       className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all shrink-0 border shadow-sm group/btn ${
-                        agent.isQH 
-                          ? 'bg-amber-500 border-amber-600 text-white shadow-amber-200' 
-                          : 'bg-white border-slate-200 text-slate-300 hover:border-amber-300 hover:text-amber-500'
+                        handler.isQH 
+                          ? 'bg-[#00ADB5] border-[#00ADB5] text-white shadow-[#00ADB5]/20' 
+                          : 'bg-white border-slate-200 text-slate-300 hover:border-[#00ADB5]/60 hover:text-[#00ADB5]'
                       }`}
-                      title={agent.isQH ? "Queue Handler (QH)" : "Assign as QH"}
+                      title={handler.isQH ? "Queue Handler (QH)" : "Assign as QH"}
                     >
-                      <ShieldCheck size={20} strokeWidth={agent.isQH ? 2.5 : 2} className={agent.isQH ? 'animate-pulse' : ''} />
+                      <ShieldCheck size={20} strokeWidth={handler.isQH ? 2.5 : 2} className={handler.isQH ? 'animate-pulse' : ''} />
                     </button>
 
                     <div className="flex-1 min-w-0">
                       <input 
                         type="text" 
-                        value={agent.name}
-                        onChange={(e) => updateAgentName(agent.id, e.target.value)}
-                        className="bg-transparent text-slate-900 font-black text-base w-full focus:outline-none focus:text-blue-600 transition-colors placeholder:text-slate-300"
+                        value={handler.name}
+                        onChange={(e) => updateHandlerName(handler.id, e.target.value)}
+                        className="bg-transparent text-slate-950 font-black text-base w-full focus:outline-none focus:text-blue-600 transition-colors placeholder:text-slate-300 uppercase tracking-tight"
                         placeholder="Full Name"
                       />
                       <div className="flex items-center gap-2 mt-1">
                         <span className={`text-[8px] font-black uppercase tracking-[0.2em] px-2 py-0.5 rounded-md border ${
-                          agent.isQH 
-                            ? 'bg-amber-50 text-amber-700 border-amber-200' 
-                            : 'bg-slate-50 text-slate-400 border-slate-100'
+                          handler.isQH 
+                            ? 'bg-[#00ADB5]/10 text-[#00ADB5] border-[#00ADB5]/20' 
+                            : 'bg-black/5 text-slate-400 border-slate-200'
                         }`}>
-                          {agent.isQH ? 'Queue Handler (QH)' : 'Standard Agent'}
+                          {handler.isQH ? 'Queue Handler (QH)' : 'Standard Handler'}
                         </span>
                       </div>
                     </div>
                   </div>
                   
                   <button 
-                    onClick={() => deleteAgent(agent.id)}
+                    onClick={() => deleteHandler(handler.id)}
                     className="p-3 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all ml-2"
                     title="Decommission"
                   >
@@ -179,38 +180,38 @@ const SettingsPage: React.FC = () => {
 
         {/* System Diagnostics / Help */}
         <div className="flex flex-col gap-6 flex-1 overflow-hidden">
-          <div className="bg-teal-50/60 backdrop-blur-3xl rounded-4xl border border-teal-200/40 p-8 shadow-xl flex-1 flex flex-col min-h-0">
+          <div className="bg-white/40 backdrop-blur-3xl rounded-4xl border border-white/40 p-8 shadow-xl flex-1 flex flex-col min-h-0">
              <div className="flex items-center gap-3 mb-6 shrink-0">
-               <div className="w-10 h-10 bg-indigo-600/10 rounded-xl flex items-center justify-center text-indigo-700 border border-white/30">
+               <div className="w-10 h-10 bg-indigo-600/10 rounded-xl flex items-center justify-center text-indigo-700 border border-slate-100">
                  <AlertCircle size={22} />
                </div>
-               <h2 className="text-[11px] font-black text-slate-800 uppercase tracking-[0.2em]">Operational Protocol</h2>
+               <h2 className="text-[11px] font-black text-slate-950 uppercase tracking-[0.2em]">Operational Protocol</h2>
              </div>
              <div className="space-y-4 overflow-hidden pr-2 scrollbar-hide">
-               <div className="bg-white/40 rounded-2xl p-6 border border-white/30 hover:bg-white/60 transition-all backdrop-blur-md">
-                 <p className="text-slate-900 font-black text-[13px] mb-1.5 uppercase tracking-tighter">Automated Synchronization</p>
-                 <p className="text-slate-700 text-[12px] leading-relaxed font-bold">Changes broadcast instantly to all connected terminals via the encrypted fleet link.</p>
+               <div className="bg-white/60 rounded-2xl p-6 border border-white/40 hover:bg-white/80 transition-all backdrop-blur-md">
+                 <p className="text-slate-950 font-black text-[13px] mb-1.5 uppercase tracking-tighter">Automated Synchronization</p>
+                 <p className="text-slate-600 text-[12px] leading-relaxed font-bold">Changes broadcast instantly to all connected terminals via the encrypted fleet link.</p>
                </div>
-               <div className="bg-white/40 rounded-2xl p-6 border border-white/30 hover:bg-white/60 transition-all backdrop-blur-md">
-                 <p className="text-slate-900 font-black text-[13px] mb-1.5 uppercase tracking-tighter">Data Persistence</p>
-                 <p className="text-slate-700 text-[12px] leading-relaxed font-bold">Log records are stored centrally. Use archive tools for compliance audits.</p>
+               <div className="bg-white/60 rounded-2xl p-6 border border-white/40 hover:bg-white/80 transition-all backdrop-blur-md">
+                 <p className="text-slate-950 font-black text-[13px] mb-1.5 uppercase tracking-tighter">Data Persistence</p>
+                 <p className="text-slate-600 text-[12px] leading-relaxed font-bold">Log records are stored centrally. Use archive tools for compliance audits.</p>
                </div>
-               <div className="bg-white/40 rounded-2xl p-6 border border-white/30 hover:bg-white/60 transition-all backdrop-blur-md">
-                 <p className="text-slate-900 font-black text-[13px] mb-1.5 uppercase tracking-tighter">Agent Hierarchy</p>
-                 <p className="text-slate-700 text-[12px] leading-relaxed font-bold">Queue Handlers (QH) enable priority identifiers across tracking matrices.</p>
+               <div className="bg-white/60 rounded-2xl p-6 border border-white/40 hover:bg-white/80 transition-all backdrop-blur-md">
+                 <p className="text-slate-950 font-black text-[13px] mb-1.5 uppercase tracking-tighter">Hierarchy Level</p>
+                 <p className="text-slate-600 text-[12px] leading-relaxed font-bold">Queue Handlers (QH) enable priority identifiers across tracking matrices.</p>
                </div>
              </div>
           </div>
 
-          <div className="bg-white/70 backdrop-blur-3xl rounded-[2.5rem] border border-white/50 p-8 flex flex-col items-center justify-center text-center shadow-2xl shrink-0">
-            <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-black text-3xl shadow-xl shadow-blue-600/30 mb-4 shrink-0">
+          <div className="bg-white/60 backdrop-blur-3xl rounded-[2.5rem] border border-white/40 p-8 flex flex-col items-center justify-center text-center shadow-2xl shrink-0">
+            <div className="w-16 h-16 bg-slate-900 rounded-2xl flex items-center justify-center text-white font-black text-3xl shadow-xl shadow-slate-900/30 mb-4 shrink-0">
               P
             </div>
-            <p className="text-slate-900 font-normal text-xl tracking-tight mb-1 uppercase">Productivity Tracker</p>
+            <p className="text-slate-950 font-black text-xl tracking-tight mb-1 uppercase">Queue Tracker</p>
             <p className="text-[11px] text-slate-500 font-black uppercase tracking-[0.3em] mb-6">Version 4.0.0-Titanium</p>
-            <div className="flex items-center gap-3 px-5 py-2.5 bg-green-500/15 backdrop-blur-md rounded-full border border-green-500/30 shadow-inner">
-              <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_12px_rgba(34,197,94,0.6)]" />
-              <span className="text-[10px] font-black text-green-800 uppercase tracking-widest">Engine Status: Nominal</span>
+            <div className="flex items-center gap-3 px-5 py-2.5 bg-green-500/10 backdrop-blur-md rounded-full border border-green-500/20">
+              <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse" />
+              <span className="text-[10px] font-black text-green-700 uppercase tracking-widest">Engine Status: Nominal</span>
             </div>
           </div>
         </div>

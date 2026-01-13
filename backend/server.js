@@ -22,7 +22,7 @@ mongoose.connect(MONGODB_URI)
 // Define Schema
 const stateSchema = new mongoose.Schema({
   key: { type: String, default: 'global', unique: true },
-  agents: { type: Array, default: [] },
+  handlers: { type: Array, default: [] },
   roster: { type: Array, default: [] },
   stats: { type: Array, default: [] }
 });
@@ -52,7 +52,7 @@ const migrateData = async () => {
       if (!existingState) {
         await State.create({
           key: 'global',
-          agents: dbFile.agents || [],
+          handlers: dbFile.agents || dbFile.handlers || [],
           roster: dbFile.roster || [],
           stats: dbFile.stats || []
         });
@@ -271,11 +271,18 @@ io.on('connection', async (socket) => {
     console.log(`${cleanName} joined. Online:`, Array.from(onlineUsers.values()));
   });
 
+  socket.on('update_handlers', async (handlers) => {
+    // Sanitize handler names
+    const cleanHandlers = handlers.map(a => ({ ...a, name: sanitize(a.name) }));
+    await State.updateOne({ key: 'global' }, { $set: { handlers: cleanHandlers } });
+    socket.broadcast.emit('handlers_updated', cleanHandlers);
+  });
+
+  // Legacy support for old 'update_agents' event
   socket.on('update_agents', async (agents) => {
-    // Sanitize agent names
     const cleanAgents = agents.map(a => ({ ...a, name: sanitize(a.name) }));
-    await State.updateOne({ key: 'global' }, { $set: { agents: cleanAgents } });
-    socket.broadcast.emit('agents_updated', cleanAgents);
+    await State.updateOne({ key: 'global' }, { $set: { handlers: cleanAgents } });
+    socket.broadcast.emit('handlers_updated', cleanAgents);
   });
 
   socket.on('update_roster', async (roster) => {

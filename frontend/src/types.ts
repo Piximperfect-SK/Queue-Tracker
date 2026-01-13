@@ -22,20 +22,20 @@ export type StandardShiftType =
 
 export type ShiftType = StandardShiftType | string;
 
-export interface Agent {
+export interface Handler {
   id: string;
   name: string;
   isQH: boolean;
 }
 
 export interface RosterEntry {
-  agentId: string;
+  handlerId: string;
   date: string; // YYYY-MM-DD
   shift: ShiftType;
 }
 
 export interface DailyStats {
-  agentId: string;
+  handlerId: string;
   date: string;
   incidents: number;
   sctasks: number;

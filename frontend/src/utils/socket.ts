@@ -1,4 +1,6 @@
 import { io } from 'socket.io-client';
+import type { Handler, RosterEntry, DailyStats } from '../types';
+import type { LogEntry } from '../types';
 
 const SOCKET_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
 
@@ -16,8 +18,8 @@ export const socket = io(SOCKET_URL, {
 
 export const syncData = {
   join: (username: string, accessKey: string) => socket.emit('join', { username, accessKey }),
-  updateAgents: (agents: any) => socket.emit('update_agents', agents),
-  updateRoster: (roster: any) => socket.emit('update_roster', roster),
-  updateStats: (stats: any) => socket.emit('update_stats', stats),
-  addLog: (logEntry: any) => socket.emit('add_log', logEntry),
+  updateHandlers: (handlers: Handler[]) => socket.emit('update_handlers', handlers),
+  updateRoster: (roster: RosterEntry[]) => socket.emit('update_roster', roster),
+  updateStats: (stats: DailyStats[]) => socket.emit('update_stats', stats),
+  addLog: (logEntry: LogEntry) => socket.emit('add_log', logEntry),
 };
