@@ -79,16 +79,19 @@ const createAgentId = () => {
 
 const getShiftColor = (shift: string) => {
   switch (shift) {
-    case '6AM-3PM': return { bg: 'bg-[#00ADB5]', text: 'text-[#00ADB5]', light: 'bg-[#00ADB5]/10', border: 'border-[#00ADB5]/30', card: 'bg-[#00ADB5]/20' };
-    case '1PM-10PM': return { bg: 'bg-[#393E46]', text: 'text-[#393E46]', light: 'bg-[#393E46]/10', border: 'border-[#393E46]/30', card: 'bg-[#393E46]/20' };
-    case '2PM-11PM': return { bg: 'bg-[#393E46]', text: 'text-[#393E46]', light: 'bg-[#393E46]/15', border: 'border-[#393E46]/40', card: 'bg-[#393E46]/25' };
-    case '10PM-7AM': return { bg: 'bg-[#222831]', text: 'text-[#222831]', light: 'bg-[#222831]/10', border: 'border-[#222831]/30', card: 'bg-[#222831]/15' };
-    case '12PM-9PM': return { bg: 'bg-[#00ADB5]', text: 'text-[#00ADB5]', light: 'bg-[#00ADB5]/15', border: 'border-[#00ADB5]/40', card: 'bg-[#00ADB5]/25' };
-    case 'EL':
-    case 'PL':
-    case 'UL':
-    case 'MID-LEAVE': return { bg: 'bg-rose-600', text: 'text-rose-600', light: 'bg-rose-50', border: 'border-rose-200', card: 'bg-rose-200' };
-    default: return { bg: 'bg-slate-500', text: 'text-slate-500', light: 'bg-slate-50', border: 'border-slate-200', card: 'bg-slate-200' };
+    case '6AM-3PM': return { bg: 'bg-blue-600', text: 'text-blue-700', light: 'bg-blue-50', border: 'border-blue-200', card: 'bg-blue-50' };
+    case '12PM-9PM': return { bg: 'bg-yellow-400', text: 'text-yellow-600', light: 'bg-yellow-50', border: 'border-yellow-200', card: 'bg-yellow-50' };
+    case '1PM-10PM': return { bg: 'bg-orange-500', text: 'text-orange-600', light: 'bg-orange-50', border: 'border-orange-200', card: 'bg-orange-50' };
+    case '2PM-11PM': return { bg: 'bg-orange-700', text: 'text-orange-700', light: 'bg-orange-50', border: 'border-orange-200', card: 'bg-orange-50' };
+    case '10PM-7AM': return { bg: 'bg-blue-900', text: 'text-blue-900', light: 'bg-blue-50', border: 'border-blue-300', card: 'bg-blue-50' };
+    case 'WO': return { bg: 'bg-slate-400', text: 'text-slate-500', light: 'bg-slate-50', border: 'border-slate-200', card: 'bg-slate-50' };
+    case 'ML': return { bg: 'bg-pink-500', text: 'text-pink-600', light: 'bg-pink-50', border: 'border-pink-200', card: 'bg-pink-50' };
+    case 'PL': return { bg: 'bg-rose-500', text: 'text-rose-600', light: 'bg-rose-50', border: 'border-rose-200', card: 'bg-rose-50' };
+    case 'EL': return { bg: 'bg-red-600', text: 'text-red-700', light: 'bg-red-50', border: 'border-red-200', card: 'bg-red-50' };
+    case 'UL': return { bg: 'bg-gray-500', text: 'text-gray-600', light: 'bg-gray-50', border: 'border-gray-200', card: 'bg-gray-50' };
+    case 'CO': return { bg: 'bg-emerald-600', text: 'text-emerald-700', light: 'bg-emerald-50', border: 'border-emerald-200', card: 'bg-emerald-50' };
+    case 'MID-LEAVE': return { bg: 'bg-rose-600', text: 'text-rose-600', light: 'bg-rose-50', border: 'border-rose-100', card: 'bg-rose-50' };
+    default: return { bg: 'bg-slate-500', text: 'text-slate-500', light: 'bg-slate-50', border: 'border-slate-200', card: 'bg-slate-50' };
   }
 };
 
@@ -687,119 +690,8 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
   };
 
   const activeHandler = activeId ? handlers.find(a => a.id === activeId) : null;
-
   return (
     <div className="h-full flex flex-col overflow-hidden px-4 pb-4">
-      {/* Header - Compact Integrated Bar */}
-      <div className="mb-3 mt-1 bg-white/40 backdrop-blur-xl border border-white/40 rounded-2xl flex justify-between items-center shrink-0 px-5 py-2 shadow-sm">
-        <div className="flex items-center space-x-6">
-          <div className="flex items-center space-x-4">
-            <div className="w-8 h-8 bg-[#393E46] rounded-xl flex items-center justify-center border border-[#393E46] shadow-sm">
-              <CalendarIcon size={16} className="text-white" />
-            </div>
-            <div className="flex flex-col">
-              <h1 className="text-lg font-black text-[#222831] tracking-tight leading-none uppercase">Handler Matrix</h1>
-              <p className="text-[8px] text-slate-500 font-bold uppercase tracking-[0.25em] mt-0.5">Queue Handler Board</p>
-            </div>
-          </div>
-
-          <div className="h-8 w-px bg-slate-200" />
-
-          {/* Integrated Date Selector */}
-          <div className="flex items-center h-8 gap-1 bg-black/5 backdrop-blur-md px-2 rounded-xl border border-slate-200">
-            <button 
-              onClick={() => {
-                const [y, m, d] = selectedDate.split('-').map(Number);
-                const dateObj = new Date(y, m - 1, d);
-                dateObj.setDate(dateObj.getDate() - 1);
-                setSelectedDate(dateObj.toLocaleDateString('en-CA'));
-              }}
-              className="p-1 hover:bg-black/5 rounded-lg transition-colors text-slate-400 hover:text-slate-900"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            
-            <div className="flex items-center gap-2 cursor-pointer group px-1 relative">
-              <span className="text-slate-900 font-black text-[10px] uppercase tracking-widest min-w-20 text-center">
-                {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
-              </span>
-              <input 
-                type="date" 
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="absolute inset-0 opacity-0 cursor-pointer z-10 w-full"
-              />
-            </div>
-
-            <button 
-              onClick={() => {
-                const [y, m, d] = selectedDate.split('-').map(Number);
-                const dateObj = new Date(y, m - 1, d);
-                dateObj.setDate(dateObj.getDate() + 1);
-                setSelectedDate(dateObj.toLocaleDateString('en-CA'));
-              }}
-              className="p-1 hover:bg-black/5 rounded-lg transition-colors text-slate-400 hover:text-slate-900"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          </div>
-
-          {/* Integrated Time Center */}
-          <div className="flex items-center bg-black/5 rounded-xl p-1 border border-slate-200 overflow-hidden ml-2">
-            <div className="flex items-center gap-3 px-4 py-1.5 bg-white/60 rounded-lg">
-                <span className="text-[12px] font-black text-[#00ADB5] uppercase tracking-tighter border-r border-slate-200 pr-3">IST</span>
-                <span className="text-[15px] font-black text-[#222831] tabular-nums tracking-tighter leading-none">{times.ist}</span>
-              </div>
-              <div className="flex items-center gap-3 px-4 py-1.5 rounded-lg ml-0.5">
-                <span className="text-[12px] font-black text-[#393E46] uppercase tracking-tighter border-r border-slate-200 pr-3">GMT</span>
-                <span className="text-[15px] font-black text-[#222831] tabular-nums tracking-tighter leading-none">{times.uk}</span>
-              </div>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isImportingRoster}
-            className="px-4 py-1.5 rounded-xl font-black text-[9px] uppercase tracking-widest bg-[#222831] text-white hover:bg-[#222831]/90 transition-all shadow-md disabled:opacity-50"
-          >
-            {isImportingRoster ? 'Importing...' : 'Import Roster'}
-          </button>
-          <input 
-            type="file"
-            ref={fileInputRef}
-            onChange={handleRosterFileChange}
-            accept=".xlsx,.xls,.csv"
-            className="hidden"
-          />
-        </div>
-      </div>
-
-      {importStatus && (
-        <div className={`mb-4 mx-2 p-3 rounded-2xl flex items-center justify-between backdrop-blur-md border animate-in fade-in slide-in-from-top-2 duration-300 shadow-sm ${
-          importStatus.tone === 'success' ? 'bg-green-100 border-green-200 text-green-700' :
-          importStatus.tone === 'warning' ? 'bg-[#00ADB5]/10 border-[#00ADB5]/30 text-[#00ADB5]' :
-          'bg-rose-100 border-rose-200 text-rose-700'
-        }`}>
-          <div className="flex items-center gap-3">
-            <div className={`w-2 h-2 rounded-full ${
-              importStatus.tone === 'success' ? 'bg-green-500' :
-              importStatus.tone === 'warning' ? 'bg-[#00ADB5]' :
-              'bg-rose-500'
-            }`} />
-            <span className="text-[11px] font-black uppercase tracking-wider">{importStatus.message}</span>
-          </div>
-          <button onClick={() => setImportStatus(null)} className="p-1 hover:bg-black/5 rounded-lg transition-colors text-inherit opacity-50 hover:opacity-100">
-            <X size={14} />
-          </button>
-        </div>
-      )}
-
-
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -809,154 +701,225 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
         <div className="flex-1 flex overflow-hidden gap-4">
           <div className="flex-1 flex flex-col gap-4 overflow-hidden">
             <div className="flex-1 min-h-0">
-              <div className="flex flex-col h-full min-h-0 bg-white rounded-2xl p-2 text-black border border-slate-300">
-                <div className="flex-1 overflow-auto">
-                  <table className="w-full table-fixed border-collapse">
-                    <thead>
-                      <tr className="text-[10px] font-black text-slate-900 uppercase tracking-widest border-b-2 border-slate-300">
-                        {SHIFTS.map(shift => {
-                          const colors = getShiftColor(shift);
-                          const shiftHandlers = getHandlersForShift(shift);
-                          return (
-                            <th key={shift} className={`px-4 py-3 text-left border-r border-slate-300 ${colors.light}`}>
-                              <div className="flex items-center justify-between">
-                                <span className="inline-block">{shift}</span>
-                                <div className="flex items-center gap-3">
-                                  <div className={`w-2.5 h-2.5 rounded-full ${colors.bg}`} />
-                                  <span className="text-[12px] font-black text-slate-900">{shiftHandlers.length}</span>
-                                </div>
-                              </div>
-                            </th>
-                          );
-                        })}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        {SHIFTS.map((shift) => {
-                          const colors = getShiftColor(shift);
-                          const shiftHandlers = getHandlersForShift(shift);
-                          return (
-                            <td key={shift} className="align-top px-2 pb-3 border-r border-slate-300">
-                              <div className="sr-only">{shift}</div>
-                              <DroppableContainer id={shift} className="px-0 pt-3 pb-3 overflow-y-auto scrollbar-hide">
-                                <SortableContext
-                                  id={shift}
-                                  items={shiftHandlers.map(a => a.id)}
-                                  strategy={verticalListSortingStrategy}
-                                >
-                                  <ul className="flex flex-col gap-1.5">
-                                    {shiftHandlers.map(handler => (
-                                      <SortableHandler 
-                                        key={handler.id} 
-                                        handler={handler} 
-                                        shift={shift} 
-                                        colors={colors} 
-                                        onShiftChange={updateShift}
-                                        onDelete={deleteHandlerGlobally}
-                                        shiftOptions={shiftPickerOptions}
-                                      />
-                                    ))}
-                                    {shiftHandlers.length === 0 && (
-                                      <li className="flex flex-col items-center justify-center p-4 opacity-80 shrink-0 border-2 border-dashed border-slate-200 rounded-3xl mt-2 bg-transparent">
-                                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Empty</span>
-                                      </li>
-                                    )}
-                                  </ul>
-                                </SortableContext>
-                              </DroppableContainer>
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-
-                <div className="flex-shrink-0 bg-white rounded-b-3xl border-t border-slate-200 flex flex-col h-auto shadow-inner mt-4 text-black">
-                  <div className="px-6 py-4 flex items-center justify-between shrink-0 rounded-b-3xl">
-                    <div className="flex items-center gap-3">
-                      <h2 className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Leaves / Week Off</h2>
-                      <span className="bg-black/5 text-slate-600 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider border border-slate-200">
-                        {getOffDutyHandlers().length} Handlers
-                      </span>
+              <div className="flex flex-col h-full min-h-0 bg-white/90 backdrop-blur-sm rounded-2xl text-black border border-white/30">
+                {/* Header Section - Part of Main Container */}
+                <div className="bg-white/90 backdrop-blur-sm border-b border-white/30 flex justify-between items-center shrink-0 px-5 py-3 rounded-t-2xl">
+                  <div className="flex items-center space-x-6">
+                    <div className="flex items-center space-x-4">
+                      <div className="w-8 h-8 bg-[#393E46] rounded-xl flex items-center justify-center border border-[#393E46] shadow-sm">
+                        <CalendarIcon size={16} className="text-white" />
+                      </div>
+                      <div className="flex flex-col">
+                        <h1 className="text-lg font-black text-[#222831] tracking-tight leading-none uppercase">Handler Matrix</h1>
+                        <p className="text-[8px] text-slate-500 font-bold uppercase tracking-[0.25em] mt-0.5">Queue Handler Board</p>
+                      </div>
                     </div>
 
-                    <div className="relative">
+                    <div className="h-8 w-px bg-slate-200" />
+
+                    {/* Integrated Date Selector */}
+                    <div className="flex items-center h-8 gap-1 bg-black/5 backdrop-blur-md px-2 rounded-xl border border-slate-200">
                       <button 
-                        onClick={() => setIsModalOpen(!isModalOpen)}
-                        className={`w-10 h-10 ${isModalOpen ? 'bg-rose-500 text-white shadow-rose-500/30' : 'bg-[#393E46] text-white shadow-[#393E46]/30'} rounded-2xl flex items-center justify-center transition-all shadow-lg active:scale-[0.98]`}
-                        title="Register Handler"
+                        onClick={() => {
+                          const [y, m, d] = selectedDate.split('-').map(Number);
+                          const dateObj = new Date(y, m - 1, d);
+                          dateObj.setDate(dateObj.getDate() - 1);
+                          setSelectedDate(dateObj.toLocaleDateString('en-CA'));
+                        }}
+                        className="p-1 hover:bg-black/5 rounded-lg transition-colors text-slate-400 hover:text-slate-900"
                       >
-                        <Plus size={20} className={`transition-transform duration-300 ${isModalOpen ? 'rotate-45' : ''}`} />
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" />
+                        </svg>
                       </button>
+                      
+                      <div className="flex items-center gap-2 cursor-pointer group px-1 relative">
+                        <span className="text-slate-900 font-black text-[10px] uppercase tracking-widest min-w-20 text-center">
+                          {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </span>
+                        <input 
+                          type="date" 
+                          value={selectedDate}
+                          onChange={(e) => setSelectedDate(e.target.value)}
+                          className="absolute inset-0 opacity-0 cursor-pointer z-10 w-full"
+                        />
+                      </div>
 
-                      {isModalOpen && (
-                        <div className="absolute bottom-full right-0 mb-4 w-72 bg-white border border-slate-200 shadow-2xl rounded-4xl p-6 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                          <h3 className="text-sm font-black text-[#222831] tracking-tight mb-4 uppercase">Register Handler</h3>
-                          <div className="space-y-4">
-                            <div>
-                              <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Full Name</label>
-                              <input 
-                                autoFocus
-                                value={newHandlerName}
-                                onChange={(e) => setNewHandlerName(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && handleAddHandler()}
-                                placeholder="Full Name"
-                                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-slate-900 font-bold text-xs"
-                              />
-                            </div>
+                      <button 
+                        onClick={() => {
+                          const [y, m, d] = selectedDate.split('-').map(Number);
+                          const dateObj = new Date(y, m - 1, d);
+                          dateObj.setDate(dateObj.getDate() + 1);
+                          setSelectedDate(dateObj.toLocaleDateString('en-CA'));
+                        }}
+                        className="p-1 hover:bg-black/5 rounded-lg transition-colors text-slate-400 hover:text-slate-900"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+                    </div>
 
-                            <div>
-                              <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Shift (Required)</label>
-                              <select 
-                                value={newHandlerShift}
-                                onChange={(e) => setNewHandlerShift(e.target.value as ShiftType)}
-                                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none text-slate-900 font-bold text-xs appearance-none"
-                              >
-                                {shiftPickerOptions.map(s => (
-                                  <option key={s} value={s}>{s}</option>
-                                ))}
-                              </select>
-                            </div>
-
-                            <div className="flex gap-2 pt-2">
-                              <button 
-                                onClick={handleAddHandler}
-                                disabled={!newHandlerName.trim() || !newHandlerShift}
-                                className="flex-1 bg-[#222831] text-white font-black text-[10px] uppercase tracking-widest py-3 rounded-xl shadow-lg shadow-[#222831]/20 hover:bg-[#222831]/90 transition-all disabled:opacity-30"
-                              >
-                                Confirm
-                              </button>
-                            </div>
-                          </div>
+                    {/* Integrated Time Center */}
+                    <div className="flex items-center bg-black/5 rounded-xl p-1 border border-slate-200 overflow-hidden ml-2">
+                      <div className="flex items-center gap-3 px-4 py-1.5 bg-white/60 rounded-lg">
+                          <span className="text-[12px] font-black text-[#00ADB5] uppercase tracking-tighter border-r border-slate-200 pr-3">IST</span>
+                          <span className="text-[15px] font-black text-[#222831] tabular-nums tracking-tighter leading-none">{times.ist}</span>
                         </div>
-                      )}
+                        <div className="flex items-center gap-3 px-4 py-1.5 rounded-lg ml-0.5">
+                          <span className="text-[12px] font-black text-[#393E46] uppercase tracking-tighter border-r border-slate-200 pr-3">GMT</span>
+                          <span className="text-[15px] font-black text-[#222831] tabular-nums tracking-tighter leading-none">{times.uk}</span>
+                        </div>
                     </div>
                   </div>
-
-                  <DroppableContainer id="OFF_DUTY" className="p-4 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
-                    <SortableContext
-                      id="OFF_DUTY"
-                      items={getOffDutyHandlers().map(item => item.handler.id)}
-                      strategy={verticalListSortingStrategy}
+                  
+                  <div className="flex items-center gap-4">
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isImportingRoster}
+                      className="px-4 py-1.5 rounded-xl font-black text-[9px] uppercase tracking-widest bg-[#222831] text-white hover:bg-[#222831]/90 transition-all shadow-md disabled:opacity-50"
                     >
-                      <div className="flex flex-wrap gap-2 h-auto content-start pb-2">
-                        {getOffDutyHandlers().map(({ handler, reason }) => (
-                          <div key={handler.id} className="w-56 shrink-0">
-                            <SortableHandler 
-                              handler={handler} 
-                              shift={reason} 
-                              colors={getShiftColor(reason)} 
-                              onShiftChange={updateShift}
-                              onDelete={deleteHandlerGlobally}
-                              shiftOptions={shiftPickerOptions}
-                            />
-                          </div>
-                        ))}
+                      {isImportingRoster ? 'Importing...' : 'Import Roster'}
+                    </button>
+                    <input 
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleRosterFileChange}
+                      accept=".xlsx,.xls,.csv"
+                      className="hidden"
+                    />
+                  </div>
+                </div>
+
+                {importStatus && (
+                  <div className={`mx-2 mt-2 p-3 rounded-2xl flex items-center justify-between backdrop-blur-md border animate-in fade-in slide-in-from-top-2 duration-300 shadow-sm ${
+                    importStatus.tone === 'success' ? 'bg-green-100 border-green-200 text-green-700' :
+                    importStatus.tone === 'warning' ? 'bg-[#00ADB5]/10 border-[#00ADB5]/30 text-[#00ADB5]' :
+                    'bg-rose-100 border-rose-200 text-rose-700'
+                  }`}>
+                    <div className="flex items-center gap-3">
+                      <div className={`w-2 h-2 rounded-full ${
+                        importStatus.tone === 'success' ? 'bg-green-500' :
+                        importStatus.tone === 'warning' ? 'bg-[#00ADB5]' :
+                        'bg-rose-500'
+                      }`} />
+                      <span className="text-[11px] font-black uppercase tracking-wider">{importStatus.message}</span>
+                    </div>
+                    <button onClick={() => setImportStatus(null)} className="p-1 hover:bg-black/5 rounded-lg transition-colors text-inherit opacity-50 hover:opacity-100">
+                      <X size={14} />
+                    </button>
+                  </div>
+                )}
+
+                {/* Table Content Section */}
+                <div className="p-2">
+                  <div className="flex-1 overflow-auto">
+                    <table className="w-full table-fixed border-collapse">
+                      <thead>
+                        <tr className="text-[10px] font-black text-slate-900 uppercase tracking-widest border-b-2 border-slate-300">
+                          {SHIFTS.map(shift => {
+                            const colors = getShiftColor(shift);
+                            const shiftHandlers = getHandlersForShift(shift);
+                            return (
+                              <th key={shift} className={`px-4 py-3 text-left border-r border-slate-300 ${colors.light}`}>
+                                <div className="flex items-center justify-between">
+                                  <span className="inline-block">{shift}</span>
+                                  <div className="flex items-center gap-3">
+                                    <div className={`w-2.5 h-2.5 rounded-full ${colors.bg}`} />
+                                    <span className="text-[12px] font-black text-slate-900">{shiftHandlers.length}</span>
+                                  </div>
+                                </div>
+                              </th>
+                            );
+                          })}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          {SHIFTS.map((shift) => {
+                            const colors = getShiftColor(shift);
+                            const shiftHandlers = getHandlersForShift(shift);
+                            return (
+                              <td key={shift} className="align-top px-2 pb-3 border-r border-slate-300">
+                                <div className="sr-only">{shift}</div>
+                                <DroppableContainer id={shift} className="px-0 pt-3 pb-3">
+                                  <SortableContext
+                                    id={shift}
+                                    items={shiftHandlers.map(a => a.id)}
+                                    strategy={verticalListSortingStrategy}
+                                  >
+                                    <ul className="flex flex-col gap-1.5">
+                                      {shiftHandlers.map(handler => (
+                                        <SortableHandler 
+                                          key={handler.id} 
+                                          handler={handler} 
+                                          shift={shift} 
+                                          colors={colors} 
+                                          onShiftChange={updateShift}
+                                          onDelete={deleteHandlerGlobally}
+                                          shiftOptions={shiftPickerOptions}
+                                        />
+                                      ))}
+                                      {shiftHandlers.length === 0 && (
+                                        <li className="flex flex-col items-center justify-center p-4 opacity-80 shrink-0 border-2 border-dashed border-slate-200 rounded-3xl mt-2 bg-transparent">
+                                          <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Empty</span>
+                                        </li>
+                                      )}
+                                    </ul>
+                                  </SortableContext>
+                                </DroppableContainer>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Leaves / Week Off Section - pinned inside main card */}
+                  <div className="flex-shrink-0 bg-white/90 backdrop-blur-sm rounded-b-3xl border-t border-white/30 flex flex-col h-auto shadow-inner mt-4 text-black">
+                    <div className="px-6 py-4 flex items-center justify-between shrink-0 rounded-b-3xl">
+                      <div className="flex items-center gap-3">
+                        <h2 className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Leaves / Week Off</h2>
+                        <span className="bg-black/5 text-slate-600 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider border border-slate-200">
+                          {getOffDutyHandlers().length} Handlers
+                        </span>
                       </div>
-                    </SortableContext>
-                  </DroppableContainer>
+
+                      <div className="relative">
+                        <button 
+                          onClick={() => setIsModalOpen(!isModalOpen)}
+                          className={`w-10 h-10 ${isModalOpen ? 'bg-rose-500 text-white shadow-rose-500/30' : 'bg-[#393E46] text-white shadow-[#393E46]/30'} rounded-2xl flex items-center justify-center transition-all shadow-lg active:scale-[0.98]`}
+                          title="Register Handler"
+                        >
+                          <Plus size={20} className={`transition-transform duration-300 ${isModalOpen ? 'rotate-45' : ''}`} />
+                        </button>
+                      </div>
+                    </div>
+
+                    <DroppableContainer id="OFF_DUTY" className="p-4 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
+                      <SortableContext
+                        id="OFF_DUTY"
+                        items={getOffDutyHandlers().map(item => item.handler.id)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        <div className="flex flex-wrap gap-2 h-auto content-start pb-2">
+                          {getOffDutyHandlers().map(({ handler, reason }) => (
+                            <div key={handler.id} className="w-56 shrink-0">
+                              <SortableHandler 
+                                handler={handler} 
+                                shift={reason} 
+                                colors={getShiftColor(reason)} 
+                                onShiftChange={updateShift}
+                                onDelete={deleteHandlerGlobally}
+                                shiftOptions={shiftPickerOptions}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </SortableContext>
+                    </DroppableContainer>
+                  </div>
                 </div>
               </div>
             </div>

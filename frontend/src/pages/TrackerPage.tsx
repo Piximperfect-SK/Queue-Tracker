@@ -1,20 +1,23 @@
   import React, { useState, useMemo, useEffect } from 'react';
     import { MOCK_HANDLERS, MOCK_ROSTER } from '../data/mockData';
-    import { ShieldCheck, PhoneCall, X, Check, Calendar } from 'lucide-react';
+    import { ShieldCheck, PhoneCall, X, Check } from 'lucide-react';
     import type { DailyStats, Handler, RosterEntry, ShiftType } from '../types';
     import { addLog, saveLogsFromServer, saveSingleLogFromServer } from '../utils/logger';
     import { socket, syncData } from '../utils/socket';
 
     const getShiftColor = (shift: string) => {
       switch (shift) {
-        case '6AM-3PM': return { bg: 'bg-[#00ADB5]', text: 'text-[#00ADB5]', light: 'bg-[#00ADB5]/10', border: 'border-[#00ADB5]/30', rowBg: 'bg-[#00ADB5]/5' };
-        case '12PM-9PM': return { bg: 'bg-[#00ADB5]', text: 'text-[#00ADB5]', light: 'bg-[#00ADB5]/15', border: 'border-[#00ADB5]/40', rowBg: 'bg-[#00ADB5]/8' };
-        case '1PM-10PM': return { bg: 'bg-[#393E46]', text: 'text-[#393E46]', light: 'bg-[#393E46]/10', border: 'border-[#393E46]/30', rowBg: 'bg-[#393E46]/5' };
-        case '2PM-11PM': return { bg: 'bg-[#393E46]', text: 'text-[#393E46]', light: 'bg-[#393E46]/15', border: 'border-[#393E46]/40', rowBg: 'bg-[#393E46]/8' };
-        case '10PM-7AM': return { bg: 'bg-[#222831]', text: 'text-[#222831]', light: 'bg-[#222831]/10', border: 'border-[#222831]/30', rowBg: 'bg-[#222831]/5' };
-        case 'EL':
-        case 'PL':
-        case 'UL':
+        case '6AM-3PM': return { bg: 'bg-blue-600', text: 'text-blue-700', light: 'bg-blue-50', border: 'border-blue-200', rowBg: 'bg-blue-50/10' };
+        case '12PM-9PM': return { bg: 'bg-yellow-400', text: 'text-yellow-600', light: 'bg-yellow-50', border: 'border-yellow-200', rowBg: 'bg-yellow-50/10' };
+        case '1PM-10PM': return { bg: 'bg-orange-500', text: 'text-orange-600', light: 'bg-orange-50', border: 'border-orange-200', rowBg: 'bg-orange-50/10' };
+        case '2PM-11PM': return { bg: 'bg-orange-700', text: 'text-orange-700', light: 'bg-orange-50', border: 'border-orange-200', rowBg: 'bg-orange-50/10' };
+        case '10PM-7AM': return { bg: 'bg-blue-900', text: 'text-blue-900', light: 'bg-blue-50', border: 'border-blue-300', rowBg: 'bg-blue-50/10' };
+        case 'WO': return { bg: 'bg-slate-400', text: 'text-slate-500', light: 'bg-slate-50', border: 'border-slate-200', rowBg: 'bg-slate-50/10' };
+        case 'ML': return { bg: 'bg-pink-500', text: 'text-pink-600', light: 'bg-pink-50', border: 'border-pink-200', rowBg: 'bg-pink-50/10' };
+        case 'PL': return { bg: 'bg-rose-500', text: 'text-rose-600', light: 'bg-rose-50', border: 'border-rose-200', rowBg: 'bg-rose-50/10' };
+        case 'EL': return { bg: 'bg-red-600', text: 'text-red-700', light: 'bg-red-50', border: 'border-red-200', rowBg: 'bg-red-50/10' };
+        case 'UL': return { bg: 'bg-gray-500', text: 'text-gray-600', light: 'bg-gray-50', border: 'border-gray-200', rowBg: 'bg-gray-50/10' };
+        case 'CO': return { bg: 'bg-emerald-600', text: 'text-emerald-700', light: 'bg-emerald-50', border: 'border-emerald-200', rowBg: 'bg-emerald-50/10' };
         case 'MID-LEAVE': return { bg: 'bg-rose-600', text: 'text-rose-600', light: 'bg-rose-50', border: 'border-rose-100', rowBg: 'bg-rose-50/10' };
         default: return { bg: 'bg-slate-500', text: 'text-slate-500', light: 'bg-slate-50', border: 'border-slate-200', rowBg: 'bg-slate-50/10' };
       }
@@ -39,6 +42,7 @@
         return saved ? JSON.parse(saved) as DailyStats[] : [];
       });
       const [currentTime, setCurrentTime] = useState(new Date());
+      const [flashMap, setFlashMap] = useState<Record<string, 'positive' | 'negative'>>({});
       const [times, setTimes] = useState({ ist: '', uk: '' });
 
       // Call Modal State
@@ -264,6 +268,19 @@
           const numOld = Number(oldValue);
           if (numFinal > numOld) type = 'positive';
           else if (numFinal < numOld) type = 'negative';
+
+          if (type !== 'neutral') {
+            const key = `${handlerId}-${field}`;
+            const t = type as 'positive' | 'negative';
+            setFlashMap(prev => ({ ...prev, [key]: t }));
+            setTimeout(() => {
+              setFlashMap(prev => {
+                const next = { ...prev };
+                delete next[key];
+                return next;
+              });
+            }, 1200);
+          }
         }
 
         addLog('Update Stat', `${handler?.name || handlerId} - ${field}: ${oldValue} -> ${finalValue} (Date: ${selectedDate})`, type);
@@ -283,240 +300,155 @@
       };
 
       return (
-        <div className="h-full flex flex-col gap-0 overflow-hidden p-0 px-2 pb-2 relative rounded-4xl shadow-xl border border-white/20">
-          <div className="absolute inset-0 bg-white/20 rounded-4xl z-[-1]" />
-      
-          {/* Header - Compact Integrated Bar - Light Themed */}
-          <div className="mb-3 mt-1 bg-white/40 backdrop-blur-xl border border-white/40 rounded-2xl flex justify-between items-center shrink-0 px-5 py-2 shadow-sm">
-            <div className="flex items-center space-x-6">
-              <div className="flex items-center space-x-4">
-                <div className="w-8 h-8 bg-[#393E46] rounded-xl flex items-center justify-center border border-[#393E46] shadow-lg">
-                  <ShieldCheck size={16} className="text-white" />
+        <div className="h-full flex flex-col overflow-hidden px-4 pb-4">
+          <div className="flex-1 flex flex-col h-full min-h-0">
+            <div className="flex flex-col h-full min-h-0 bg-white/90 backdrop-blur-sm rounded-2xl text-black border border-white/30">
+              <div className="px-5 py-3 flex justify-between items-center shrink-0 rounded-t-2xl bg-white/90 border-b border-white/30">
+                <div className="flex items-center space-x-6">
+                  <div className="flex items-center space-x-4">
+                    <div className="w-8 h-8 bg-[#393E46] rounded-xl flex items-center justify-center border border-[#393E46] shadow-sm">
+                      <ShieldCheck size={16} className="text-white" />
+                    </div>
+                    <div className="flex flex-col">
+                      <h1 className="text-lg font-black text-[#222831] tracking-tight leading-none uppercase">Productivity Tracker</h1>
+                      <p className="text-[8px] text-slate-500 font-bold uppercase tracking-[0.25em] mt-0.5">Live Performance Board</p>
+                    </div>
+                  </div>
+
+                  <div className="h-8 w-px bg-slate-200" />
+
+                  <div className="flex items-center h-8 gap-1 bg-white/20 backdrop-blur-md px-2 rounded-xl border border-slate-200">
+                    <button onClick={() => {
+                        const [y, m, d] = selectedDate.split('-').map(Number);
+                        const dateObj = new Date(y, m - 1, d);
+                        dateObj.setDate(dateObj.getDate() - 1);
+                        setSelectedDate(dateObj.toLocaleDateString('en-CA'));
+                      }} className="p-1 hover:bg-black/5 rounded-lg transition-colors text-slate-400 hover:text-black">
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" />
+                      </svg>
+                    </button>
+
+                    <div className="flex items-center gap-2 cursor-pointer group px-1 relative text-[10px] font-black text-black uppercase tracking-widest min-w-20 text-center">
+                      {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="absolute inset-0 opacity-0 cursor-pointer z-10 w-full" />
+                    </div>
+
+                    <button onClick={() => {
+                        const [y, m, d] = selectedDate.split('-').map(Number);
+                        const dateObj = new Date(y, m - 1, d);
+                        dateObj.setDate(dateObj.getDate() + 1);
+                        setSelectedDate(dateObj.toLocaleDateString('en-CA'));
+                      }} className="p-1 hover:bg-black/5 rounded-lg transition-colors text-slate-400 hover:text-black">
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  <div className="flex items-center bg-white/20 rounded-xl p-1 border border-slate-200 overflow-hidden ml-2">
+                    <div className="flex items-center gap-3 px-4 py-1.5 bg-white/60 rounded-lg shadow-sm">
+                      <span className="text-[12px] font-black text-[#00ADB5] uppercase tracking-tighter border-r border-slate-200 pr-3">IST</span>
+                      <span className="text-[15px] font-black text-[#222831] tabular-nums tracking-tighter leading-none">{times.ist}</span>
+                    </div>
+                    <div className="flex items-center gap-3 px-4 py-1.5 rounded-lg ml-0.5">
+                      <span className="text-[12px] font-black text-[#393E46] uppercase tracking-tighter border-r border-slate-200 pr-3">GMT</span>
+                      <span className="text-[15px] font-black text-black tabular-nums tracking-tighter leading-none">{times.uk}</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex flex-col">
-                  <h1 className="text-lg font-black text-[#222831] tracking-tight leading-none uppercase">Productivity Tracker</h1>
-                  <p className="text-[8px] text-slate-500 font-bold uppercase tracking-[0.25em] mt-0.5">Live Performance Board</p>
+
+                <div className="flex items-center bg-white/90 backdrop-blur-xl rounded-2xl border border-white/20 overflow-hidden divide-x divide-slate-200/50 shadow-xl">
+                  <div className="px-6 py-2 flex flex-col items-center min-w-25">
+                    <span className="text-[8px] font-black text-[#00ADB5] uppercase tracking-[0.2em] mb-0.5">Total INC</span>
+                    <span className="text-base font-black text-[#222831] tabular-nums leading-none tracking-tight">{totalStats.incidents}</span>
+                  </div>
+                  <div className="px-6 py-2 flex flex-col items-center min-w-25">
+                    <span className="text-[8px] font-black text-[#393E46] uppercase tracking-[0.2em] mb-0.5">Total TASK</span>
+                    <span className="text-base font-black text-[#222831] tabular-nums leading-none tracking-tight">{totalStats.sctasks}</span>
+                  </div>
+                  <div className="px-6 py-2 flex flex-col items-center min-w-25">
+                    <span className="text-[8px] font-black text-[#00ADB5] uppercase tracking-[0.2em] mb-0.5">Total Calls</span>
+                    <span className="text-base font-black text-[#222831] tabular-nums leading-none tracking-tight">{totalStats.calls}</span>
+                  </div>
                 </div>
               </div>
 
-              <div className="h-8 w-px bg-slate-200" />
-
-              {/* Integrated Date Selector */}
-              <div className="flex items-center h-8 gap-1 bg-white/20 backdrop-blur-md px-2 rounded-xl border border-slate-200">
-                <button 
-                  onClick={() => {
-                    const [y, m, d] = selectedDate.split('-').map(Number);
-                    const dateObj = new Date(y, m - 1, d);
-                    dateObj.setDate(dateObj.getDate() - 1);
-                    setSelectedDate(dateObj.toLocaleDateString('en-CA'));
-                  }}
-                  className="p-1 hover:bg-black/5 rounded-lg transition-colors text-slate-400 hover:text-black"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" />
-                  </svg>
-                </button>
-            
-                <div className="flex items-center gap-2 cursor-pointer group px-1 relative text-[10px] font-black text-black uppercase tracking-widest min-w-20 text-center">
-                  {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
-                  <input 
-                    type="date" 
-                    value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                    className="absolute inset-0 opacity-0 cursor-pointer z-10 w-full"
-                  />
-                </div>
-
-                <button 
-                  onClick={() => {
-                    const [y, m, d] = selectedDate.split('-').map(Number);
-                    const dateObj = new Date(y, m - 1, d);
-                    dateObj.setDate(dateObj.getDate() + 1);
-                    setSelectedDate(dateObj.toLocaleDateString('en-CA'));
-                  }}
-                  className="p-1 hover:bg-black/5 rounded-lg transition-colors text-slate-400 hover:text-black"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
-                  </svg>
-                </button>
-              </div>
-
-              {/* Integrated Time Center */}
-              <div className="flex items-center bg-white/20 rounded-xl p-1 border border-slate-200 overflow-hidden ml-2">
-                <div className="flex items-center gap-3 px-4 py-1.5 bg-white/60 rounded-lg shadow-sm">
-                  <span className="text-[12px] font-black text-[#00ADB5] uppercase tracking-tighter border-r border-slate-200 pr-3">IST</span>
-                  <span className="text-[15px] font-black text-[#222831] tabular-nums tracking-tighter leading-none">{times.ist}</span>
-                </div>
-                <div className="flex items-center gap-3 px-4 py-1.5 rounded-lg ml-0.5">
-                  <span className="text-[12px] font-black text-[#393E46] uppercase tracking-tighter border-r border-slate-200 pr-3">GMT</span>
-                  <span className="text-[15px] font-black text-black tabular-nums tracking-tighter leading-none">{times.uk}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Dynamic Totals Center */}
-            <div className="flex items-center bg-white/90 backdrop-blur-xl rounded-2xl border border-white/20 overflow-hidden divide-x divide-slate-200/50 shadow-xl">
-                <div className="px-6 py-2 flex flex-col items-center min-w-25">
-                <span className="text-[8px] font-black text-[#00ADB5] uppercase tracking-[0.2em] mb-0.5">Total INC</span>
-                <span className="text-base font-black text-[#222831] tabular-nums leading-none tracking-tight">{totalStats.incidents}</span>
-              </div>
-              <div className="px-6 py-2 flex flex-col items-center min-w-25">
-                <span className="text-[8px] font-black text-[#393E46] uppercase tracking-[0.2em] mb-0.5">Total TASK</span>
-                <span className="text-base font-black text-[#222831] tabular-nums leading-none tracking-tight">{totalStats.sctasks}</span>
-              </div>
-              <div className="px-6 py-2 flex flex-col items-center min-w-25">
-                <span className="text-[8px] font-black text-[#00ADB5] uppercase tracking-[0.2em] mb-0.5">Total Calls</span>
-                <span className="text-base font-black text-[#222831] tabular-nums leading-none tracking-tight">{totalStats.calls}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Tracker Table Container (Scrollable) */}
-          <div className="flex-1 min-h-0 bg-white/40 backdrop-blur-2xl rounded-4xl border border-white/40 shadow-xl overflow-hidden relative">
-            <div className="absolute inset-0 overflow-y-auto overflow-x-hidden scrollbar-hide rounded-2xl">
-              <table className="w-full text-left border-separate" style={{ borderSpacing: 0 }}>
-                <thead>
-                  <tr className="sticky top-0 z-30">
-                    <th colSpan={7} className="px-4 py-2 bg-white/5 border border-slate-200 rounded-3xl">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 bg-[#222831] rounded-lg flex items-center justify-center text-white shadow-sm">
-                            <Calendar size={18} />
-                          </div>
-                          <div>
-                            <div className="text-[11px] font-black uppercase tracking-widest text-[#222831]">Handler Matrix</div>
-                            <div className="text-[9px] text-slate-500 font-bold">Queue Handler Board</div>
-                          </div>
-                        </div>
-                        <div>
-                          <button className="px-3 py-1.5 bg-[#222831] text-white rounded-lg font-black text-xs shadow">IMPORT ROSTER</button>
-                        </div>
-                      </div>
-                    </th>
-                  </tr>
-                  <tr className="sticky z-20" style={{ top: 52 }}>
-                    <th className="px-6 py-2.5 text-center border-r border-slate-200 first:rounded-tl-2xl">On Shift Handlers</th>
-                    <th className="px-6 py-2.5 text-center border-r border-slate-200">Shift</th>
-                    <th className="px-6 py-2.5 text-center border-r border-slate-200">INC</th>
-                    <th className="px-6 py-2.5 text-center border-r border-slate-200">TASK</th>
-                    <th className="px-6 py-2.5 text-center border-r border-slate-200">CALL</th>
-                    <th className="px-6 py-2.5 text-center border-r border-slate-200">Notes</th>
-                    <th className="px-6 py-2.5 text-center last:rounded-tr-2xl">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {!activeHandlers.length ? (
-                    <tr>
-                      <td colSpan={7} className="py-20 text-center opacity-30">
-                        <ShieldCheck size={64} className="mx-auto mb-4 text-slate-400" strokeWidth={1} />
-                        <p className="text-xs font-black uppercase tracking-[0.2em] text-black">No Handlers on Shift</p>
-                      </td>
-                    </tr>
-                  ) : activeHandlers.map(handler => {
-                    const handlerStats = getHandlerStats(handler.id);
-                    const isDisabled = isShiftNearEnd(handler.shift);
-                    const rowTotal = handlerStats.incidents + handlerStats.sctasks + handlerStats.calls;
-
-                    return (
-                      <tr key={handler.id} className={`group border-b border-slate-200 bg-white/20 hover:bg-white/30 transition-all ${isDisabled ? 'opacity-30 grayscale' : ''}`}>
-                        <td className="px-6 py-2 text-center min-w-50 border-r border-slate-200">
-                          <div className="flex flex-col items-center">
-                            <span className="text-lg font-black text-black leading-none whitespace-nowrap select-none">
-                              {handler.name}
-                            </span>
-                            {handler.isQH && (
-                              <span className="text-[6px] font-black text-blue-600 uppercase tracking-[0.3em] mt-1">
-                                Queue Handler (QH)
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="py-2 text-center border-r border-slate-200">
-                          <span className={`inline-flex px-3 py-1 rounded-lg font-black text-[10px] uppercase tracking-widest border border-slate-200 ${getShiftColor(handler.shift).light} ${getShiftColor(handler.shift).text} shadow-sm`}>
-                            {handler.shift}
-                          </span>
-                        </td>
-                        <td className="px-2 py-2 border-r border-slate-200">
-                          <div className="flex items-center justify-center gap-1.5">
-                            <button 
-                              onClick={() => updateStat(handler.id, 'incidents', Math.max(0, handlerStats.incidents - 1))}
-                              disabled={isDisabled}
-                              className="w-6 h-6 flex items-center justify-center rounded-lg bg-black/5 hover:bg-black/10 text-black transition-all disabled:opacity-50 font-black text-xs border border-slate-200"
-                            >
-                              −
-                            </button>
-                            <span className="w-5 text-center font-black text-xs text-black">{handlerStats.incidents}</span>
-                            <button 
-                              onClick={() => updateStat(handler.id, 'incidents', handlerStats.incidents + 1)}
-                              disabled={isDisabled}
-                              className="w-6 h-6 flex items-center justify-center rounded-lg bg-black/5 hover:bg-black/10 text-black transition-all disabled:opacity-50 font-black text-xs border border-slate-200"
-                            >
-                              +
-                            </button>
-                          </div>
-                        </td>
-                        <td className="px-2 py-2 border-r border-slate-200">
-                          <div className="flex items-center justify-center gap-1.5">
-                            <button 
-                              onClick={() => updateStat(handler.id, 'sctasks', Math.max(0, handlerStats.sctasks - 1))}
-                              disabled={isDisabled}
-                              className="w-6 h-6 flex items-center justify-center rounded-lg bg-black/5 hover:bg-black/10 text-black transition-all disabled:opacity-50 font-black text-xs border border-slate-200"
-                            >
-                              −
-                            </button>
-                            <span className="w-5 text-center font-black text-xs text-black">{handlerStats.sctasks}</span>
-                            <button 
-                              onClick={() => updateStat(handler.id, 'sctasks', handlerStats.sctasks + 1)}
-                              disabled={isDisabled}
-                              className="w-6 h-6 flex items-center justify-center rounded-lg bg-black/5 hover:bg-black/10 text-black transition-all disabled:opacity-50 font-black text-xs border border-slate-200"
-                            >
-                              +
-                            </button>
-                          </div>
-                        </td>
-                        <td className="px-2 py-2 border-r border-slate-200">
-                          <div className="flex items-center justify-center gap-1.5">
-                            <button 
-                              onClick={() => updateStat(handler.id, 'calls', Math.max(0, handlerStats.calls - 1))}
-                              disabled={isDisabled}
-                              className="w-6 h-6 flex items-center justify-center rounded-lg bg-black/5 hover:bg-black/10 text-black text-[10px] text-center border border-slate-200"
-                            >
-                              −
-                            </button>
-                            <span className="w-5 text-center font-black text-xs text-black">{handlerStats.calls}</span>
-                            <button 
-                              onClick={() => {
-                                setCallData({ ...callData, handlerId: handler.id });
-                                setIsCallModalOpen(true);
-                              }}
-                              disabled={isDisabled}
-                              className="w-6 h-6 flex items-center justify-center rounded-lg bg-[#00ADB5] hover:bg-[#00ADB5]/80 text-white shadow-lg shadow-[#00ADB5]/20 text-xs text-center font-black border border-[#00ADB5]/60"
-                            >
-                              +
-                            </button>
-                          </div>
-                        </td>
-                        <td className="px-3 py-2 border-r border-slate-200">
-                          <input 
-                            type="text"
-                            placeholder="Log status..."
-                            disabled={isDisabled}
-                            value={handlerStats.comments}
-                            onChange={(e) => updateStat(handler.id, 'comments', e.target.value)}
-                            className="w-full px-2 py-1 text-[10px] text-black bg-white/40 border border-slate-200 rounded-lg outline-none focus:ring-1 focus:ring-blue-200 transition-all placeholder:text-slate-400 disabled:opacity-50 font-black"
-                          />
-                        </td>
-                        <td className="px-4 py-2 text-center">
-                          <div className="inline-flex items-center justify-center px-2 py-0.5 bg-[#222831] text-white rounded-md font-black text-xs min-w-7.5 shadow-lg shadow-[#222831]/10">
-                            {rowTotal}
-                          </div>
-                        </td>
+              <div className="flex-1 min-h-0 p-4">
+                <div className="h-full overflow-auto rounded-b-2xl">
+                  <table className="w-full text-left border-separate" style={{ borderSpacing: 0 }}>
+                    <thead>
+                      
+                      <tr className="sticky z-20" style={{ top: 0 }}>
+                        <th className="px-6 py-2.5 text-center border-r border-slate-200 first:rounded-tl-2xl">On Shift Handlers</th>
+                        <th className="px-6 py-2.5 text-center border-r border-slate-200">Shift</th>
+                        <th className="px-6 py-2.5 text-center border-r border-slate-200">INC</th>
+                        <th className="px-6 py-2.5 text-center border-r border-slate-200">TASK</th>
+                        <th className="px-6 py-2.5 text-center border-r border-slate-200">CALL</th>
+                        <th className="px-6 py-2.5 text-center border-r border-slate-200">Notes</th>
+                        <th className="px-6 py-2.5 text-center last:rounded-tr-2xl">Total</th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                    </thead>
+                    <tbody>
+                      {!activeHandlers.length ? (
+                        <tr>
+                          <td colSpan={7} className="py-20 text-center opacity-30">
+                            <ShieldCheck size={64} className="mx-auto mb-4 text-slate-400" strokeWidth={1} />
+                            <p className="text-xs font-black uppercase tracking-[0.2em] text-black">No Handlers on Shift</p>
+                          </td>
+                        </tr>
+                      ) : activeHandlers.map(handler => {
+                        const handlerStats = getHandlerStats(handler.id);
+                        const isDisabled = isShiftNearEnd(handler.shift);
+                        const rowTotal = handlerStats.incidents + handlerStats.sctasks + handlerStats.calls;
+
+                        return (
+                          <tr key={handler.id} className={`group border-b border-slate-200 bg-white/20 hover:bg-white/30 transition-all ${isDisabled ? 'opacity-30 grayscale' : ''}`}>
+                            <td className="px-6 py-2 text-center min-w-50 border-r border-slate-200">
+                              <div className="flex flex-col items-center">
+                                <span className="text-lg font-black text-black leading-none whitespace-nowrap select-none">{handler.name}</span>
+                                {handler.isQH && (
+                                  <span className="text-[6px] font-black text-blue-600 uppercase tracking-[0.3em] mt-1">Queue Handler (QH)</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-2 text-center border-r border-slate-200">
+                              <span className={`inline-flex px-3 py-1 rounded-lg font-black text-[10px] uppercase tracking-widest border border-slate-200 ${getShiftColor(handler.shift).light} ${getShiftColor(handler.shift).text} shadow-sm`}>{handler.shift}</span>
+                            </td>
+                            <td className="px-2 py-2 border-r border-slate-200">
+                              <div className="flex items-center justify-center gap-1.5">
+                                <button onClick={() => updateStat(handler.id, 'incidents', Math.max(0, handlerStats.incidents - 1))} disabled={isDisabled} className="w-6 h-6 flex items-center justify-center rounded-lg bg-black/5 hover:bg-black/10 text-black transition-all disabled:opacity-50 font-black text-xs border border-slate-200">−</button>
+                                <span className={`w-5 text-center font-black text-xs ${flashMap[`${handler.id}-incidents`] === 'positive' ? 'text-emerald-600 bg-emerald-100/60 rounded' : flashMap[`${handler.id}-incidents`] === 'negative' ? 'text-red-600 bg-red-100/60 rounded' : 'text-black'}`}>{handlerStats.incidents}</span>
+                                <button onClick={() => updateStat(handler.id, 'incidents', handlerStats.incidents + 1)} disabled={isDisabled} className="w-6 h-6 flex items-center justify-center rounded-lg bg-black/5 hover:bg-black/10 text-black transition-all disabled:opacity-50 font-black text-xs border border-slate-200">+</button>
+                              </div>
+                            </td>
+                            <td className="px-2 py-2 border-r border-slate-200">
+                              <div className="flex items-center justify-center gap-1.5">
+                                <button onClick={() => updateStat(handler.id, 'sctasks', Math.max(0, handlerStats.sctasks - 1))} disabled={isDisabled} className="w-6 h-6 flex items-center justify-center rounded-lg bg-black/5 hover:bg-black/10 text-black transition-all disabled:opacity-50 font-black text-xs border border-slate-200">−</button>
+                                <span className={`w-5 text-center font-black text-xs ${flashMap[`${handler.id}-sctasks`] === 'positive' ? 'text-emerald-600 bg-emerald-100/60 rounded' : flashMap[`${handler.id}-sctasks`] === 'negative' ? 'text-red-600 bg-red-100/60 rounded' : 'text-black'}`}>{handlerStats.sctasks}</span>
+                                <button onClick={() => updateStat(handler.id, 'sctasks', handlerStats.sctasks + 1)} disabled={isDisabled} className="w-6 h-6 flex items-center justify-center rounded-lg bg-black/5 hover:bg-black/10 text-black transition-all disabled:opacity-50 font-black text-xs border border-slate-200">+</button>
+                              </div>
+                            </td>
+                            <td className="px-2 py-2 border-r border-slate-200">
+                              <div className="flex items-center justify-center gap-1.5">
+                                <button onClick={() => updateStat(handler.id, 'calls', Math.max(0, handlerStats.calls - 1))} disabled={isDisabled} className="w-6 h-6 flex items-center justify-center rounded-lg bg-black/5 hover:bg-black/10 text-black text-[10px] text-center border border-slate-200">−</button>
+                                <span className={`w-5 text-center font-black text-xs ${flashMap[`${handler.id}-calls`] === 'positive' ? 'text-emerald-600 bg-emerald-100/60 rounded' : flashMap[`${handler.id}-calls`] === 'negative' ? 'text-red-600 bg-red-100/60 rounded' : 'text-black'}`}>{handlerStats.calls}</span>
+                                <button onClick={() => { setCallData({ ...callData, handlerId: handler.id }); setIsCallModalOpen(true); }} disabled={isDisabled} className="w-6 h-6 flex items-center justify-center rounded-lg bg-[#00ADB5] hover:bg-[#00ADB5]/80 text-white shadow-lg shadow-[#00ADB5]/20 text-xs text-center font-black border border-[#00ADB5]/60">+</button>
+                              </div>
+                            </td>
+                            <td className="px-3 py-2 border-r border-slate-200">
+                              <input type="text" placeholder="Log status..." disabled={isDisabled} value={handlerStats.comments} onChange={(e) => updateStat(handler.id, 'comments', e.target.value)} className="w-full px-2 py-1 text-[10px] text-black bg-white/40 border border-slate-200 rounded-lg outline-none focus:ring-1 focus:ring-blue-200 transition-all placeholder:text-slate-400 disabled:opacity-50 font-black" />
+                            </td>
+                            <td className="px-4 py-2 text-center">
+                              <div className="inline-flex items-center justify-center px-2 py-0.5 bg-[#222831] text-white rounded-md font-black text-xs min-w-7.5 shadow-lg shadow-[#222831]/10">{rowTotal}</div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           </div>
 
