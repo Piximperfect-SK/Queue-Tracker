@@ -712,7 +712,7 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
         <div className="flex-1 flex overflow-hidden gap-4">
           <div className="flex-1 flex flex-col gap-4 overflow-hidden">
             <div className="flex-1 min-h-0">
-              <div className="flex flex-col h-full min-h-0 bg-white/90 backdrop-blur-sm rounded-2xl text-black border border-white/30">
+              <div className={`flex flex-col h-full min-h-0 bg-white/90 rounded-2xl text-black border border-white/30 ${isModalOpen ? 'filter blur-sm' : ''}`}>
                 {/* Header Section - Part of Main Container */}
                 <div className="bg-white/90 backdrop-blur-sm border-b border-white/30 flex justify-between items-center shrink-0 px-5 py-3 rounded-t-2xl">
                   <div className="flex items-center space-x-6">
@@ -1030,8 +1030,8 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
       {/* Register Agent Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 flex items-center justify-center z-100 p-6">
-          <div className="absolute inset-0 bg-white/20 backdrop-blur-sm" onClick={handleAddAgentCancel} />
-          <div className="bg-white/90 backdrop-blur-3xl rounded-4xl border border-slate-200 shadow-2xl w-full max-w-sm overflow-hidden relative animate-in fade-in zoom-in duration-200">
+          <div className="absolute inset-0 bg-black/10" onClick={handleAddAgentCancel} />
+          <div className="bg-white/90 rounded-4xl border border-slate-200 shadow-2xl w-full max-w-sm overflow-hidden relative animate-in fade-in zoom-in duration-200">
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
                 <div className="w-12 h-12 bg-[#393E46]/10 rounded-2xl flex items-center justify-center border border-[#393E46]/20">
