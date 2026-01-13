@@ -753,14 +753,16 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
                       </button>
                       
                       <div className="flex items-center gap-2 cursor-pointer group px-1 relative">
-                        <span className="text-slate-900 font-black text-[10px] uppercase tracking-widest min-w-20 text-center">
-                          {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
-                        </span>
+                        <div className="text-center min-w-[88px]">
+                          <div className="text-[#222831] font-extrabold text-lg leading-none tabular-nums">{new Date(selectedDate + 'T00:00:00').getDate()}</div>
+                          <div className="text-[11px] text-slate-500 font-black tracking-wide">{new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</div>
+                        </div>
                         <input 
                           type="date" 
                           value={selectedDate}
                           onChange={(e) => setSelectedDate(e.target.value)}
                           className="absolute inset-0 opacity-0 cursor-pointer z-10 w-full"
+                          aria-label="Select date"
                         />
                       </div>
 
