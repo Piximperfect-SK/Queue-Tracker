@@ -230,6 +230,7 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newAgentName, setNewAgentName] = useState('');
   const [newAgentShift, setNewAgentShift] = useState<ShiftType | ''>('');
+  const [newAgentShiftOpen, setNewAgentShiftOpen] = useState(false);
   const [leaveOperation, setLeaveOperation] = useState<{
     type: 'assign' | 'remove';
     handlerId: string;
@@ -1059,19 +1060,39 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
                   />
                 </div>
 
-                <div>
+                <div className="relative">
                   <label className="text-[11px] text-slate-400 font-bold uppercase tracking-widest">Shift</label>
                   <p className="text-xs text-slate-500">Assign agent to a shift for the selected date (optional)</p>
-                  <select
-                    value={newAgentShift}
-                    onChange={(e) => setNewAgentShift(e.target.value as ShiftType)}
-                    className="mt-2 w-full px-4 py-3 rounded-2xl border border-slate-200 bg-white/80 focus:outline-none"
-                  >
-                    <option value="">No initial shift</option>
-                    {shiftPickerOptions.map((s) => (
-                      <option key={s} value={s}>{s}</option>
-                    ))}
-                  </select>
+
+                  <div className="mt-2">
+                    <button
+                      type="button"
+                      onClick={() => setNewAgentShiftOpen(s => !s)}
+                      className="w-full flex items-center justify-between px-4 py-3 rounded-2xl border border-slate-200 bg-white/90 text-left"
+                    >
+                      <span className="truncate">{newAgentShift || 'No initial shift'}</span>
+                      <svg className="w-4 h-4 text-slate-500" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 8l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    </button>
+
+                    {newAgentShiftOpen && (
+                      <div className="absolute z-50 mt-2 w-full max-h-56 overflow-auto rounded-xl border border-slate-200 bg-white shadow-lg">
+                        <ul className="divide-y divide-slate-100">
+                          <li>
+                            <button type="button" className="w-full text-left px-4 py-3 hover:bg-slate-50" onClick={() => { setNewAgentShift(''); setNewAgentShiftOpen(false); }}>
+                              No initial shift
+                            </button>
+                          </li>
+                          {shiftPickerOptions.map((s) => (
+                            <li key={s}>
+                              <button type="button" className="w-full text-left px-4 py-3 hover:bg-slate-50" onClick={() => { setNewAgentShift(s); setNewAgentShiftOpen(false); }}>
+                                {s}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
