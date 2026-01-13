@@ -192,7 +192,7 @@ const SortableHandler: React.FC<SortableHandlerProps> = ({ handler, shift, color
         <button
           onClick={handleDelete}
           className="p-1 rounded-md text-red-600 hover:bg-white/30 transition-all opacity-0 group-hover:opacity-100"
-          title="Delete Handler"
+          title="Delete Agent"
         >
           <Trash2 size={14} />
         </button>
@@ -397,7 +397,7 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
     localStorage.setItem('roster', JSON.stringify(updatedRoster));
     syncData.updateHandlers(updatedHandlers);
     syncData.updateRoster(updatedRoster);
-    addLog('Delete Handler', `Permanently deleted handler: ${handlerToDelete?.name || handlerId}`, 'negative');
+    addLog('Delete Agent', `Permanently deleted handler: ${handlerToDelete?.name || handlerId}`, 'negative');
   }
 
   const handleRosterFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -672,8 +672,8 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
                         <CalendarIcon size={16} className="text-white" />
                       </div>
                       <div className="flex flex-col">
-                        <h1 className="text-lg font-black text-[#222831] tracking-tight leading-none uppercase">Handler Matrix</h1>
-                        <p className="text-[8px] text-slate-500 font-bold uppercase tracking-[0.25em] mt-0.5">Queue Handler Board</p>
+                        <h1 className="text-lg font-black text-[#222831] tracking-tight leading-none uppercase">Roster</h1>
+                        <p className="text-[8px] text-slate-500 font-bold uppercase tracking-[0.25em] mt-0.5">Agent Roster</p>
                       </div>
                     </div>
                     <div className="h-8 w-px bg-slate-200" />
@@ -735,6 +735,14 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
                   </div>
                   
                   <div className="flex items-center gap-4">
+                    <button 
+                      onClick={() => setIsModalOpen(!isModalOpen)}
+                      className={`w-10 h-10 ${isModalOpen ? 'bg-rose-500 text-white shadow-rose-500/30' : 'bg-[#393E46] text-white shadow-[#393E46]/30'} rounded-2xl flex items-center justify-center transition-all shadow-lg active:scale-[0.98]`}
+                      title="Register Agent"
+                    >
+                      <Plus size={18} className={`${isModalOpen ? 'rotate-45' : ''}`} />
+                    </button>
+
                     <button
                       onClick={() => fileInputRef.current?.click()}
                       disabled={isImportingRoster}
@@ -773,7 +781,7 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
                 )}
 
                 {/* Table Content Section */}
-                <div className="p-2">
+                <div className="p-2 flex flex-col flex-1 min-h-0">
                   <div className="flex-1 overflow-auto">
                     <table className="w-full table-fixed border-collapse">
                       <thead>
@@ -838,27 +846,19 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
                   </div>
 
                   {/* Leaves / Week Off Section - pinned inside main card */}
-                  <div className="flex-shrink-0 bg-white/90 backdrop-blur-sm rounded-b-3xl border-t border-white/30 flex flex-col h-auto shadow-inner mt-4 text-black">
+                  <div className="flex-shrink-0 bg-white/90 backdrop-blur-sm rounded-b-3xl border-t border-white/30 flex flex-col h-auto shadow-inner mt-auto text-black">
                     <div className="px-6 py-4 flex items-center justify-between shrink-0 rounded-b-3xl">
                       <div className="flex items-center gap-3">
-                        <h2 className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Leaves / Week Off</h2>
-                        <span className="bg-black/5 text-slate-600 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider border border-slate-200">
-                          {getOffDutyHandlers().length} Handlers
-                        </span>
+                          <h2 className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Leaves / Week Off</h2>
+                          <span className="bg-black/5 text-slate-600 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider border border-slate-200">
+                            {getOffDutyHandlers().length} Agents
+                          </span>
                       </div>
 
-                      <div className="relative">
-                        <button 
-                          onClick={() => setIsModalOpen(!isModalOpen)}
-                          className={`w-10 h-10 ${isModalOpen ? 'bg-rose-500 text-white shadow-rose-500/30' : 'bg-[#393E46] text-white shadow-[#393E46]/30'} rounded-2xl flex items-center justify-center transition-all shadow-lg active:scale-[0.98]`}
-                          title="Register Handler"
-                        >
-                          <Plus size={20} className={`transition-transform duration-300 ${isModalOpen ? 'rotate-45' : ''}`} />
-                        </button>
-                      </div>
+                      <div className="w-10 h-10" />
                     </div>
 
-                    <DroppableContainer id="OFF_DUTY" className="p-4 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
+                    <DroppableContainer id="OFF_DUTY" className="p-4 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
                       <SortableContext
                         id="OFF_DUTY"
                         items={getOffDutyHandlers().map(item => item.handler.id)}
