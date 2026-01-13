@@ -178,14 +178,14 @@ const SortableHandler: React.FC<SortableHandlerProps> = ({ handler, shift, color
     <li
       ref={setNodeRef}
       style={style}
-      className={`flex items-center justify-between px-2.5 py-1.5 rounded-xl transition-all group ${colors.card} hover:opacity-95 shadow-sm active:scale-[0.98] cursor-default flex-1 min-h-9`}
+      className={`flex items-center justify-between px-3 h-12 rounded-xl transition-all group ${colors.card} hover:opacity-95 shadow-sm active:scale-[0.98] cursor-default` }
     >
       <div className="flex items-center space-x-2 flex-1 min-w-0">
         <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-slate-800/40 hover:text-slate-900 transition-colors shrink-0">
           <GripVertical size={14} />
         </div>
         <div className="flex-1 min-w-0">
-          <span className="text-slate-900 font-semibold text-[11px] block leading-tight whitespace-normal wrap-break-word">{handler.name}</span>
+          <span className="text-slate-900 font-semibold text-[11px] block leading-tight truncate">{handler.name}</span>
         </div>
       </div>
 
@@ -883,7 +883,7 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
                                         />
                                       ))}
                                       {shiftHandlers.length === 0 && (
-                                        <li className="flex flex-col items-center justify-center p-4 opacity-80 shrink-0 border-2 border-dashed border-slate-200 rounded-3xl mt-2 bg-transparent h-full">
+                                        <li className="flex items-center justify-center h-12 opacity-80 shrink-0 border-2 border-dashed border-slate-200 rounded-3xl mt-2 bg-transparent">
                                           <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Empty</span>
                                         </li>
                                       )}
