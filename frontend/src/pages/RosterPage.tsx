@@ -874,7 +874,7 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
                                       items={shiftHandlers.map(a => a.id)}
                                       strategy={verticalListSortingStrategy}
                                     >
-                                      <ul className="flex flex-col gap-1.5 pb-8">
+                                      <ul className="flex flex-col gap-1.5 pb-16">
                                         {shiftHandlers.slice(0, MAX_SHIFT_VISIBLE).map(handler => (
                                           <SortableHandler 
                                             key={handler.id} 
@@ -896,8 +896,10 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
                                     </SortableContext>
 
                                     {shiftHandlers.length > MAX_SHIFT_VISIBLE && (
-                                      <div className="absolute bottom-0 left-0 right-0 bg-white/70 border-t border-slate-100 py-2 text-center text-[11px] font-black text-slate-700 pointer-events-none">
-                                        +{shiftHandlers.length - MAX_SHIFT_VISIBLE} more
+                                      <div className="absolute bottom-2 left-2 right-2 rounded-t-xl pointer-events-none" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.75) 40%, rgba(255,255,255,0.15) 100%)' }}>
+                                        <div className="border-t border-slate-100 py-2 text-center text-[11px] font-black text-slate-700">
+                                          +{shiftHandlers.length - MAX_SHIFT_VISIBLE} more
+                                        </div>
                                       </div>
                                     )}
                                   </div>
