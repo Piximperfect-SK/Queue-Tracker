@@ -228,7 +228,7 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
   const [activeId, setActiveId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newAgentName, setNewAgentName] = useState('');
-  const [newAgentIsQH, setNewAgentIsQH] = useState(false);
+  const [newAgentShift, setNewAgentShift] = useState<ShiftType | ''>('');
   const [leaveOperation, setLeaveOperation] = useState<{
     type: 'assign' | 'remove';
     handlerId: string;
@@ -570,14 +570,26 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
     const name = newAgentName.trim();
     if (!name) return;
     const id = createAgentId();
-    const newHandler: Handler = { id, name, isQH: newAgentIsQH };
+    const newHandler: Handler = { id, name, isQH: false };
     const updatedHandlers = [...handlers, newHandler];
     setHandlers(updatedHandlers);
     localStorage.setItem('handlers', JSON.stringify(updatedHandlers));
     syncData.updateHandlers(updatedHandlers);
-    addLog('Register Agent', `Registered agent: ${name}`, 'positive');
+
+    // If a shift was selected, add roster entry for selectedDate
+    if (newAgentShift) {
+      const newEntry: RosterEntry = { handlerId: id, date: selectedDate, shift: newAgentShift };
+      const updatedRoster = mergeRosterEntries(roster, [newEntry]);
+      setRoster(updatedRoster);
+      localStorage.setItem('roster', JSON.stringify(updatedRoster));
+      syncData.updateRoster(updatedRoster);
+      addLog('Register Agent', `Registered agent: ${name} and assigned to ${newAgentShift} on ${selectedDate}`, 'positive');
+    } else {
+      addLog('Register Agent', `Registered agent: ${name}`, 'positive');
+    }
+
     setNewAgentName('');
-    setNewAgentIsQH(false);
+    setNewAgentShift('');
     setIsModalOpen(false);
   };
 
@@ -1030,14 +1042,19 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
                   />
                 </div>
 
-                <div className="flex items-center justify-between">
-                  <div>
-                    <label className="text-[11px] text-slate-400 font-bold uppercase tracking-widest">Quick Hire</label>
-                    <p className="text-xs text-slate-500">Mark agent as quick-hire (optional)</p>
-                  </div>
-                  <div>
-                    <input type="checkbox" checked={newAgentIsQH} onChange={(e) => setNewAgentIsQH(e.target.checked)} className="w-5 h-5" />
-                  </div>
+                <div>
+                  <label className="text-[11px] text-slate-400 font-bold uppercase tracking-widest">Shift</label>
+                  <p className="text-xs text-slate-500">Assign agent to a shift for the selected date (optional)</p>
+                  <select
+                    value={newAgentShift}
+                    onChange={(e) => setNewAgentShift(e.target.value as ShiftType)}
+                    className="mt-2 w-full px-4 py-3 rounded-2xl border border-slate-200 bg-white/80 focus:outline-none"
+                  >
+                    <option value="">No initial shift</option>
+                    {shiftPickerOptions.map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
             </div>
