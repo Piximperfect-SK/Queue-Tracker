@@ -174,7 +174,7 @@ const LogMonitorPage: React.FC = () => {
           <span className="px-3 py-1 border border-slate-300 rounded bg-white text-[#0a0e27] tracking-[0.2em] text-[8px]">LIVE</span>
           <div className="flex items-center gap-3">
             <label className="text-[10px] text-slate-500 uppercase tracking-widest">Logs Date</label>
-            <input type="date" value={monitoredDate} onChange={(e) => setMonitoredDate(e.target.value)} className="bg-white/6 px-2 py-1 text-xs rounded border border-slate-700 text-white" />
+            <input type="date" value={monitoredDate} onChange={(e) => setMonitoredDate(e.target.value)} className="bg-white/90 px-2 py-1 text-xs rounded border border-slate-300 text-[#0a0e27]" style={{ WebkitTextFillColor: '#0a0e27', color: '#0a0e27' }} />
             <button
               onClick={() => setShowNavLogs(s => !s)}
               className={`px-2 py-1 rounded border border-slate-300 text-[9px] font-black uppercase tracking-wider ${showNavLogs ? 'bg-white text-[#0a0e27]' : 'bg-transparent text-slate-500'}`}

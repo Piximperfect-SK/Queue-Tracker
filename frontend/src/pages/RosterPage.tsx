@@ -763,6 +763,7 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
                           onChange={(e) => setSelectedDate(e.target.value)}
                           className="absolute inset-0 opacity-0 cursor-pointer z-10 w-full"
                           aria-label="Select date"
+                          style={{ color: '#222831', WebkitTextFillColor: '#222831' }}
                         />
                       </div>
 
