@@ -187,8 +187,8 @@ const SortableHandler: React.FC<SortableHandlerProps> = ({ handler, shift, color
         <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-slate-800/40 hover:text-slate-900 transition-colors shrink-0">
           <GripVertical size={14} />
         </div>
-        <div className="flex-1 min-w-0">
-          <span className="text-slate-900 font-semibold text-[11px] block leading-tight truncate">{handler.name}</span>
+        <div className="flex-1 min-w-0 text-center">
+          <span className="text-slate-900 font-semibold text-[16px] block leading-tight truncate">{handler.name}</span>
         </div>
       </div>
 
@@ -203,10 +203,10 @@ const SortableHandler: React.FC<SortableHandlerProps> = ({ handler, shift, color
         <select 
           value={shift}
           onChange={(e) => onShiftChange(handler.id, e.target.value as ShiftType)}
-          className={`text-[9px] font-black bg-white/30 px-1 py-0.5 rounded-md border-none focus:ring-0 ${colors.text} cursor-pointer outline-none opacity-0 group-hover:opacity-100 transition-opacity uppercase tracking-widest`}
+          className={`text-[9px] font-black bg-white/30 px-1 py-0.5 rounded-md border-none focus:ring-0 ${colors.text} cursor-pointer outline-none opacity-0 group-hover:opacity-100 transition-opacity uppercase tracking-widest text-center`}
         >
           {shiftOptions.map(s => (
-            <option key={s} value={s} className="bg-white text-slate-900 font-bold">{s}</option>
+            <option key={s} value={s} className="bg-white text-slate-900 font-bold text-center">{s}</option>
           ))}
         </select>
       </div>
@@ -732,7 +732,7 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
                     <div className="h-8 w-px bg-slate-200" />
 
                     {/* Integrated Date Selector */}
-                    <div className="flex items-center h-8 gap-1 bg-black/5 backdrop-blur-md px-2 rounded-xl border border-slate-200">
+                    <div className="flex items-center h-8 gap-2">
                       <button 
                         onClick={() => {
                           const [y, m, d] = selectedDate.split('-').map(Number);
@@ -740,17 +740,17 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
                           dateObj.setDate(dateObj.getDate() - 1);
                           setSelectedDate(dateObj.toLocaleDateString('en-CA'));
                         }}
-                        className="p-1 hover:bg-black/5 rounded-lg transition-colors text-slate-400 hover:text-slate-900"
+                        className="p-1 rounded-lg transition-colors text-slate-400 hover:text-slate-900 bg-white/60"
+                        aria-label="Previous day"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" />
                         </svg>
                       </button>
-                      
-                      <div className="flex items-center gap-2 cursor-pointer group px-1 relative">
-                        <div className="text-center min-w-[88px]">
-                          <div className="text-[#222831] font-extrabold text-lg leading-none tabular-nums">{new Date(selectedDate + 'T00:00:00').getDate()}</div>
-                          <div className="text-[11px] text-slate-500 font-black tracking-wide">{new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</div>
+
+                      <div className="flex items-center gap-2 cursor-pointer px-3 py-1 bg-white/90 rounded-full border border-slate-200 shadow-sm relative">
+                        <div className="text-center min-w-[140px]">
+                          <div className="text-[#222831] font-black text-[12px] uppercase tracking-widest">{new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toUpperCase()}</div>
                         </div>
                         <input 
                           type="date" 
@@ -769,7 +769,8 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
                           dateObj.setDate(dateObj.getDate() + 1);
                           setSelectedDate(dateObj.toLocaleDateString('en-CA'));
                         }}
-                        className="p-1 hover:bg-black/5 rounded-lg transition-colors text-slate-400 hover:text-slate-900"
+                        className="p-1 rounded-lg transition-colors text-slate-400 hover:text-slate-900 bg-white/60"
+                        aria-label="Next day"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
@@ -780,12 +781,12 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
                     {/* Integrated Time Center */}
                     <div className="flex items-center bg-black/5 rounded-xl p-1 border border-slate-200 overflow-hidden ml-2">
                       <div className="flex items-center gap-3 px-4 py-1.5 bg-white/60 rounded-lg">
-                          <span className="text-[12px] font-black text-[#00ADB5] uppercase tracking-tighter border-r border-slate-200 pr-3">IST</span>
-                          <span className="text-[15px] font-black text-[#222831] tabular-nums tracking-tighter leading-none">{times.ist}</span>
+                          <span className="text-[12px] font-semibold text-[#00ADB5] uppercase tracking-tighter border-r border-slate-200 pr-3">IST</span>
+                          <span className="text-[15px] font-medium text-[#222831] tabular-nums tracking-tighter leading-none">{times.ist}</span>
                         </div>
                         <div className="flex items-center gap-3 px-4 py-1.5 rounded-lg ml-0.5">
-                          <span className="text-[12px] font-black text-[#393E46] uppercase tracking-tighter border-r border-slate-200 pr-3">GMT</span>
-                          <span className="text-[15px] font-black text-[#222831] tabular-nums tracking-tighter leading-none">{times.uk}</span>
+                          <span className="text-[12px] font-semibold text-[#393E46] uppercase tracking-tighter border-r border-slate-200 pr-3">GMT</span>
+                          <span className="text-[15px] font-medium text-[#222831] tabular-nums tracking-tighter leading-none">{times.uk}</span>
                         </div>
                     </div>
                   </div>
@@ -846,10 +847,10 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
                             const colors = getShiftColor(shift);
                             const shiftHandlers = getHandlersForShift(shift);
                             return (
-                              <th key={shift} className={`px-4 py-3 text-left border-r border-slate-300 ${colors.light}`}>
-                                <div className="flex items-center justify-between">
+                              <th key={shift} className={`px-4 py-3 text-center border-r border-slate-300 ${colors.light}`}>
+                                <div className="flex items-center justify-center gap-3">
                                   <span className="inline-block">{shift}</span>
-                                  <div className="flex items-center gap-3">
+                                  <div className="flex items-center gap-2">
                                     <div className={`w-2.5 h-2.5 rounded-full ${colors.bg}`} />
                                     <span className="text-[12px] font-black text-slate-900">{shiftHandlers.length}</span>
                                   </div>
@@ -868,19 +869,19 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
                               <td key={shift} className="align-top px-2 pb-3 border-r border-slate-300 h-full">
                                 <div className="sr-only">{shift}</div>
                                 <DroppableContainer id={shift} className="px-0 pt-3 pb-3 h-full">
-                                  <div className="relative max-h-[384px] overflow-hidden">
+                                  <div className="flex flex-col">
                                     <SortableContext
                                       id={shift}
                                       items={shiftHandlers.map(a => a.id)}
                                       strategy={verticalListSortingStrategy}
                                     >
-                                      <ul className="flex flex-col gap-1.5 pb-16">
+                                      <ul className="flex flex-col gap-1.5 pb-2">
                                         {shiftHandlers.slice(0, MAX_SHIFT_VISIBLE).map(handler => (
-                                          <SortableHandler 
-                                            key={handler.id} 
-                                            handler={handler} 
-                                            shift={shift} 
-                                            colors={colors} 
+                                          <SortableHandler
+                                            key={handler.id}
+                                            handler={handler}
+                                            shift={shift}
+                                            colors={colors}
                                             onShiftChange={updateShift}
                                             onDelete={deleteHandlerGlobally}
                                             shiftOptions={shiftPickerOptions}
@@ -896,10 +897,8 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
                                     </SortableContext>
 
                                     {shiftHandlers.length > MAX_SHIFT_VISIBLE && (
-                                      <div className="absolute bottom-2 left-2 right-2 rounded-t-xl pointer-events-none" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.75) 40%, rgba(255,255,255,0.15) 100%)' }}>
-                                        <div className="border-t border-slate-100 py-2 text-center text-[11px] font-black text-slate-700">
-                                          +{shiftHandlers.length - MAX_SHIFT_VISIBLE} more
-                                        </div>
+                                      <div className="mx-2 mb-1 rounded-xl bg-white/70 border border-slate-200 text-center text-[11px] font-black text-slate-700 py-2">
+                                        +{shiftHandlers.length - MAX_SHIFT_VISIBLE} more
                                       </div>
                                     )}
                                   </div>
