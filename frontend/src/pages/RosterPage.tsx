@@ -30,6 +30,9 @@ const ALL_SHIFT_TYPES: ShiftType[] = [
   'WO', 'ML', 'PL', 'EL', 'UL', 'CO', 'MID-LEAVE'
 ];
 
+// UI limit: maximum visible handler cards per shift (prevents internal scrolling)
+const MAX_SHIFT_VISIBLE = 8;
+
 type ImportFeedback = {
   message: string;
   tone: 'success' | 'warning' | 'error';
@@ -865,30 +868,39 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
                               <td key={shift} className="align-top px-2 pb-3 border-r border-slate-300 h-full">
                                 <div className="sr-only">{shift}</div>
                                 <DroppableContainer id={shift} className="px-0 pt-3 pb-3 h-full">
-                                  <SortableContext
-                                    id={shift}
-                                    items={shiftHandlers.map(a => a.id)}
-                                    strategy={verticalListSortingStrategy}
-                                  >
-                                    <ul className="flex flex-col gap-1.5 h-full">
-                                      {shiftHandlers.map(handler => (
-                                        <SortableHandler 
-                                          key={handler.id} 
-                                          handler={handler} 
-                                          shift={shift} 
-                                          colors={colors} 
-                                          onShiftChange={updateShift}
-                                          onDelete={deleteHandlerGlobally}
-                                          shiftOptions={shiftPickerOptions}
-                                        />
-                                      ))}
-                                      {shiftHandlers.length === 0 && (
-                                        <li className="flex items-center justify-center h-12 opacity-80 shrink-0 border-2 border-dashed border-slate-200 rounded-3xl mt-2 bg-transparent">
-                                          <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Empty</span>
-                                        </li>
-                                      )}
-                                    </ul>
-                                  </SortableContext>
+                                  <div className="relative max-h-[384px] overflow-hidden">
+                                    <SortableContext
+                                      id={shift}
+                                      items={shiftHandlers.map(a => a.id)}
+                                      strategy={verticalListSortingStrategy}
+                                    >
+                                      <ul className="flex flex-col gap-1.5 pb-8">
+                                        {shiftHandlers.slice(0, MAX_SHIFT_VISIBLE).map(handler => (
+                                          <SortableHandler 
+                                            key={handler.id} 
+                                            handler={handler} 
+                                            shift={shift} 
+                                            colors={colors} 
+                                            onShiftChange={updateShift}
+                                            onDelete={deleteHandlerGlobally}
+                                            shiftOptions={shiftPickerOptions}
+                                          />
+                                        ))}
+
+                                        {shiftHandlers.length === 0 && (
+                                          <li className="flex items-center justify-center h-12 opacity-80 shrink-0 border-2 border-dashed border-slate-200 rounded-3xl mt-2 bg-transparent">
+                                            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Empty</span>
+                                          </li>
+                                        )}
+                                      </ul>
+                                    </SortableContext>
+
+                                    {shiftHandlers.length > MAX_SHIFT_VISIBLE && (
+                                      <div className="absolute bottom-0 left-0 right-0 bg-white/70 border-t border-slate-100 py-2 text-center text-[11px] font-black text-slate-700 pointer-events-none">
+                                        +{shiftHandlers.length - MAX_SHIFT_VISIBLE} more
+                                      </div>
+                                    )}
+                                  </div>
                                 </DroppableContainer>
                               </td>
                             );
