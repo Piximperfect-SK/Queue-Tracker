@@ -5,6 +5,7 @@ import { Calendar as CalendarIcon, GripVertical, Plus, X, Trash2, AlertCircle } 
 import type { Handler, RosterEntry, ShiftType } from '../types';
 import { addLog, saveLogsFromServer, saveSingleLogFromServer } from '../utils/logger';
 import { socket, syncData } from '../utils/socket';
+import { addLogForDate } from '../utils/logger';
 import {
   DndContext,
   closestCenter,
@@ -352,6 +353,28 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
       socket.off('init', handleInit);
     };
   }, []);
+
+  // Log navigation when selectedDate changes (skip initial mount)
+  const firstNavRef = useRef(true);
+  useEffect(() => {
+    if (firstNavRef.current) {
+      firstNavRef.current = false;
+      return;
+    }
+    const user = localStorage.getItem('currentUser') || 'Unknown User';
+    // Save a NAVIGATE log under the date we navigated to
+    addLogForDate(selectedDate, 'NAVIGATE', `Visited ${selectedDate}`);
+    // Also add a regular log for today about navigation action
+    // (so monitoring for today still shows recent navigation events)
+    try {
+      // reuse existing addLog to record in today's logs as well
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { addLog } = require('../utils/logger');
+      addLog('NAVIGATE', `Visited ${selectedDate}`);
+    } catch (_e) {
+      // ignore
+    }
+  }, [selectedDate]);
 
   
 

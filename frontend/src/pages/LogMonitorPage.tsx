@@ -3,13 +3,11 @@ import { Terminal, Shield, Zap, Wifi } from 'lucide-react';
 import { AreaChart, Area, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
 import { socket } from '../utils/socket';
 import type { LogEntry } from '../types';
-import { getLogsForDate } from '../utils/logger';
+import { getLogsForDate, saveSingleLogFromServer } from '../utils/logger';
 
 const LogMonitorPage: React.FC = () => {
-  const [logs, setLogs] = useState<LogEntry[]>(() => {
-    const todayStr = new Date().toISOString().split('T')[0];
-    return getLogsForDate(todayStr);
-  });
+  const [monitoredDate, setMonitoredDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [logs, setLogs] = useState<LogEntry[]>(() => getLogsForDate(new Date().toISOString().split('T')[0]));
   const [topOffset, setTopOffset] = useState<number>(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [pingSamples, setPingSamples] = useState<number[]>([]);
@@ -50,8 +48,16 @@ const LogMonitorPage: React.FC = () => {
 
   // Socket logs
   useEffect(() => {
-    const handleNewLog = ({ logEntry }: { dateStr: string; logEntry: LogEntry }) => {
-      setLogs(prev => [...prev, logEntry].slice(-100));
+    const handleNewLog = ({ dateStr, logEntry }: { dateStr: string; logEntry: LogEntry }) => {
+      // Save into localstore for that date
+      try {
+        saveSingleLogFromServer(dateStr, logEntry);
+      } catch (_e) {}
+
+      // If we're currently viewing that date, append
+      if (dateStr === monitoredDate) {
+        setLogs(prev => [...prev, logEntry].slice(-100));
+      }
     };
     socket.on('log_added', handleNewLog);
     return () => void socket.off('log_added', handleNewLog);
@@ -61,6 +67,11 @@ const LogMonitorPage: React.FC = () => {
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [logs]);
+
+  // Reload logs when monitoredDate changes
+  useEffect(() => {
+    setLogs(getLogsForDate(monitoredDate));
+  }, [monitoredDate]);
 
   // Ping sampler
   useEffect(() => {
@@ -161,7 +172,9 @@ const LogMonitorPage: React.FC = () => {
             <span className="text-[#0a0e27]">Link: {socket.connected ? 'OK' : 'LOST'}</span>
           </div>
           <span className="px-3 py-1 border border-slate-300 rounded bg-white text-[#0a0e27] tracking-[0.2em] text-[8px]">LIVE</span>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            <label className="text-[10px] text-slate-500 uppercase tracking-widest">Logs Date</label>
+            <input type="date" value={monitoredDate} onChange={(e) => setMonitoredDate(e.target.value)} className="bg-white/6 px-2 py-1 text-xs rounded border border-slate-700 text-white" />
             <button
               onClick={() => setShowNavLogs(s => !s)}
               className={`px-2 py-1 rounded border border-slate-300 text-[9px] font-black uppercase tracking-wider ${showNavLogs ? 'bg-white text-[#0a0e27]' : 'bg-transparent text-slate-500'}`}
