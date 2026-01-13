@@ -5,6 +5,7 @@ import { Calendar as CalendarIcon, GripVertical, Plus, X, Trash2, AlertCircle } 
 import type { Handler, RosterEntry, ShiftType } from '../types';
 import { addLog, saveLogsFromServer, saveSingleLogFromServer } from '../utils/logger';
 import { socket, syncData } from '../utils/socket';
+import { addLogForDate } from '../utils/logger';
 import {
   DndContext,
   closestCenter,
@@ -28,6 +29,9 @@ const ALL_SHIFT_TYPES: ShiftType[] = [
   '6AM-3PM', '12PM-9PM', '1PM-10PM', '2PM-11PM', '10PM-7AM',
   'WO', 'ML', 'PL', 'EL', 'UL', 'CO', 'MID-LEAVE'
 ];
+
+// UI limit: maximum visible handler cards per shift (prevents internal scrolling)
+const MAX_SHIFT_VISIBLE = 8;
 
 type ImportFeedback = {
   message: string;
@@ -177,14 +181,14 @@ const SortableHandler: React.FC<SortableHandlerProps> = ({ handler, shift, color
     <li
       ref={setNodeRef}
       style={style}
-      className={`flex items-center justify-between px-2.5 py-1.5 rounded-xl transition-all group ${colors.card} hover:opacity-95 shadow-sm active:scale-[0.98] cursor-default flex-1 min-h-9`}
+      className={`flex items-center justify-between px-3 h-12 rounded-xl transition-all group ${colors.card} hover:opacity-95 shadow-sm active:scale-[0.98] cursor-default` }
     >
       <div className="flex items-center space-x-2 flex-1 min-w-0">
         <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-slate-800/40 hover:text-slate-900 transition-colors shrink-0">
           <GripVertical size={14} />
         </div>
-        <div className="flex-1 min-w-0">
-          <span className="text-slate-900 font-semibold text-[11px] block leading-tight whitespace-normal wrap-break-word">{handler.name}</span>
+        <div className="flex-1 min-w-0 text-center">
+          <span className="text-slate-900 font-semibold text-[16px] block leading-tight truncate">{handler.name}</span>
         </div>
       </div>
 
@@ -192,17 +196,17 @@ const SortableHandler: React.FC<SortableHandlerProps> = ({ handler, shift, color
         <button
           onClick={handleDelete}
           className="p-1 rounded-md text-red-600 hover:bg-white/30 transition-all opacity-0 group-hover:opacity-100"
-          title="Delete Handler"
+          title="Delete Agent"
         >
           <Trash2 size={14} />
         </button>
         <select 
           value={shift}
           onChange={(e) => onShiftChange(handler.id, e.target.value as ShiftType)}
-          className={`text-[9px] font-black bg-white/30 px-1 py-0.5 rounded-md border-none focus:ring-0 ${colors.text} cursor-pointer outline-none opacity-0 group-hover:opacity-100 transition-opacity uppercase tracking-widest`}
+          className={`text-[9px] font-black bg-white/30 px-1 py-0.5 rounded-md border-none focus:ring-0 ${colors.text} cursor-pointer outline-none opacity-0 group-hover:opacity-100 transition-opacity uppercase tracking-widest text-center`}
         >
           {shiftOptions.map(s => (
-            <option key={s} value={s} className="bg-white text-slate-900 font-bold">{s}</option>
+            <option key={s} value={s} className="bg-white text-slate-900 font-bold text-center">{s}</option>
           ))}
         </select>
       </div>
@@ -227,8 +231,9 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
   });
   const [activeId, setActiveId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [newHandlerName, setNewHandlerName] = useState('');
-  const [newHandlerShift, setNewHandlerShift] = useState<ShiftType>(SHIFTS[0]);
+  const [newAgentName, setNewAgentName] = useState('');
+  const [newAgentShift, setNewAgentShift] = useState<ShiftType | ''>('');
+  const [newAgentShiftOpen, setNewAgentShiftOpen] = useState(false);
   const [leaveOperation, setLeaveOperation] = useState<{
     type: 'assign' | 'remove';
     handlerId: string;
@@ -353,43 +358,20 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
     };
   }, []);
 
-  const handleAddHandler = () => {
-    if (!newHandlerName.trim()) return;
-
-    const newHandlerId = createAgentId();
-    const newHandler: Handler = {
-      id: newHandlerId,
-      name: newHandlerName.trim(),
-      isQH: false
-    };
-
-    const updatedHandlers = [...handlers, newHandler];
-    setHandlers(updatedHandlers);
-    
-    let logMsg = `Registered new handler: ${newHandler.name}`;
-
-    // Handle initial shift assignment if provided
-    let updatedRoster = [...roster];
-    if (newHandlerShift && newHandlerShift !== 'Unassigned') {
-      updatedRoster.push({
-        handlerId: newHandlerId,
-        date: selectedDate,
-        shift: newHandlerShift
-      });
-      setRoster(updatedRoster);
-      localStorage.setItem('roster', JSON.stringify(updatedRoster));
-      syncData.updateRoster(updatedRoster);
-      logMsg += ` assigned to ${newHandlerShift}`;
+  // Log navigation when selectedDate changes (skip initial mount)
+  const firstNavRef = useRef(true);
+  useEffect(() => {
+    if (firstNavRef.current) {
+      firstNavRef.current = false;
+      return;
     }
+    // Save a NAVIGATE log under the date we navigated to
+    addLogForDate(selectedDate, 'NAVIGATE', `Visited ${selectedDate}`);
+    // Also add a regular log for today about navigation action
+    addLog('NAVIGATE', `Visited ${selectedDate}`);
+  }, [selectedDate]);
 
-    localStorage.setItem('handlers', JSON.stringify(updatedHandlers));
-    syncData.updateHandlers(updatedHandlers);
-
-    setNewHandlerName('');
-    setNewHandlerShift(SHIFTS[0]);
-    setIsModalOpen(false);
-    addLog('Add Handler', logMsg, 'positive');
-  };
+  
 
   const LEAVE_TYPES = ['EL', 'PL', 'UL', 'MID-LEAVE', 'WO', 'ML', 'CO'];
 
@@ -435,7 +417,7 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
     localStorage.setItem('roster', JSON.stringify(updatedRoster));
     syncData.updateHandlers(updatedHandlers);
     syncData.updateRoster(updatedRoster);
-    addLog('Delete Handler', `Permanently deleted handler: ${handlerToDelete?.name || handlerId}`, 'negative');
+    addLog('Delete Agent', `Permanently deleted handler: ${handlerToDelete?.name || handlerId}`, 'negative');
   }
 
   const handleRosterFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -602,6 +584,39 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
     setLeaveOperation(null);
   };
 
+  const handleAddAgentConfirm = () => {
+    const name = newAgentName.trim();
+    if (!name) return;
+    const id = createAgentId();
+    const newHandler: Handler = { id, name, isQH: false };
+    const updatedHandlers = [...handlers, newHandler];
+    setHandlers(updatedHandlers);
+    localStorage.setItem('handlers', JSON.stringify(updatedHandlers));
+    syncData.updateHandlers(updatedHandlers);
+
+    // If a shift was selected, add roster entry for selectedDate
+    if (newAgentShift) {
+      const newEntry: RosterEntry = { handlerId: id, date: selectedDate, shift: newAgentShift };
+      const updatedRoster = mergeRosterEntries(roster, [newEntry]);
+      setRoster(updatedRoster);
+      localStorage.setItem('roster', JSON.stringify(updatedRoster));
+      syncData.updateRoster(updatedRoster);
+      addLog('Register Agent', `Registered agent: ${name} and assigned to ${newAgentShift} on ${selectedDate}`, 'positive');
+    } else {
+      addLog('Register Agent', `Registered agent: ${name}`, 'positive');
+    }
+
+    setNewAgentName('');
+    setNewAgentShift('');
+    setIsModalOpen(false);
+  };
+
+  const handleAddAgentCancel = () => {
+    setNewAgentName('');
+    setNewAgentShift('');
+    setIsModalOpen(false);
+  };
+
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
   };
@@ -701,7 +716,7 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
         <div className="flex-1 flex overflow-hidden gap-4">
           <div className="flex-1 flex flex-col gap-4 overflow-hidden">
             <div className="flex-1 min-h-0">
-              <div className="flex flex-col h-full min-h-0 bg-white/90 backdrop-blur-sm rounded-2xl text-black border border-white/30">
+              <div className={`relative overflow-hidden flex flex-col h-full min-h-0 bg-white/90 rounded-2xl text-black border border-white/30 ${isModalOpen ? 'filter blur-sm' : ''}`}>
                 {/* Header Section - Part of Main Container */}
                 <div className="bg-white/90 backdrop-blur-sm border-b border-white/30 flex justify-between items-center shrink-0 px-5 py-3 rounded-t-2xl">
                   <div className="flex items-center space-x-6">
@@ -710,15 +725,14 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
                         <CalendarIcon size={16} className="text-white" />
                       </div>
                       <div className="flex flex-col">
-                        <h1 className="text-lg font-black text-[#222831] tracking-tight leading-none uppercase">Handler Matrix</h1>
-                        <p className="text-[8px] text-slate-500 font-bold uppercase tracking-[0.25em] mt-0.5">Queue Handler Board</p>
+                        <h1 className="text-lg font-black text-[#222831] tracking-tight leading-none uppercase">Roster</h1>
+                        <p className="text-[8px] text-slate-500 font-bold uppercase tracking-[0.25em] mt-0.5">Agent Roster</p>
                       </div>
                     </div>
-
                     <div className="h-8 w-px bg-slate-200" />
 
                     {/* Integrated Date Selector */}
-                    <div className="flex items-center h-8 gap-1 bg-black/5 backdrop-blur-md px-2 rounded-xl border border-slate-200">
+                    <div className="flex items-center h-8 gap-2">
                       <button 
                         onClick={() => {
                           const [y, m, d] = selectedDate.split('-').map(Number);
@@ -726,22 +740,25 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
                           dateObj.setDate(dateObj.getDate() - 1);
                           setSelectedDate(dateObj.toLocaleDateString('en-CA'));
                         }}
-                        className="p-1 hover:bg-black/5 rounded-lg transition-colors text-slate-400 hover:text-slate-900"
+                        className="p-1 rounded-lg transition-colors text-slate-400 hover:text-slate-900 bg-white/60"
+                        aria-label="Previous day"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" />
                         </svg>
                       </button>
-                      
-                      <div className="flex items-center gap-2 cursor-pointer group px-1 relative">
-                        <span className="text-slate-900 font-black text-[10px] uppercase tracking-widest min-w-20 text-center">
-                          {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
-                        </span>
+
+                      <div className="flex items-center gap-2 cursor-pointer px-3 py-1 bg-white/90 rounded-full border border-slate-200 shadow-sm relative">
+                        <div className="text-center min-w-[140px]">
+                          <div className="text-[#222831] font-black text-[12px] uppercase tracking-widest">{new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toUpperCase()}</div>
+                        </div>
                         <input 
                           type="date" 
                           value={selectedDate}
                           onChange={(e) => setSelectedDate(e.target.value)}
                           className="absolute inset-0 opacity-0 cursor-pointer z-10 w-full"
+                          aria-label="Select date"
+                          style={{ color: '#222831', WebkitTextFillColor: '#222831' }}
                         />
                       </div>
 
@@ -752,7 +769,8 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
                           dateObj.setDate(dateObj.getDate() + 1);
                           setSelectedDate(dateObj.toLocaleDateString('en-CA'));
                         }}
-                        className="p-1 hover:bg-black/5 rounded-lg transition-colors text-slate-400 hover:text-slate-900"
+                        className="p-1 rounded-lg transition-colors text-slate-400 hover:text-slate-900 bg-white/60"
+                        aria-label="Next day"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
@@ -763,17 +781,25 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
                     {/* Integrated Time Center */}
                     <div className="flex items-center bg-black/5 rounded-xl p-1 border border-slate-200 overflow-hidden ml-2">
                       <div className="flex items-center gap-3 px-4 py-1.5 bg-white/60 rounded-lg">
-                          <span className="text-[12px] font-black text-[#00ADB5] uppercase tracking-tighter border-r border-slate-200 pr-3">IST</span>
-                          <span className="text-[15px] font-black text-[#222831] tabular-nums tracking-tighter leading-none">{times.ist}</span>
+                          <span className="text-[12px] font-semibold text-[#00ADB5] uppercase tracking-tighter border-r border-slate-200 pr-3">IST</span>
+                          <span className="text-[15px] font-medium text-[#222831] tabular-nums tracking-tighter leading-none">{times.ist}</span>
                         </div>
                         <div className="flex items-center gap-3 px-4 py-1.5 rounded-lg ml-0.5">
-                          <span className="text-[12px] font-black text-[#393E46] uppercase tracking-tighter border-r border-slate-200 pr-3">GMT</span>
-                          <span className="text-[15px] font-black text-[#222831] tabular-nums tracking-tighter leading-none">{times.uk}</span>
+                          <span className="text-[12px] font-semibold text-[#393E46] uppercase tracking-tighter border-r border-slate-200 pr-3">GMT</span>
+                          <span className="text-[15px] font-medium text-[#222831] tabular-nums tracking-tighter leading-none">{times.uk}</span>
                         </div>
                     </div>
                   </div>
                   
                   <div className="flex items-center gap-4">
+                    <button 
+                      onClick={() => setIsModalOpen(!isModalOpen)}
+                      className={`w-10 h-10 ${isModalOpen ? 'bg-rose-500 text-white shadow-rose-500/30' : 'bg-[#393E46] text-white shadow-[#393E46]/30'} rounded-2xl flex items-center justify-center transition-all shadow-lg active:scale-[0.98]`}
+                      title="Register Agent"
+                    >
+                      <Plus size={18} className={`${isModalOpen ? 'rotate-45' : ''}`} />
+                    </button>
+
                     <button
                       onClick={() => fileInputRef.current?.click()}
                       disabled={isImportingRoster}
@@ -812,19 +838,19 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
                 )}
 
                 {/* Table Content Section */}
-                <div className="p-2">
+                <div className="p-2 flex flex-col flex-1 min-h-0">
                   <div className="flex-1 overflow-auto">
-                    <table className="w-full table-fixed border-collapse">
+                    <table className="w-full table-fixed border-collapse h-full">
                       <thead>
                         <tr className="text-[10px] font-black text-slate-900 uppercase tracking-widest border-b-2 border-slate-300">
                           {SHIFTS.map(shift => {
                             const colors = getShiftColor(shift);
                             const shiftHandlers = getHandlersForShift(shift);
                             return (
-                              <th key={shift} className={`px-4 py-3 text-left border-r border-slate-300 ${colors.light}`}>
-                                <div className="flex items-center justify-between">
+                              <th key={shift} className={`px-4 py-3 text-center border-r border-slate-300 ${colors.light}`}>
+                                <div className="flex items-center justify-center gap-3">
                                   <span className="inline-block">{shift}</span>
-                                  <div className="flex items-center gap-3">
+                                  <div className="flex items-center gap-2">
                                     <div className={`w-2.5 h-2.5 rounded-full ${colors.bg}`} />
                                     <span className="text-[12px] font-black text-slate-900">{shiftHandlers.length}</span>
                                   </div>
@@ -834,39 +860,48 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
                           })}
                         </tr>
                       </thead>
-                      <tbody>
-                        <tr>
+                      <tbody className="h-full">
+                        <tr className="h-full">
                           {SHIFTS.map((shift) => {
                             const colors = getShiftColor(shift);
                             const shiftHandlers = getHandlersForShift(shift);
                             return (
-                              <td key={shift} className="align-top px-2 pb-3 border-r border-slate-300">
+                              <td key={shift} className="align-top px-2 pb-3 border-r border-slate-300 h-full">
                                 <div className="sr-only">{shift}</div>
-                                <DroppableContainer id={shift} className="px-0 pt-3 pb-3">
-                                  <SortableContext
-                                    id={shift}
-                                    items={shiftHandlers.map(a => a.id)}
-                                    strategy={verticalListSortingStrategy}
-                                  >
-                                    <ul className="flex flex-col gap-1.5">
-                                      {shiftHandlers.map(handler => (
-                                        <SortableHandler 
-                                          key={handler.id} 
-                                          handler={handler} 
-                                          shift={shift} 
-                                          colors={colors} 
-                                          onShiftChange={updateShift}
-                                          onDelete={deleteHandlerGlobally}
-                                          shiftOptions={shiftPickerOptions}
-                                        />
-                                      ))}
-                                      {shiftHandlers.length === 0 && (
-                                        <li className="flex flex-col items-center justify-center p-4 opacity-80 shrink-0 border-2 border-dashed border-slate-200 rounded-3xl mt-2 bg-transparent">
-                                          <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Empty</span>
-                                        </li>
-                                      )}
-                                    </ul>
-                                  </SortableContext>
+                                <DroppableContainer id={shift} className="px-0 pt-3 pb-3 h-full">
+                                  <div className="flex flex-col">
+                                    <SortableContext
+                                      id={shift}
+                                      items={shiftHandlers.map(a => a.id)}
+                                      strategy={verticalListSortingStrategy}
+                                    >
+                                      <ul className="flex flex-col gap-1.5 pb-2">
+                                        {shiftHandlers.slice(0, MAX_SHIFT_VISIBLE).map(handler => (
+                                          <SortableHandler
+                                            key={handler.id}
+                                            handler={handler}
+                                            shift={shift}
+                                            colors={colors}
+                                            onShiftChange={updateShift}
+                                            onDelete={deleteHandlerGlobally}
+                                            shiftOptions={shiftPickerOptions}
+                                          />
+                                        ))}
+
+                                        {shiftHandlers.length === 0 && (
+                                          <li className="flex items-center justify-center h-12 opacity-80 shrink-0 border-2 border-dashed border-slate-200 rounded-3xl mt-2 bg-transparent">
+                                            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Empty</span>
+                                          </li>
+                                        )}
+                                      </ul>
+                                    </SortableContext>
+
+                                    {shiftHandlers.length > MAX_SHIFT_VISIBLE && (
+                                      <div className="mx-2 mb-1 rounded-xl bg-white/70 border border-slate-200 text-center text-[11px] font-black text-slate-700 py-2">
+                                        +{shiftHandlers.length - MAX_SHIFT_VISIBLE} more
+                                      </div>
+                                    )}
+                                  </div>
                                 </DroppableContainer>
                               </td>
                             );
@@ -877,27 +912,19 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
                   </div>
 
                   {/* Leaves / Week Off Section - pinned inside main card */}
-                  <div className="flex-shrink-0 bg-white/90 backdrop-blur-sm rounded-b-3xl border-t border-white/30 flex flex-col h-auto shadow-inner mt-4 text-black">
+                  <div className="flex-shrink-0 bg-white/90 backdrop-blur-sm rounded-b-3xl border-t border-white/30 flex flex-col h-auto shadow-inner mt-auto text-black">
                     <div className="px-6 py-4 flex items-center justify-between shrink-0 rounded-b-3xl">
                       <div className="flex items-center gap-3">
-                        <h2 className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Leaves / Week Off</h2>
-                        <span className="bg-black/5 text-slate-600 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider border border-slate-200">
-                          {getOffDutyHandlers().length} Handlers
-                        </span>
+                          <h2 className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Leaves / Week Off</h2>
+                          <span className="bg-black/5 text-slate-600 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider border border-slate-200">
+                            {getOffDutyHandlers().length} Agents
+                          </span>
                       </div>
 
-                      <div className="relative">
-                        <button 
-                          onClick={() => setIsModalOpen(!isModalOpen)}
-                          className={`w-10 h-10 ${isModalOpen ? 'bg-rose-500 text-white shadow-rose-500/30' : 'bg-[#393E46] text-white shadow-[#393E46]/30'} rounded-2xl flex items-center justify-center transition-all shadow-lg active:scale-[0.98]`}
-                          title="Register Handler"
-                        >
-                          <Plus size={20} className={`transition-transform duration-300 ${isModalOpen ? 'rotate-45' : ''}`} />
-                        </button>
-                      </div>
+                      <div className="w-10 h-10" />
                     </div>
 
-                    <DroppableContainer id="OFF_DUTY" className="p-4 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
+                    <DroppableContainer id="OFF_DUTY" className="p-4 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
                       <SortableContext
                         id="OFF_DUTY"
                         items={getOffDutyHandlers().map(item => item.handler.id)}
@@ -1009,6 +1036,92 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
                 className="flex-1 px-6 py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest bg-[#222831] text-white hover:bg-[#222831]/90 transition-all shadow-xl shadow-[#222831]/20 active:scale-95"
               >
                 Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Register Agent Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 flex items-center justify-center z-100 p-6">
+          <div className="absolute inset-0 bg-black/10" onClick={handleAddAgentCancel} />
+          <div className="bg-white/90 rounded-4xl border border-slate-200 shadow-2xl w-full max-w-sm overflow-hidden relative animate-in fade-in zoom-in duration-200">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="w-12 h-12 bg-[#393E46]/10 rounded-2xl flex items-center justify-center border border-[#393E46]/20">
+                  <CalendarIcon size={24} className="text-[#393E46]" />
+                </div>
+                <button 
+                  onClick={handleAddAgentCancel}
+                  className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-full transition-all"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <h3 className="text-2xl font-black text-[#222831] tracking-tight mb-2">Register Agent</h3>
+              <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mb-6">Add a new agent to the roster</p>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] text-slate-400 font-bold uppercase tracking-widest">Name</label>
+                  <input
+                    value={newAgentName}
+                    onChange={(e) => setNewAgentName(e.target.value)}
+                    className="mt-2 w-full px-4 py-3 rounded-2xl border border-slate-200 bg-white/80 focus:outline-none"
+                    placeholder="Agent name"
+                  />
+                </div>
+
+                <div className="relative">
+                  <label className="text-[11px] text-slate-400 font-bold uppercase tracking-widest">Shift</label>
+                  <p className="text-xs text-slate-500">Assign agent to a shift for the selected date (optional)</p>
+
+                  <div className="mt-2">
+                    <button
+                      type="button"
+                      onClick={() => setNewAgentShiftOpen(s => !s)}
+                      className="w-full flex items-center justify-between px-4 py-3 rounded-2xl border border-slate-200 bg-white/90 text-left"
+                    >
+                      <span className="truncate">{newAgentShift || 'No initial shift'}</span>
+                      <svg className="w-4 h-4 text-slate-500" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 8l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    </button>
+
+                    {newAgentShiftOpen && (
+                      <div className="absolute z-50 mt-2 w-full max-h-56 overflow-auto rounded-xl border border-slate-200 bg-white shadow-lg">
+                        <ul className="divide-y divide-slate-100">
+                          <li>
+                            <button type="button" className="w-full text-left px-4 py-3 hover:bg-slate-50" onClick={() => { setNewAgentShift(''); setNewAgentShiftOpen(false); }}>
+                              No initial shift
+                            </button>
+                          </li>
+                          {shiftPickerOptions.map((s) => (
+                            <li key={s}>
+                              <button type="button" className="w-full text-left px-4 py-3 hover:bg-slate-50" onClick={() => { setNewAgentShift(s); setNewAgentShiftOpen(false); }}>
+                                {s}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 pt-4 flex gap-4">
+              <button 
+                onClick={handleAddAgentCancel}
+                className="flex-1 px-6 py-3 rounded-2xl font-black text-[11px] uppercase tracking-widest text-slate-500 hover:bg-slate-50 transition-all active:scale-95"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleAddAgentConfirm}
+                className="flex-1 px-6 py-3 rounded-2xl font-black text-[11px] uppercase tracking-widest bg-[#222831] text-white hover:bg-[#222831]/90 transition-all shadow-xl shadow-[#222831]/20 active:scale-95"
+              >
+                Register
               </button>
             </div>
           </div>

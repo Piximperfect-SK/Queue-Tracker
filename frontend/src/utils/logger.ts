@@ -28,6 +28,38 @@ export const addLog = (action: string, details: string, type: 'positive' | 'nega
   }
 };
 
+export const addLogForDate = (dateStr: string, action: string, details: string, type: 'positive' | 'negative' | 'neutral' = 'neutral') => {
+  try {
+    const now = new Date();
+    const logKey = `logs_${dateStr}`;
+    const user = localStorage.getItem('currentUser') || 'Unknown User';
+    const newEntry: LogEntry = {
+      timestamp: now.toLocaleTimeString(),
+      user,
+      action,
+      details,
+      type,
+    };
+
+    // Save locally under the provided date
+    const existing = localStorage.getItem(logKey);
+    const logs: LogEntry[] = existing ? JSON.parse(existing) : [];
+    logs.push(newEntry);
+    localStorage.setItem(logKey, JSON.stringify(logs));
+
+    // Also emit to server (server may assign its own date grouping)
+    try {
+      syncData.addLog(newEntry);
+    } catch (e) {
+      // ignore
+    }
+
+    console.log(`[LOG:${dateStr}] ${newEntry.timestamp} - ${user} - ${action}: ${details}`);
+  } catch (e) {
+    console.error('Failed to save log for date', e);
+  }
+};
+
 export const getLogsForDate = (dateStr: string): LogEntry[] => {
   try {
     const logs = localStorage.getItem(`logs_${dateStr}`);
