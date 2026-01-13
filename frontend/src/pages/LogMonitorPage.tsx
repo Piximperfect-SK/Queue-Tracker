@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Terminal, Shield, Zap, Wifi } from 'lucide-react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
+import { AreaChart, Area, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
 import { socket } from '../utils/socket';
 import type { LogEntry } from '../types';
 import { getLogsForDate } from '../utils/logger';
@@ -17,6 +17,7 @@ const LogMonitorPage: React.FC = () => {
   const lastSuccessRef = useRef<number | null>(null);
   const [apiUrl, setApiUrl] = useState<string>(`${window.location.origin}/api/health`);
   const [apiSamples, setApiSamples] = useState<number[]>([]);
+  const [showNavLogs, setShowNavLogs] = useState<boolean>(true);
   const [lastApiStatus, setLastApiStatus] = useState<number | null>(null);
   const [lastApiSize, setLastApiSize] = useState<number | null>(null);
   const apiLimit = 20;
@@ -160,6 +161,13 @@ const LogMonitorPage: React.FC = () => {
             <span className="text-[#0a0e27]">Link: {socket.connected ? 'OK' : 'LOST'}</span>
           </div>
           <span className="px-3 py-1 border border-slate-300 rounded bg-white text-[#0a0e27] tracking-[0.2em] text-[8px]">LIVE</span>
+          <button
+            onClick={() => setShowNavLogs(s => !s)}
+            className={`px-2 py-1 rounded border border-slate-300 text-[9px] font-black uppercase tracking-wider ${showNavLogs ? 'bg-white text-[#0a0e27]' : 'bg-transparent text-slate-500'}`}
+            title="Format: toggle navigation logs"
+          >
+            Format
+          </button>
         </div>
       </div>
 
@@ -176,7 +184,10 @@ const LogMonitorPage: React.FC = () => {
               <p className="text-xs font-black uppercase tracking-[0.5em] animate-pulse">Awaiting Data...</p>
             </div>
           ) : (
-            logs.map((log, i) => (
+            // apply format filter: hide navigation logs when toggled off
+            (() => {
+              const visibleLogs = showNavLogs ? logs : logs.filter(l => !/navigate/i.test(l.action) && !/visited/i.test(l.details));
+              return visibleLogs.map((log, i) => (
               <div key={i} className="flex gap-3 px-1 py-0.5 group">
                 <span className="text-slate-400 shrink-0 select-none">[{log.timestamp}]</span>
                 <span className="text-white shrink-0 font-black">[{log.user}]</span>
@@ -191,50 +202,56 @@ const LogMonitorPage: React.FC = () => {
                   'text-white/90'
                 }`}>{log.details}</span>
               </div>
-            ))
+              ));
+            })()
           )}
         </div>
 
         {/* Right: split into Ping (top) and API (bottom) - NO SCROLL */}
         <div className="w-1/2 flex flex-col border-l border-slate-700 p-4 bg-[#0f1535] gap-4 overflow-hidden">
-          {/* Ping section - FIXED */}
-          <div className="flex flex-col gap-2 flex-1 min-h-0">
-            <div className="flex items-center justify-between shrink-0">
+          {/* Ping (card) */}
+          <div className="flex flex-col gap-3 flex-1 min-h-0">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Wifi size={18} className="text-[#00ADB5]" />
+                <div className="leading-tight">
+                  <h3 className="text-lg font-semibold text-white">Ping</h3>
+                  <p className="text-xs text-slate-400">Realtime network round-trip time</p>
+                </div>
+              </div>
               <div className="flex items-center gap-2">
-                <Wifi size={16} className="text-[#00ADB5]" />
-                <h3 className="text-sm font-black uppercase tracking-wider text-white">Ping</h3>
-              </div>
-              <button onClick={() => runPingRef.current()} className="px-2 py-1 bg-white/10 rounded text-xs text-white hover:bg-white/20">Ping Now</button>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-2 text-[10px]">
-              <div>
-                <p className="text-slate-400 uppercase tracking-widest">Last</p>
-                <p className="font-black text-white">{lastPing !== null ? `${lastPing} ms` : '—'}</p>
-              </div>
-              <div>
-                <p className="text-slate-400 uppercase tracking-widest">Avg</p>
-                <p className="font-black text-white">{(() => { const nums = pingSamples.filter(n => n >= 0); if (!nums.length) return '—'; return `${Math.round(nums.reduce((a,b) => a+b,0)/nums.length)} ms`; })()}</p>
-              </div>
-              <div>
-                <p className="text-slate-400 uppercase tracking-widest">Min</p>
-                <p className="font-black text-white">{(() => { const nums = pingSamples.filter(n => n >= 0); return nums.length ? `${Math.min(...nums)} ms` : '—'; })()}</p>
-              </div>
-              <div>
-                <p className="text-slate-400 uppercase tracking-widest">Max</p>
-                <p className="font-black text-white">{(() => { const nums = pingSamples.filter(n => n >= 0); return nums.length ? `${Math.max(...nums)} ms` : '—'; })()}</p>
-              </div>
-              <div>
-                <p className="text-slate-400 uppercase tracking-widest">Loss</p>
-                <p className="font-black text-white">{(() => { const total = pingSamples.length || 0; if (!total) return '—'; const fails = pingSamples.filter(n => n < 0).length; return `${Math.round((fails/total)*100)}%`; })()}</p>
-              </div>
-              <div>
-                <p className="text-slate-400 uppercase tracking-widest">Jitter</p>
-                <p className="font-black text-white">{(() => { const nums = pingSamples.filter(n => n >= 0); if (nums.length < 2) return '—'; const diffs = nums.slice(1).map((v,i) => Math.abs(v - nums[i])); return `${Math.round(diffs.reduce((a,b)=>a+b,0)/diffs.length)} ms`; })()}</p>
+                <button onClick={() => runPingRef.current()} className="px-3 py-1 bg-white/8 hover:bg-white/16 rounded text-xs text-white">Ping Now</button>
               </div>
             </div>
 
-            <div className="h-32 bg-white rounded border border-slate-200 flex relative">
+            <div className="grid grid-cols-3 grid-rows-2 gap-3 text-[11px]">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400 text-xs uppercase">Last</span>
+                <span className="font-semibold text-white text-sm">{lastPing !== null ? `${lastPing} ms` : '—'}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400 text-xs uppercase">Avg</span>
+                <span className="font-semibold text-white text-sm">{(() => { const nums = pingSamples.filter(n => n >= 0); if (!nums.length) return '—'; return `${Math.round(nums.reduce((a,b) => a+b,0)/nums.length)} ms`; })()}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400 text-xs uppercase">Min</span>
+                <span className="font-semibold text-white text-sm">{(() => { const nums = pingSamples.filter(n => n >= 0); return nums.length ? `${Math.min(...nums)} ms` : '—'; })()}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400 text-xs uppercase">Max</span>
+                <span className="font-semibold text-white text-sm">{(() => { const nums = pingSamples.filter(n => n >= 0); return nums.length ? `${Math.max(...nums)} ms` : '—'; })()}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400 text-xs uppercase">Loss</span>
+                <span className="font-semibold text-white text-sm">{(() => { const total = pingSamples.length || 0; if (!total) return '—'; const fails = pingSamples.filter(n => n < 0).length; return `${Math.round((fails/total)*100)}%`; })()}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400 text-xs uppercase">Jitter</span>
+                <span className="font-semibold text-white text-sm">{(() => { const nums = pingSamples.filter(n => n >= 0); if (nums.length < 2) return '—'; const diffs = nums.slice(1).map((v,i) => Math.abs(v - nums[i])); return `${Math.round(diffs.reduce((a,b)=>a+b,0)/diffs.length)} ms`; })()}</span>
+              </div>
+            </div>
+
+            <div className="h-40 bg-white rounded border border-slate-200 flex relative p-2">
               {/* Y-Axis Labels */}
               <div className="w-12 flex flex-col justify-between text-right py-1 px-2 shrink-0">
                 {[...Array(4)].map((_, i) => {
@@ -266,49 +283,41 @@ const LogMonitorPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex justify-between text-[10px] text-slate-400 shrink-0">
+            <div className="flex justify-between text-[12px] text-slate-400">
               <span>Failures: {pingSamples.filter(n => n < 0).length}</span>
               <span>Samples: {pingSamples.length}</span>
             </div>
           </div>
 
-          {/* API section - FIXED */}
-          <div className="flex flex-col gap-2 flex-1 min-h-0 border-t border-slate-700 pt-4">
-            <div className="flex items-center justify-between shrink-0">
-              <h3 className="text-sm font-black uppercase tracking-wider text-white">API Checks</h3>
-              <div className="flex gap-1">
-                <input value={apiUrl} onChange={e => setApiUrl(e.target.value)} className="bg-white/10 px-2 py-1 text-xs rounded w-32 border border-slate-700 text-white placeholder-slate-500" placeholder="URL" />
-                <button onClick={() => runApiRef.current()} className="px-2 py-1 bg-white/10 rounded text-xs text-white hover:bg-white/20">Check</button>
+          {/* API (card) */}
+          <div className="flex flex-col gap-3 flex-1 min-h-0 border-t border-slate-700 pt-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-white">API Checks</h3>
+                <p className="text-xs text-slate-400">Health endpoint monitoring</p>
+              </div>
+              <div className="flex gap-2 items-center">
+                <input value={apiUrl} onChange={e => setApiUrl(e.target.value)} className="bg-white/6 px-2 py-1 text-xs rounded w-56 border border-slate-700 text-white placeholder-slate-500" placeholder="URL" />
+                <button onClick={() => runApiRef.current()} className="px-3 py-1 bg-white/8 rounded text-xs text-white hover:bg-white/16">Check</button>
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-2 text-[10px] shrink-0">
-              <div>
-                <p className="text-slate-400 uppercase tracking-widest">Status</p>
-                <p className="font-black">
-                  {lastApiStatus === null ? (
-                    <span className="text-red-400">ERR</span>
-                  ) : (
-                    apiSamples.length && apiSamples[apiSamples.length - 1] < 0 ? (
-                      <span className="text-red-400">{lastApiStatus} (fail)</span>
-                    ) : (
-                      <span className="text-white">{lastApiStatus}</span>
-                    )
-                  )}
-                </p>
+            <div className="grid grid-cols-3 gap-3 text-[11px]">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400 text-xs uppercase">Status</span>
+                <span className="font-semibold text-white text-sm">{lastApiStatus === null ? <span className="text-red-400">ERR</span> : apiSamples.length && apiSamples[apiSamples.length - 1] < 0 ? <span className="text-red-400">{lastApiStatus} (fail)</span> : <span>{lastApiStatus}</span>}</span>
               </div>
-              <div>
-                <p className="text-slate-400 uppercase tracking-widest">Last RTT</p>
-                <p className="font-black text-white">{apiSamples.length ? (apiSamples[apiSamples.length - 1] >= 0 ? `${apiSamples[apiSamples.length - 1]} ms` : 'fail') : '—'}</p>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400 text-xs uppercase">Last RTT</span>
+                <span className="font-semibold text-white text-sm">{apiSamples.length ? (apiSamples[apiSamples.length - 1] >= 0 ? `${apiSamples[apiSamples.length - 1]} ms` : 'fail') : '—'}</span>
               </div>
-              <div>
-                <p className="text-slate-400 uppercase tracking-widest">Size</p>
-                <p className="font-black text-white">{lastApiSize !== null ? `${lastApiSize} B` : '—'}</p>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400 text-xs uppercase">Size</span>
+                <span className="font-semibold text-white text-sm">{lastApiSize !== null ? `${lastApiSize} B` : '—'}</span>
               </div>
             </div>
 
-            <div className="h-28 bg-white rounded border border-slate-200 flex relative">
-              {/* Y-Axis Labels */}
+            <div className="h-28 bg-white rounded border border-slate-200 flex relative p-2">
               <div className="w-12 flex flex-col justify-between text-right py-1 px-2 shrink-0">
                 {[...Array(3)].map((_, i) => {
                   const maxVal = Math.max(1, ...apiSamples.filter(n => n >= 0), 200);
@@ -320,15 +329,13 @@ const LogMonitorPage: React.FC = () => {
                   );
                 })}
               </div>
-
-              {/* Recharts Graph */}
               <div className="flex-1">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={apiSamples.map((val) => ({ value: val < 0 ? null : val }))} margin={{ top: 5, right: 5, bottom: 5, left: 0 }}>
                     <defs>
                       <linearGradient id="apiGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#6366f1" stopOpacity="0.3" />
-                        <stop offset="100%" stopColor="#6366f1" stopOpacity="0.05" />
+                        <stop offset="0%" stopColor="#6366f1" stopOpacity="0.28" />
+                        <stop offset="100%" stopColor="#6366f1" stopOpacity="0.04" />
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="0" vertical={false} stroke="#e2e8f0" />
@@ -339,14 +346,18 @@ const LogMonitorPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="text-[9px] text-slate-400 shrink-0 max-h-20 overflow-y-auto">
+            <div className="text-[10px] text-slate-400 shrink-0">
               <p className="font-bold text-white mb-1">Recent:</p>
               <ul className="space-y-0.5">
-                {recentApiRef.current.length === 0 ? <li className="opacity-40">No checks yet</li> : recentApiRef.current.map((r, idx) => (
-                  <li key={idx} className={`${r.status && r.status >= 200 && r.status < 300 ? 'text-green-400' : r.status ? 'text-yellow-400' : 'text-red-400'}`}>
-                    {new Date(r.ts).toLocaleTimeString()} — {r.status ?? 'ERR'} {r.time !== null ? `${r.time}ms` : ''} {r.size ? `${r.size}B` : ''}
-                  </li>
-                ))}
+                {recentApiRef.current.length === 0 ? (
+                  <li className="opacity-40">No checks yet</li>
+                ) : (
+                  recentApiRef.current.slice(0, 4).map((r, idx) => (
+                    <li key={idx} className={`${r.status && r.status >= 200 && r.status < 300 ? 'text-green-400' : r.status ? 'text-yellow-400' : 'text-red-400'}`}>
+                      {new Date(r.ts).toLocaleTimeString()} — {r.status ?? 'ERR'} {r.time !== null ? `${r.time}ms` : ''} {r.size ? `${r.size}B` : ''}
+                    </li>
+                  ))
+                )}
               </ul>
             </div>
           </div>
