@@ -161,13 +161,18 @@ const LogMonitorPage: React.FC = () => {
             <span className="text-[#0a0e27]">Link: {socket.connected ? 'OK' : 'LOST'}</span>
           </div>
           <span className="px-3 py-1 border border-slate-300 rounded bg-white text-[#0a0e27] tracking-[0.2em] text-[8px]">LIVE</span>
-          <button
-            onClick={() => setShowNavLogs(s => !s)}
-            className={`px-2 py-1 rounded border border-slate-300 text-[9px] font-black uppercase tracking-wider ${showNavLogs ? 'bg-white text-[#0a0e27]' : 'bg-transparent text-slate-500'}`}
-            title="Format: toggle navigation logs"
-          >
-            Format
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowNavLogs(s => !s)}
+              className={`px-2 py-1 rounded border border-slate-300 text-[9px] font-black uppercase tracking-wider ${showNavLogs ? 'bg-white text-[#0a0e27]' : 'bg-transparent text-slate-500'}`}
+              title="Toggle hiding of navigation logs"
+            >
+              Hide Navigation Logs
+            </button>
+            <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${!showNavLogs ? 'bg-white text-[#0a0e27]' : 'bg-transparent text-slate-400'} `}>
+              {!showNavLogs ? 'Yes' : 'No'}
+            </span>
+          </div>
         </div>
       </div>
 
