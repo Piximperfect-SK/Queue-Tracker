@@ -844,7 +844,7 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
                 {/* Table Content Section */}
                 <div className="p-2 flex flex-col flex-1 min-h-0">
                   <div className="flex-1 overflow-auto">
-                    <table className="w-full table-fixed border-collapse">
+                    <table className="w-full table-fixed border-collapse h-full">
                       <thead>
                         <tr className="text-[10px] font-black text-slate-900 uppercase tracking-widest border-b-2 border-slate-300">
                           {SHIFTS.map(shift => {
@@ -864,21 +864,21 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
                           })}
                         </tr>
                       </thead>
-                      <tbody>
-                        <tr>
+                      <tbody className="h-full">
+                        <tr className="h-full">
                           {SHIFTS.map((shift) => {
                             const colors = getShiftColor(shift);
                             const shiftHandlers = getHandlersForShift(shift);
                             return (
-                              <td key={shift} className="align-top px-2 pb-3 border-r border-slate-300">
+                              <td key={shift} className="align-top px-2 pb-3 border-r border-slate-300 h-full align-top">
                                 <div className="sr-only">{shift}</div>
-                                <DroppableContainer id={shift} className="px-0 pt-3 pb-3">
+                                <DroppableContainer id={shift} className="px-0 pt-3 pb-3 h-full">
                                   <SortableContext
                                     id={shift}
                                     items={shiftHandlers.map(a => a.id)}
                                     strategy={verticalListSortingStrategy}
                                   >
-                                    <ul className="flex flex-col gap-1.5">
+                                    <ul className="flex flex-col gap-1.5 h-full">
                                       {shiftHandlers.map(handler => (
                                         <SortableHandler 
                                           key={handler.id} 
@@ -891,7 +891,7 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
                                         />
                                       ))}
                                       {shiftHandlers.length === 0 && (
-                                        <li className="flex flex-col items-center justify-center p-4 opacity-80 shrink-0 border-2 border-dashed border-slate-200 rounded-3xl mt-2 bg-transparent">
+                                        <li className="flex flex-col items-center justify-center p-4 opacity-80 shrink-0 border-2 border-dashed border-slate-200 rounded-3xl mt-2 bg-transparent h-full">
                                           <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Empty</span>
                                         </li>
                                       )}
