@@ -244,28 +244,14 @@ function App() {
   return (
     <Router>
       <NavigationLogger />
-      <div className="h-screen w-full relative overflow-hidden font-sans selection:bg-blue-500/30 text-slate-900">
-        {/* Background Image */}
-        <img src={bgImage} alt="Background" className="absolute inset-0 w-full h-full object-cover scale-105" />
-        
-        {/* Background visible — overlay removed to expose wallpaper */}
-
-        <div className="relative z-10 flex flex-col h-full">
-          <Navbar 
-            currentUser={currentUser!} 
-            onLogout={handleLogout} 
-            onlineUsers={onlineUsers} 
-          />
-          <main className="flex-1 w-full max-w-full mx-auto px-3 py-2 overflow-hidden">
-            <Routes>
-              <Route path="/" element={<RosterPage selectedDate={selectedDate} setSelectedDate={setSelectedDate} />} />
-              <Route path="/tracker" element={<TrackerPage selectedDate={selectedDate} setSelectedDate={setSelectedDate} />} />
-              <Route path="/settings" element={<SettingsPage />} />
-              <Route path="/logs" element={<LogMonitorPage />} />
-            </Routes>
-          </main>
-        </div>
-      </div>
+      <AppFrame
+        currentUser={currentUser!}
+        onLogout={handleLogout}
+        onlineUsers={onlineUsers}
+        selectedDate={selectedDate}
+        setSelectedDate={setSelectedDate}
+        bgImage={bgImage}
+      />
     </Router>
   );
 }
@@ -282,4 +268,37 @@ const NavigationLogger: React.FC = () => {
   }, [location.pathname, location.search]);
 
   return null;
+};
+
+const AppFrame: React.FC<{
+  currentUser: string;
+  onLogout: () => void;
+  onlineUsers: string[];
+  selectedDate: string;
+  setSelectedDate: (date: string) => void;
+  bgImage: string;
+}> = ({ currentUser, onLogout, onlineUsers, selectedDate, setSelectedDate, bgImage }) => {
+  const location = useLocation();
+  const isTracker = location.pathname === '/tracker';
+
+  return (
+    <div className="h-screen w-full relative overflow-hidden font-sans selection:bg-blue-500/30 text-slate-900">
+      {/* Background Image */}
+      <img src={bgImage} alt="Background" className="absolute inset-0 w-full h-full object-cover scale-105" />
+
+      {/* Background visible — overlay removed to expose wallpaper */}
+
+      <div className="relative z-10 flex flex-col h-full">
+        <Navbar currentUser={currentUser} onLogout={onLogout} onlineUsers={onlineUsers} />
+        <main className={`flex-1 w-full max-w-full mx-auto overflow-hidden ${isTracker ? 'px-0 py-0' : 'px-3 py-2'}`}>
+          <Routes>
+            <Route path="/" element={<RosterPage selectedDate={selectedDate} setSelectedDate={setSelectedDate} />} />
+            <Route path="/tracker" element={<TrackerPage selectedDate={selectedDate} setSelectedDate={setSelectedDate} />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/logs" element={<LogMonitorPage />} />
+          </Routes>
+        </main>
+      </div>
+    </div>
+  );
 };

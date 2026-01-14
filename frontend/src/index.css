@@ -16,3 +16,99 @@ html, body, #root {
     scrollbar-width: none;
   }
 }
+
+@layer components {
+  :root {
+    /* Fixed heights for the tracker table */
+    --tracker-head-height: 28px;
+    --tracker-row-height: 31px;
+  }
+
+  .tracker-table {
+    border: 1px solid rgba(15,23,42,0.06);
+  }
+  .tracker-table th, .tracker-table td {
+    vertical-align: middle;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .tracker-table {
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  .tracker-table thead th {
+    background-color: rgba(247,250,252,0.95);
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
+  }
+  .tracker-table td input {
+    font-family: inherit;
+  }
+
+  /* Compact density mode (smaller paddings & fonts to fit more rows) */
+  .tracker-compact thead th {
+    padding: 0.45rem 0.5rem;
+    font-size: 0.85rem;
+  }
+  .tracker-compact td {
+    padding: 0.45rem 0.5rem;
+    font-size: 0.9rem;
+  }
+  .tracker-compact td input {
+    padding: 6px 8px;
+    font-size: 0.85rem;
+  }
+  .tracker-compact td button {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+  }
+  .tracker-compact td .inline-flex {
+    gap: 0.4rem;
+  }
+
+  /* Super compact mode — aggressive reductions to fit ~18-20 rows */
+  .tracker-super-compact thead tr {
+    height: var(--tracker-head-height);
+  }
+  .tracker-super-compact thead th {
+    height: var(--tracker-head-height);
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    padding-left: 0.35rem !important;
+    padding-right: 0.35rem !important;
+    font-size: 0.76rem;
+    line-height: 1.1;
+  }
+  .tracker-super-compact tbody tr {
+    height: var(--tracker-row-height);
+  }
+  .tracker-super-compact td {
+    height: var(--tracker-row-height);
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    padding-left: 0.35rem !important;
+    padding-right: 0.35rem !important;
+    font-size: 0.84rem;
+    line-height: 1.1;
+  }
+  .tracker-super-compact td input {
+    height: 22px;
+    padding: 0 8px;
+    font-size: 0.82rem;
+  }
+  .tracker-super-compact td button {
+    width: 24px !important;
+    height: 24px !important;
+    padding: 0 !important;
+    font-size: 1rem;
+  }
+  .tracker-super-compact td .inline-flex {
+    gap: 0.22rem;
+  }
+  /* Tighten header area to free more vertical space */
+  .productivity-header {
+    padding: 0.35rem 0.75rem;
+  }
+}
