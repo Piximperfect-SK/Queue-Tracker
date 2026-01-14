@@ -23,6 +23,17 @@
       }
     };
 
+const getShiftLabel = (shift: string) => {
+  switch (shift) {
+    case '6AM-3PM': return 'Morning Shift';
+    case '12PM-9PM': return 'Afternoon Shift';
+    case '1PM-10PM': return 'Afternoon Team';
+    case '2PM-11PM': return 'Noon Night Shift';
+    case '10PM-7AM': return 'Night Shift';
+    default: return shift;
+  }
+};
+
     interface TrackerPageProps {
       selectedDate: string;
       setSelectedDate: (date: string) => void;
@@ -86,6 +97,7 @@
         const timer = setInterval(() => setCurrentTime(new Date()), 30000);
         return () => clearInterval(timer);
       }, []);
+
 
       useEffect(() => {
           const handleHandlers = (data: Handler[]) => {
@@ -300,36 +312,36 @@
       };
 
       return (
-        <div className="h-full flex flex-col overflow-hidden px-4 pb-4">
+        <div className="h-full w-full flex flex-col overflow-hidden bg-white">
           <div className="flex-1 flex flex-col h-full min-h-0">
-            <div className="flex flex-col h-full min-h-0 bg-white/90 backdrop-blur-sm rounded-2xl text-black border border-white/30">
-              <div className="px-5 py-3 flex justify-between items-center shrink-0 rounded-t-2xl bg-white/90 border-b border-white/30">
-                <div className="flex items-center space-x-6">
-                  <div className="flex items-center space-x-4">
-                    <div className="w-8 h-8 bg-[#393E46] rounded-xl flex items-center justify-center border border-[#393E46] shadow-sm">
+            <div className="flex flex-col h-full min-h-0 bg-white text-black border border-slate-200 overflow-hidden">
+              <div className="px-4 py-2 flex justify-between items-center shrink-0 bg-white border-b border-slate-200 productivity-header">
+                <div className="flex items-center space-x-4">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-7 h-7 bg-[#393E46] rounded-lg flex items-center justify-center border border-[#393E46] shadow-sm">
                       <ShieldCheck size={16} className="text-white" />
                     </div>
                     <div className="flex flex-col">
-                      <h1 className="text-lg font-black text-[#222831] tracking-tight leading-none uppercase">Productivity Tracker</h1>
-                      <p className="text-[8px] text-slate-500 font-bold uppercase tracking-[0.25em] mt-0.5">Live Performance Board</p>
+                      <h1 className="text-base font-black text-[#222831] tracking-tight leading-none uppercase">Productivity Tracker</h1>
+                      <p className="text-[7px] text-slate-500 font-bold uppercase tracking-[0.22em]">Live Performance Board</p>
                     </div>
                   </div>
 
-                  <div className="h-8 w-px bg-slate-200" />
+                  <div className="h-7 w-px bg-slate-200" />
 
-                  <div className="flex items-center h-8 gap-1 bg-white/20 backdrop-blur-md px-2 rounded-xl border border-slate-200">
+                  <div className="flex items-center h-7 gap-1 bg-white/20 backdrop-blur-md px-1.5 rounded-lg border border-slate-200">
                     <button onClick={() => {
                         const [y, m, d] = selectedDate.split('-').map(Number);
                         const dateObj = new Date(y, m - 1, d);
                         dateObj.setDate(dateObj.getDate() - 1);
                         setSelectedDate(dateObj.toLocaleDateString('en-CA'));
-                      }} className="p-1 hover:bg-black/5 rounded-lg transition-colors text-slate-400 hover:text-black">
+                      }} className="p-1 hover:bg-black/5 rounded-md transition-colors text-slate-400 hover:text-black">
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" />
                       </svg>
                     </button>
 
-                    <div className="flex items-center gap-2 cursor-pointer group px-1 relative text-[10px] font-black text-black uppercase tracking-widest min-w-20 text-center">
+                    <div className="flex items-center gap-2 cursor-pointer group px-1 relative text-[9px] font-black text-black uppercase tracking-widest min-w-20 text-center">
                       {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
                       <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="absolute inset-0 opacity-0 cursor-pointer z-10 w-full" />
                     </div>
@@ -339,60 +351,60 @@
                         const dateObj = new Date(y, m - 1, d);
                         dateObj.setDate(dateObj.getDate() + 1);
                         setSelectedDate(dateObj.toLocaleDateString('en-CA'));
-                      }} className="p-1 hover:bg-black/5 rounded-lg transition-colors text-slate-400 hover:text-black">
+                      }} className="p-1 hover:bg-black/5 rounded-md transition-colors text-slate-400 hover:text-black">
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
                       </svg>
                     </button>
                   </div>
 
-                  <div className="flex items-center bg-white/20 rounded-xl p-1 border border-slate-200 overflow-hidden ml-2">
-                    <div className="flex items-center gap-3 px-4 py-1.5 bg-white/60 rounded-lg shadow-sm">
-                      <span className="text-[12px] font-black text-[#00ADB5] uppercase tracking-tighter border-r border-slate-200 pr-3">IST</span>
-                      <span className="text-[15px] font-black text-[#222831] tabular-nums tracking-tighter leading-none">{times.ist}</span>
+                  <div className="flex items-center bg-white/20 rounded-lg p-0.5 border border-slate-200 overflow-hidden ml-2">
+                    <div className="flex items-center gap-2 px-2.5 py-1 bg-white/60 rounded-md shadow-sm">
+                      <span className="text-[10px] font-black text-[#00ADB5] uppercase tracking-tighter border-r border-slate-200 pr-2">IST</span>
+                      <span className="text-[12px] font-black text-[#222831] tabular-nums tracking-tighter leading-none">{times.ist}</span>
                     </div>
-                    <div className="flex items-center gap-3 px-4 py-1.5 rounded-lg ml-0.5">
-                      <span className="text-[12px] font-black text-[#393E46] uppercase tracking-tighter border-r border-slate-200 pr-3">GMT</span>
-                      <span className="text-[15px] font-black text-black tabular-nums tracking-tighter leading-none">{times.uk}</span>
+                    <div className="flex items-center gap-2 px-2.5 py-1 rounded-md ml-0.5">
+                      <span className="text-[10px] font-black text-[#393E46] uppercase tracking-tighter border-r border-slate-200 pr-2">GMT</span>
+                      <span className="text-[12px] font-black text-black tabular-nums tracking-tighter leading-none">{times.uk}</span>
                     </div>
                   </div>
                 </div>
-
-                <div className="flex items-center bg-white/90 backdrop-blur-xl rounded-2xl border border-white/20 overflow-hidden divide-x divide-slate-200/50 shadow-xl">
-                  <div className="px-6 py-2 flex flex-col items-center min-w-25">
-                    <span className="text-[8px] font-black text-[#00ADB5] uppercase tracking-[0.2em] mb-0.5">Total INC</span>
-                    <span className="text-base font-black text-[#222831] tabular-nums leading-none tracking-tight">{totalStats.incidents}</span>
+                <div className="flex items-center bg-white/90 backdrop-blur-xl rounded-xl border border-white/20 overflow-hidden divide-x divide-slate-200/50 shadow-xl">
+                  <div className="px-4 py-1.5 flex flex-col items-center min-w-20">
+                    <span className="text-[7px] font-black text-[#00ADB5] uppercase tracking-[0.2em]">Total INC</span>
+                    <span className="text-sm font-black text-[#222831] tabular-nums leading-none tracking-tight">{totalStats.incidents}</span>
                   </div>
-                  <div className="px-6 py-2 flex flex-col items-center min-w-25">
-                    <span className="text-[8px] font-black text-[#393E46] uppercase tracking-[0.2em] mb-0.5">Total TASK</span>
-                    <span className="text-base font-black text-[#222831] tabular-nums leading-none tracking-tight">{totalStats.sctasks}</span>
+                  <div className="px-4 py-1.5 flex flex-col items-center min-w-20">
+                    <span className="text-[7px] font-black text-[#393E46] uppercase tracking-[0.2em]">Total TASK</span>
+                    <span className="text-sm font-black text-[#222831] tabular-nums leading-none tracking-tight">{totalStats.sctasks}</span>
                   </div>
-                  <div className="px-6 py-2 flex flex-col items-center min-w-25">
-                    <span className="text-[8px] font-black text-[#00ADB5] uppercase tracking-[0.2em] mb-0.5">Total Calls</span>
-                    <span className="text-base font-black text-[#222831] tabular-nums leading-none tracking-tight">{totalStats.calls}</span>
+                  <div className="px-4 py-1.5 flex flex-col items-center min-w-20">
+                    <span className="text-[7px] font-black text-[#00ADB5] uppercase tracking-[0.2em]">Total Calls</span>
+                    <span className="text-sm font-black text-[#222831] tabular-nums leading-none tracking-tight">{totalStats.calls}</span>
                   </div>
                 </div>
               </div>
 
-              <div className="flex-1 min-h-0 p-4">
-                <div className="h-full overflow-auto rounded-b-2xl">
-                  <table className="w-full text-left border-separate" style={{ borderSpacing: 0 }}>
+              <div className="flex-1 min-h-0 p-0 pb-2">
+                <div className="h-full overflow-hidden">
+                  <table className={`w-full text-center table-fixed border-collapse tracker-table tracker-super-compact`} style={{maxWidth: '100%', boxSizing: 'border-box'}}>
                     <thead>
                       
-                      <tr className="sticky z-20" style={{ top: 0 }}>
-                        <th className="px-6 py-2.5 text-center border-r border-slate-200 first:rounded-tl-2xl">On Shift Handlers</th>
-                        <th className="px-6 py-2.5 text-center border-r border-slate-200">Shift</th>
-                        <th className="px-6 py-2.5 text-center border-r border-slate-200">INC</th>
-                        <th className="px-6 py-2.5 text-center border-r border-slate-200">TASK</th>
-                        <th className="px-6 py-2.5 text-center border-r border-slate-200">CALL</th>
-                        <th className="px-6 py-2.5 text-center border-r border-slate-200">Notes</th>
-                        <th className="px-6 py-2.5 text-center last:rounded-tr-2xl">Total</th>
+                      <tr className="sticky top-0 z-20 bg-white/70 backdrop-blur-sm">
+                        <th className="px-3 py-2 text-center border-r border-slate-200 text-xs font-semibold text-slate-600 first:rounded-tl-md" style={{width: '22%'}}>On Shift</th>
+                        <th className="px-2 py-2 text-center border-r border-slate-200 text-xs font-semibold text-slate-600" style={{width: '12%'}}>Shift</th>
+                        <th className="px-2 py-2 text-center border-r border-slate-200 text-xs font-semibold text-slate-600" style={{width: '10%'}}>Shift Time</th>
+                        <th className="px-2 py-2 text-center border-r border-slate-200 text-xs font-semibold text-slate-600" style={{width: '9%'}}>INC</th>
+                        <th className="px-2 py-2 text-center border-r border-slate-200 text-xs font-semibold text-slate-600" style={{width: '9%'}}>TASK</th>
+                        <th className="px-2 py-2 text-center border-r border-slate-200 text-xs font-semibold text-slate-600" style={{width: '9%'}}>CALL</th>
+                        <th className="px-2 py-2 text-center border-r border-slate-200 text-xs font-semibold text-slate-600" style={{width: '20%'}}>Notes</th>
+                        <th className="px-2 py-2 text-center last:rounded-tr-md text-xs font-semibold text-slate-600" style={{width: '5%'}}>Total</th>
                       </tr>
                     </thead>
                     <tbody>
                       {!activeHandlers.length ? (
                         <tr>
-                          <td colSpan={7} className="py-20 text-center opacity-30">
+                          <td colSpan={8} className="py-20 text-center opacity-30">
                             <ShieldCheck size={64} className="mx-auto mb-4 text-slate-400" strokeWidth={1} />
                             <p className="text-xs font-black uppercase tracking-[0.2em] text-black">No Handlers on Shift</p>
                           </td>
@@ -403,44 +415,47 @@
                         const rowTotal = handlerStats.incidents + handlerStats.sctasks + handlerStats.calls;
 
                         return (
-                          <tr key={handler.id} className={`group border-b border-slate-200 bg-white/20 hover:bg-white/30 transition-all ${isDisabled ? 'opacity-30 grayscale' : ''}`}>
-                            <td className="px-6 py-2 text-center min-w-50 border-r border-slate-200">
-                              <div className="flex flex-col items-center">
-                                <span className="text-lg font-black text-black leading-none whitespace-nowrap select-none">{handler.name}</span>
+                          <tr key={handler.id} className={`group border-b border-slate-200 bg-white transition-colors hover:bg-slate-50 ${isDisabled ? 'opacity-30 grayscale' : ''}`}>
+                            <td className="px-3 py-2 text-center border-r border-slate-200">
+                              <div className="flex items-center justify-center gap-2 min-w-0">
+                                <div className="text-[15px] font-semibold text-slate-800 truncate min-w-0">{handler.name}</div>
                                 {handler.isQH && (
-                                  <span className="text-[6px] font-black text-blue-600 uppercase tracking-[0.3em] mt-1">Queue Handler (QH)</span>
+                                  <span className="shrink-0 text-[10px] font-bold text-[#00ADB5] uppercase tracking-wide">QH</span>
                                 )}
                               </div>
                             </td>
-                            <td className="py-2 text-center border-r border-slate-200">
-                              <span className={`inline-flex px-3 py-1 rounded-lg font-black text-[10px] uppercase tracking-widest border border-slate-200 ${getShiftColor(handler.shift).light} ${getShiftColor(handler.shift).text} shadow-sm`}>{handler.shift}</span>
+                            <td className="px-2 py-1.5 text-center border-r border-slate-200">
+                              <span className={`inline-flex px-2 py-0.5 rounded-md text-[12px] font-semibold tracking-tight border ${getShiftColor(handler.shift).border} ${getShiftColor(handler.shift).light} ${getShiftColor(handler.shift).text}`}>{getShiftLabel(handler.shift)}</span>
                             </td>
-                            <td className="px-2 py-2 border-r border-slate-200">
-                              <div className="flex items-center justify-center gap-1.5">
-                                <button onClick={() => updateStat(handler.id, 'incidents', Math.max(0, handlerStats.incidents - 1))} disabled={isDisabled} className="w-6 h-6 flex items-center justify-center rounded-lg bg-black/5 hover:bg-black/10 text-black transition-all disabled:opacity-50 font-black text-xs border border-slate-200">−</button>
-                                <span className={`w-5 text-center font-black text-xs ${flashMap[`${handler.id}-incidents`] === 'positive' ? 'text-emerald-600 bg-emerald-100/60 rounded' : flashMap[`${handler.id}-incidents`] === 'negative' ? 'text-red-600 bg-red-100/60 rounded' : 'text-black'}`}>{handlerStats.incidents}</span>
-                                <button onClick={() => updateStat(handler.id, 'incidents', handlerStats.incidents + 1)} disabled={isDisabled} className="w-6 h-6 flex items-center justify-center rounded-lg bg-black/5 hover:bg-black/10 text-black transition-all disabled:opacity-50 font-black text-xs border border-slate-200">+</button>
+                            <td className="px-2 py-1.5 text-center border-r border-slate-200">
+                              <span className={`inline-flex px-2 py-0.5 rounded-md text-[11px] font-semibold tracking-tight border ${getShiftColor(handler.shift).border} ${getShiftColor(handler.shift).light} ${getShiftColor(handler.shift).text}`}>{handler.shift}</span>
+                            </td>
+                            <td className="px-2 py-1.5 border-r border-slate-200">
+                              <div className="flex items-center justify-center gap-2">
+                                <button onClick={() => updateStat(handler.id, 'incidents', Math.max(0, handlerStats.incidents - 1))} disabled={isDisabled} className="w-6 h-6 flex items-center justify-center rounded-full bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 transition disabled:opacity-50">−</button>
+                                <span className={`w-5 text-center font-semibold text-[14px] tabular-nums ${flashMap[`${handler.id}-incidents`] === 'positive' ? 'text-emerald-600 bg-emerald-100/60 rounded' : flashMap[`${handler.id}-incidents`] === 'negative' ? 'text-red-600 bg-red-100/60 rounded' : 'text-slate-800'}`}>{handlerStats.incidents}</span>
+                                <button onClick={() => updateStat(handler.id, 'incidents', handlerStats.incidents + 1)} disabled={isDisabled} className="w-6 h-6 flex items-center justify-center rounded-full bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 transition disabled:opacity-50">+</button>
                               </div>
                             </td>
-                            <td className="px-2 py-2 border-r border-slate-200">
-                              <div className="flex items-center justify-center gap-1.5">
-                                <button onClick={() => updateStat(handler.id, 'sctasks', Math.max(0, handlerStats.sctasks - 1))} disabled={isDisabled} className="w-6 h-6 flex items-center justify-center rounded-lg bg-black/5 hover:bg-black/10 text-black transition-all disabled:opacity-50 font-black text-xs border border-slate-200">−</button>
-                                <span className={`w-5 text-center font-black text-xs ${flashMap[`${handler.id}-sctasks`] === 'positive' ? 'text-emerald-600 bg-emerald-100/60 rounded' : flashMap[`${handler.id}-sctasks`] === 'negative' ? 'text-red-600 bg-red-100/60 rounded' : 'text-black'}`}>{handlerStats.sctasks}</span>
-                                <button onClick={() => updateStat(handler.id, 'sctasks', handlerStats.sctasks + 1)} disabled={isDisabled} className="w-6 h-6 flex items-center justify-center rounded-lg bg-black/5 hover:bg-black/10 text-black transition-all disabled:opacity-50 font-black text-xs border border-slate-200">+</button>
+                            <td className="px-2 py-1.5 border-r border-slate-200">
+                              <div className="flex items-center justify-center gap-2">
+                                <button onClick={() => updateStat(handler.id, 'sctasks', Math.max(0, handlerStats.sctasks - 1))} disabled={isDisabled} className="w-6 h-6 flex items-center justify-center rounded-full bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 transition disabled:opacity-50">−</button>
+                                <span className={`w-5 text-center font-semibold text-[14px] tabular-nums ${flashMap[`${handler.id}-sctasks`] === 'positive' ? 'text-emerald-600 bg-emerald-100/60 rounded' : flashMap[`${handler.id}-sctasks`] === 'negative' ? 'text-red-600 bg-red-100/60 rounded' : 'text-slate-800'}`}>{handlerStats.sctasks}</span>
+                                <button onClick={() => updateStat(handler.id, 'sctasks', handlerStats.sctasks + 1)} disabled={isDisabled} className="w-6 h-6 flex items-center justify-center rounded-full bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 transition disabled:opacity-50">+</button>
                               </div>
                             </td>
-                            <td className="px-2 py-2 border-r border-slate-200">
-                              <div className="flex items-center justify-center gap-1.5">
-                                <button onClick={() => updateStat(handler.id, 'calls', Math.max(0, handlerStats.calls - 1))} disabled={isDisabled} className="w-6 h-6 flex items-center justify-center rounded-lg bg-black/5 hover:bg-black/10 text-black text-[10px] text-center border border-slate-200">−</button>
-                                <span className={`w-5 text-center font-black text-xs ${flashMap[`${handler.id}-calls`] === 'positive' ? 'text-emerald-600 bg-emerald-100/60 rounded' : flashMap[`${handler.id}-calls`] === 'negative' ? 'text-red-600 bg-red-100/60 rounded' : 'text-black'}`}>{handlerStats.calls}</span>
-                                <button onClick={() => { setCallData({ ...callData, handlerId: handler.id }); setIsCallModalOpen(true); }} disabled={isDisabled} className="w-6 h-6 flex items-center justify-center rounded-lg bg-[#00ADB5] hover:bg-[#00ADB5]/80 text-white shadow-lg shadow-[#00ADB5]/20 text-xs text-center font-black border border-[#00ADB5]/60">+</button>
+                            <td className="px-2 py-1.5 border-r border-slate-200">
+                              <div className="flex items-center justify-center gap-2">
+                                <button onClick={() => updateStat(handler.id, 'calls', Math.max(0, handlerStats.calls - 1))} disabled={isDisabled} className="w-6 h-6 flex items-center justify-center rounded-full bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 transition disabled:opacity-50">−</button>
+                                <span className={`w-5 text-center font-semibold text-[14px] tabular-nums ${flashMap[`${handler.id}-calls`] === 'positive' ? 'text-emerald-600 bg-emerald-100/60 rounded' : flashMap[`${handler.id}-calls`] === 'negative' ? 'text-red-600 bg-red-100/60 rounded' : 'text-slate-800'}`}>{handlerStats.calls}</span>
+                                <button onClick={() => { setCallData({ ...callData, handlerId: handler.id }); setIsCallModalOpen(true); }} disabled={isDisabled} className="w-6 h-6 flex items-center justify-center rounded-full bg-[#00ADB5] hover:bg-[#00ADB5]/90 text-white shadow-sm text-[12px] font-bold">+</button>
                               </div>
                             </td>
-                            <td className="px-3 py-2 border-r border-slate-200">
-                              <input type="text" placeholder="Log status..." disabled={isDisabled} value={handlerStats.comments} onChange={(e) => updateStat(handler.id, 'comments', e.target.value)} className="w-full px-2 py-1 text-[10px] text-black bg-white/40 border border-slate-200 rounded-lg outline-none focus:ring-1 focus:ring-blue-200 transition-all placeholder:text-slate-400 disabled:opacity-50 font-black" />
+                            <td className="px-2 py-1.5 border-r border-slate-200">
+                              <input type="text" placeholder="Log status..." disabled={isDisabled} value={handlerStats.comments} onChange={(e) => updateStat(handler.id, 'comments', e.target.value)} className="w-full px-2 py-1.5 text-[14px] text-center text-slate-800 bg-white border border-slate-200 rounded-md outline-none focus:ring-1 focus:ring-[#00ADB5]/20 transition placeholder:text-slate-400 disabled:opacity-50" />
                             </td>
-                            <td className="px-4 py-2 text-center">
-                              <div className="inline-flex items-center justify-center px-2 py-0.5 bg-[#222831] text-white rounded-md font-black text-xs min-w-7.5 shadow-lg shadow-[#222831]/10">{rowTotal}</div>
+                            <td className="px-2 py-1.5 text-center">
+                              <div className="inline-flex items-center justify-center px-2 py-0.5 bg-slate-900 text-white rounded-md font-semibold text-[13px]">{rowTotal}</div>
                             </td>
                           </tr>
                         );
@@ -455,25 +470,31 @@
           {/* Call Modal - Light Glassmorphic */}
           {isCallModalOpen && (
             <div className="fixed inset-0 z-300 flex items-center justify-center p-4">
-              <div className="absolute inset-0 bg-white/40 backdrop-blur-md" onClick={() => setIsCallModalOpen(false)} />
-              <div className="relative bg-white/90 border border-white/40 rounded-[40px] w-[320px] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.1)] animate-in zoom-in-95 duration-200">
-                {/* Header */}
-                <div className="px-8 pt-8 pb-4 flex justify-between items-center">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-2xl bg-[#00ADB5]/10 border border-[#00ADB5]/20 flex items-center justify-center">
-                      <PhoneCall size={18} className="text-[#00ADB5]" />
-                    </div>
-                    <div>
-                      <h3 className="text-[#222831] font-black text-xs uppercase tracking-[0.2em] leading-none">Call Record</h3>
-                      <p className="text-[7px] text-slate-500 font-bold uppercase tracking-widest mt-1">Logging productivity...</p>
-                    </div>
-                  </div>
-                  <button onClick={() => setIsCallModalOpen(false)} className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-all">
-                    <X size={20} />
-                  </button>
-                </div>
+              {/* Full-screen dimmer that catches clicks (no blur) */}
+              <div className="absolute inset-0 bg-black/10" onClick={() => setIsCallModalOpen(false)} />
 
-                <div className="px-8 pb-10 space-y-8">
+              {/* Localized blur sized to the modal card */}
+              <div className="relative">
+                <div className="absolute -inset-2 rounded-[44px] bg-white/40 backdrop-blur-sm pointer-events-none" />
+
+                <div className="relative bg-white/90 border border-white/40 rounded-[40px] w-[320px] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.1)] animate-in zoom-in-95 duration-200">
+                  {/* Header */}
+                  <div className="px-8 pt-8 pb-4 flex justify-between items-center">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-[#00ADB5]/10 border border-[#00ADB5]/20 flex items-center justify-center">
+                        <PhoneCall size={18} className="text-[#00ADB5]" />
+                      </div>
+                      <div>
+                        <h3 className="text-[#222831] font-black text-xs uppercase tracking-[0.2em] leading-none">Call Record</h3>
+                        <p className="text-[7px] text-slate-500 font-bold uppercase tracking-widest mt-1">Logging productivity...</p>
+                      </div>
+                    </div>
+                    <button onClick={() => setIsCallModalOpen(false)} className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-all">
+                      <X size={20} />
+                    </button>
+                  </div>
+
+                  <div className="px-8 pb-10 space-y-8">
                   {/* Ticket Input Section */}
                   <div className="space-y-3">
                     <div className="flex justify-between items-center px-1">
@@ -521,6 +542,7 @@
                     Submit Record
                   </button>
                 </div>
+              </div>
               </div>
             </div>
           )}
