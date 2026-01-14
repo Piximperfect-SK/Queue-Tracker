@@ -101,20 +101,27 @@ app.get('/', (req, res) => res.status(200).send('Queue Tracker API is Live!'));
 app.get('/health', (req, res) => res.status(200).send('Backend is running'));
 
 const FRONTEND_URL = (process.env.FRONTEND_URL || "http://localhost:5173").replace(/\/$/, "");
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || process.env.FRONTEND_URL || "").split(',').map(s => s.trim()).filter(Boolean);
 
-// STRICT CORS: Only allow the authorized frontend and localhost for development
+// STRICT CORS: Allow localhost and any origin listed in ALLOWED_ORIGINS (comma-separated),
+// or fall back to FRONTEND_URL. In emergencies set ALLOWED_ORIGINS='*' to allow all origins.
 const corsOptions = {
   origin: (origin, callback) => {
-    // If no origin (like mobile apps or curl), or if it matches our allowed patterns
     const cleanOrigin = origin ? origin.replace(/\/$/, "") : null;
     const isLocalhost = cleanOrigin && (cleanOrigin.includes('localhost') || cleanOrigin.includes('127.0.0.1'));
-    
-    if (!origin || isLocalhost || cleanOrigin === FRONTEND_URL) {
-      callback(null, true);
-    } else {
-      console.warn(`BLOCKED CORS connection from: ${origin}. Expected: ${FRONTEND_URL}`);
-      callback(new Error('Not allowed by CORS'));
+
+    if (!origin || isLocalhost) return callback(null, true);
+
+    // Allow if '*' present
+    if (ALLOWED_ORIGINS.includes('*')) return callback(null, true);
+
+    // Allow if exact match against allowed origins or FRONTEND_URL
+    if (cleanOrigin && (ALLOWED_ORIGINS.includes(cleanOrigin) || cleanOrigin === FRONTEND_URL)) {
+      return callback(null, true);
     }
+
+    console.warn(`BLOCKED CORS connection from: ${origin}. Allowed: ${ALLOWED_ORIGINS.length ? ALLOWED_ORIGINS.join(', ') : FRONTEND_URL}`);
+    callback(new Error('Not allowed by CORS'));
   },
   methods: ["GET", "POST"],
   credentials: true
