@@ -13,7 +13,8 @@ const LogMonitorPage: React.FC = () => {
   const [pingSamples, setPingSamples] = useState<number[]>([]);
   const [lastPing, setLastPing] = useState<number | null>(null);
   const lastSuccessRef = useRef<number | null>(null);
-  const [apiUrl, setApiUrl] = useState<string>(`${window.location.origin}/api/health`);
+  const defaultApiUrl = import.meta.env.VITE_BACKEND_URL ? `${import.meta.env.VITE_BACKEND_URL.replace(/\/$/, '')}/health` : `${window.location.origin}/api/health`;
+  const [apiUrl, setApiUrl] = useState<string>(defaultApiUrl);
   const [apiSamples, setApiSamples] = useState<number[]>([]);
   const [showNavLogs, setShowNavLogs] = useState<boolean>(true);
   const [lastApiStatus, setLastApiStatus] = useState<number | null>(null);
