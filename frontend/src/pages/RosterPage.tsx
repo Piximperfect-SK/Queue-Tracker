@@ -181,14 +181,14 @@ const SortableHandler: React.FC<SortableHandlerProps> = ({ handler, shift, color
     <li
       ref={setNodeRef}
       style={style}
-      className={`flex items-center justify-between px-3 h-12 rounded-xl transition-all group ${colors.card} hover:opacity-95 shadow-sm active:scale-[0.98] cursor-default` }
+      className={`flex items-center justify-between px-3 py-2 min-h-12 rounded-xl transition-all group ${colors.card} hover:opacity-95 shadow-sm active:scale-[0.98] cursor-default` }
     >
       <div className="flex items-center space-x-2 flex-1 min-w-0">
         <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-slate-800/40 hover:text-slate-900 transition-colors shrink-0">
           <GripVertical size={14} />
         </div>
         <div className="flex-1 min-w-0 text-center">
-          <span className="text-slate-900 font-semibold text-[16px] block leading-tight truncate">{handler.name}</span>
+          <span className="text-slate-900 font-semibold text-[16px] block leading-tight whitespace-normal break-words">{handler.name}</span>
         </div>
       </div>
 
