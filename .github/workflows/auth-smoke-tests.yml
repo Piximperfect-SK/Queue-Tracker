@@ -1,0 +1,43 @@
+name: Auth Smoke Tests
+
+on:
+  push:
+    branches:
+      - feature/auth-username-password
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  auth-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install backend deps
+        working-directory: ./backend
+        run: npm ci
+
+      - name: Run auth smoke tests
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI_TEST }}
+          REGISTRATION_SECRET: ${{ secrets.REGISTRATION_SECRET_TEST }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET_TEST }}
+          BACKEND_URL: http://127.0.0.1:3001
+        working-directory: ./backend
+        run: |
+          node server.js &
+          npx wait-on http://127.0.0.1:3001/health --timeout 30000
+          node scripts/testAuth.js
+
+      - name: Upload test artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: auth-test-outputs
+          path: backend/reports/**/*
