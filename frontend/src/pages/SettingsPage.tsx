@@ -96,21 +96,21 @@ const SettingsPage: React.FC = () => {
         <div className="flex gap-3 w-full xl:w-auto">
           <button 
             onClick={() => downloadLogsForDate(new Date().toISOString().split('T')[0])}
-            className="flex-1 xl:flex-none flex items-center justify-center space-x-2 bg-white/40 backdrop-blur-md border border-white/40 text-slate-600 px-5 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-white/60 transition-all shadow-sm active:scale-95"
+            className="flex-1 xl:flex-none flex items-center justify-center gap-3 bg-white/30 backdrop-blur-md border border-white/30 text-slate-700 px-5 py-3 rounded-full font-black text-[10px] uppercase tracking-widest hover:bg-white/50 transition-all shadow-sm active:scale-95"
           >
             <FileText size={16} className="text-blue-600" />
             <span>Daily Logs</span>
           </button>
           <button 
             onClick={() => downloadAllLogs()}
-            className="flex-1 xl:flex-none flex items-center justify-center space-x-2 bg-white/40 backdrop-blur-md border border-white/40 text-slate-600 px-5 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-white/60 transition-all shadow-sm active:scale-95"
+            className="flex-1 xl:flex-none flex items-center justify-center gap-3 bg-white/30 backdrop-blur-md border border-white/30 text-slate-700 px-5 py-3 rounded-full font-black text-[10px] uppercase tracking-widest hover:bg-white/50 transition-all shadow-sm active:scale-95"
           >
             <Database size={16} className="text-indigo-600" />
             <span>Archive</span>
           </button>
           <button
             onClick={addHandler}
-            className="flex-1 xl:flex-none flex items-center justify-center space-x-2 bg-[#222831] text-white px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-[#222831]/90 transition-all shadow-lg active:scale-95"
+            className="flex-1 xl:flex-none flex items-center justify-center gap-3 bg-[#222831] text-white px-6 py-3 rounded-full font-black text-[10px] uppercase tracking-widest hover:bg-[#222831]/90 transition-all shadow-lg active:scale-95"
           >
             <UserPlus size={16} />
             <span>Deploy New</span>
@@ -130,15 +130,14 @@ const SettingsPage: React.FC = () => {
           <div className="overflow-y-auto flex-1 p-6 scrollbar-hide">
             <div className="space-y-4">
               {handlers.map((handler) => (
-                <div key={handler.id} className="group bg-white/40 border border-white/40 rounded-2xl p-4 flex items-center justify-between transition-all hover:bg-white/60 hover:border-white/50 shadow-sm backdrop-blur-md">
+                <div key={handler.id} className="group bg-white/60 border border-white/40 rounded-2xl p-4 flex items-center justify-between transition-transform hover:scale-[1.01] shadow-xl backdrop-blur-md">
                   <div className="flex items-center space-x-4 flex-1">
-                    {/* Dedicated QH Toggle Button in front of name */}
                     <button 
                       onClick={() => toggleQH(handler.id)}
-                      className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all shrink-0 border shadow-sm group/btn ${
+                      className={`w-12 h-12 rounded-lg flex items-center justify-center transition-all shrink-0 border shadow-sm ${
                         handler.isQH 
                           ? 'bg-[#00ADB5] border-[#00ADB5] text-white shadow-[#00ADB5]/20' 
-                          : 'bg-white border-slate-200 text-slate-300 hover:border-[#00ADB5]/60 hover:text-[#00ADB5]'
+                          : 'bg-white border-slate-200 text-slate-400 hover:border-[#00ADB5]/60 hover:text-[#00ADB5]'
                       }`}
                       title={handler.isQH ? "Queue Handler (QH)" : "Assign as QH"}
                     >
@@ -150,11 +149,11 @@ const SettingsPage: React.FC = () => {
                         type="text" 
                         value={handler.name}
                         onChange={(e) => updateHandlerName(handler.id, e.target.value)}
-                        className="bg-transparent text-slate-950 font-black text-base w-full focus:outline-none focus:text-blue-600 transition-colors placeholder:text-slate-300 uppercase tracking-tight"
+                        className="bg-transparent text-slate-900 font-extrabold text-lg w-full focus:outline-none focus:text-[#00ADB5] transition-colors placeholder:text-slate-300 uppercase tracking-tight"
                         placeholder="Full Name"
                       />
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className={`text-[8px] font-black uppercase tracking-[0.2em] px-2 py-0.5 rounded-md border ${
+                      <div className="flex items-center gap-2 mt-2">
+                        <span className={`text-[9px] font-black uppercase tracking-[0.2em] px-2 py-1 rounded-md border ${
                           handler.isQH 
                             ? 'bg-[#00ADB5]/10 text-[#00ADB5] border-[#00ADB5]/20' 
                             : 'bg-black/5 text-slate-400 border-slate-200'
@@ -165,13 +164,15 @@ const SettingsPage: React.FC = () => {
                     </div>
                   </div>
                   
-                  <button 
-                    onClick={() => deleteHandler(handler.id)}
-                    className="p-3 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all ml-2"
-                    title="Decommission"
-                  >
-                    <Trash2 size={18} />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={() => deleteHandler(handler.id)}
+                      className="p-3 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all ml-2"
+                      title="Decommission"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

@@ -10,6 +10,9 @@ import { syncData, socket } from './utils/socket';
 import signinBg from './assets/videobackground-2.mp4';
 import bgImage from './assets/background.jpg';
 import { addLog } from './utils/logger';
+import { AuthProvider } from './auth/AuthContext';
+import LoginPanel from './pages/Auth/LoginPanel';
+import RegisterPanel from './pages/Auth/RegisterPanel';
 
 function App() {
   const [currentUser, setCurrentUser] = useState<string | null>(() => {
@@ -145,98 +148,122 @@ function App() {
   }
 
   // 2. Auth State
+  const [useAccountFlow, setUseAccountFlow] = React.useState<'none'|'login'|'register'>('none');
+
   if (!isAuthenticated) {
     return (
-      <div className="h-screen w-screen bg-slate-50 flex items-center justify-center p-6 relative overflow-hidden font-sans">
-        {/* Background Video for Auth Screen */}
-        <video 
-          autoPlay 
-          muted 
-          loop 
-          playsInline
-          className="absolute inset-0 w-full h-full object-cover scale-105"
-        >
-          <source src={signinBg} type="video/mp4" />
-        </video>
-        <div className="absolute inset-0 bg-white/20 backdrop-blur-[2px]" />
-        
-        <div className="w-full max-w-105 relative z-10">
-          <div className="bg-white/80 backdrop-blur-3xl rounded-[2.5rem] border border-white/50 shadow-2xl overflow-hidden p-10 animate-in fade-in zoom-in duration-500">
-            <div className="text-center mb-10">
-              <div className="w-14 h-14 bg-slate-900 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-slate-900/40">
-                <Fingerprint size={28} className="text-white" />
+      <AuthProvider>
+        <div className="h-screen w-screen bg-slate-50 flex items-center justify-center p-6 relative overflow-hidden font-sans">
+          {/* Background Video for Auth Screen */}
+          <video 
+            autoPlay 
+            muted 
+            loop 
+            playsInline
+            className="absolute inset-0 w-full h-full object-cover scale-105"
+          >
+            <source src={signinBg} type="video/mp4" />
+          </video>
+          <div className="absolute inset-0 bg-white/20 backdrop-blur-[2px]" />
+          
+          <div className="w-full max-w-105 relative z-10">
+            <div className="bg-white/80 backdrop-blur-3xl rounded-[2.5rem] border border-white/50 shadow-2xl overflow-hidden p-10 animate-in fade-in zoom-in duration-500">
+              <div className="text-center mb-10">
+                <div className="w-14 h-14 bg-slate-900 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-slate-900/40">
+                  <Fingerprint size={28} className="text-white" />
+                </div>
+                <h1 className="text-2xl font-black text-slate-950 mb-1 tracking-tight">Access Gate</h1>
+                <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Authorized Handlers Only</p>
               </div>
-              <h1 className="text-2xl font-black text-slate-950 mb-1 tracking-tight">Access Gate</h1>
-              <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Authorized Handlers Only</p>
-            </div>
 
-            <form onSubmit={handleLogin} className="space-y-6">
-              {authError && (
-                <div className="p-4 bg-rose-600/10 border border-rose-500/30 rounded-2xl text-rose-700 text-[10px] font-black uppercase tracking-widest text-center animate-pulse">
-                  {authError}
+              {useAccountFlow === 'none' ? (
+                <form onSubmit={handleLogin} className="space-y-6">
+                  {authError && (
+                    <div className="p-4 bg-rose-600/10 border border-rose-500/30 rounded-2xl text-rose-700 text-[10px] font-black uppercase tracking-widest text-center animate-pulse">
+                      {authError}
+                    </div>
+                  )}
+
+                  <div className="space-y-4">
+                    <div className="group">
+                      <div className="flex items-center gap-2 mb-2 ml-1">
+                        <User size={12} className="text-slate-500 group-focus-within:text-blue-600 transition-colors" />
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest group-focus-within:text-blue-600 transition-colors">Identification</label>
+                      </div>
+                      <input 
+                        autoFocus
+                        type="text" 
+                        value={tempName}
+                        onChange={(e) => setTempName(e.target.value)}
+                        placeholder="Enter your full name"
+                        disabled={isVerifying}
+                        className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:border-blue-600 focus:bg-white outline-none text-slate-950 font-black transition-all placeholder:text-slate-400"
+                        required
+                      />
+                    </div>
+
+                    <div className="group">
+                      <div className="flex items-center gap-2 mb-2 ml-1">
+                        <Lock size={12} className="text-slate-500 group-focus-within:text-blue-600 transition-colors" />
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest group-focus-within:text-blue-600 transition-colors">Security Key</label>
+                      </div>
+                      <input 
+                        type="password" 
+                        value={tempKey}
+                        onChange={(e) => setTempKey(e.target.value)}
+                        placeholder="••••••••••••"
+                        disabled={isVerifying}
+                        className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:border-blue-600 focus:bg-white outline-none text-slate-950 font-black transition-all placeholder:text-slate-400"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <button 
+                    type="submit"
+                    disabled={isVerifying}
+                    className="w-full bg-slate-900 hover:bg-black disabled:bg-slate-300 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all shadow-xl active:scale-[0.98] flex items-center justify-center gap-3"
+                  >
+                    {isVerifying ? (
+                      <Loader2 size={18} className="animate-spin" />
+                    ) : (
+                      <>
+                        <LogIn size={18} />
+                        <span>Establish Link</span>
+                      </>
+                    )}
+                  </button>
+
+                  <div className="mt-4 text-center">
+                    <button type="button" onClick={() => setUseAccountFlow('login')} className="text-[12px] font-black uppercase tracking-widest text-blue-600">Use account login</button>
+                  </div>
+                </form>
+              ) : useAccountFlow === 'login' ? (
+                <div>
+                  <LoginPanel onCancel={() => setUseAccountFlow('none')} />
+                  <div className="mt-4 text-center">
+                    <button className="text-[12px] font-black uppercase tracking-widest text-blue-600" onClick={() => setUseAccountFlow('register')}>Register</button>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <RegisterPanel onCancel={() => setUseAccountFlow('none')} />
+                  <div className="mt-4 text-center">
+                    <button className="text-[12px] font-black uppercase tracking-widest text-blue-600" onClick={() => setUseAccountFlow('login')}>Already registered? Sign in</button>
+                  </div>
                 </div>
               )}
 
-              <div className="space-y-4">
-                <div className="group">
-                  <div className="flex items-center gap-2 mb-2 ml-1">
-                    <User size={12} className="text-slate-500 group-focus-within:text-blue-600 transition-colors" />
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest group-focus-within:text-blue-600 transition-colors">Identification</label>
-                  </div>
-                  <input 
-                    autoFocus
-                    type="text" 
-                    value={tempName}
-                    onChange={(e) => setTempName(e.target.value)}
-                    placeholder="Enter your full name"
-                    disabled={isVerifying}
-                    className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:border-blue-600 focus:bg-white outline-none text-slate-950 font-black transition-all placeholder:text-slate-400"
-                    required
-                  />
+              <div className="mt-8 text-center">
+                <div className="inline-flex items-center gap-3 px-4 py-2 bg-slate-50 rounded-full border border-slate-200">
+                  <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse" />
+                  <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Secure Link Active</span>
                 </div>
-
-                <div className="group">
-                  <div className="flex items-center gap-2 mb-2 ml-1">
-                    <Lock size={12} className="text-slate-500 group-focus-within:text-blue-600 transition-colors" />
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest group-focus-within:text-blue-600 transition-colors">Security Key</label>
-                  </div>
-                  <input 
-                    type="password" 
-                    value={tempKey}
-                    onChange={(e) => setTempKey(e.target.value)}
-                    placeholder="••••••••••••"
-                    disabled={isVerifying}
-                    className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:border-blue-600 focus:bg-white outline-none text-slate-950 font-black transition-all placeholder:text-slate-400"
-                    required
-                  />
-                </div>
-              </div>
-
-              <button 
-                type="submit"
-                disabled={isVerifying}
-                className="w-full bg-slate-900 hover:bg-black disabled:bg-slate-300 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all shadow-xl active:scale-[0.98] flex items-center justify-center gap-3"
-              >
-                {isVerifying ? (
-                  <Loader2 size={18} className="animate-spin" />
-                ) : (
-                  <>
-                    <LogIn size={18} />
-                    <span>Establish Link</span>
-                  </>
-                )}
-              </button>
-            </form>
-
-            <div className="mt-8 text-center">
-              <div className="inline-flex items-center gap-3 px-4 py-2 bg-slate-50 rounded-full border border-slate-200">
-                <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse" />
-                <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Secure Link Active</span>
               </div>
             </div>
           </div>
         </div>
-      </div>
+      </AuthProvider>
     );
   }
 
