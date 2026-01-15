@@ -2,7 +2,25 @@ import express from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import validator from 'validator';
+import rateLimit from 'express-rate-limit';
 import User from '../models/User.js';
+
+// Rate limiters (configurable via env)
+const loginLimiter = rateLimit({
+  windowMs: parseInt(process.env.AUTH_LOGIN_WINDOW_MS || '300000', 10), // 5min
+  max: parseInt(process.env.AUTH_LOGIN_MAX || '3', 10), // default: 3 attempts
+  message: { error: 'Too many login attempts. Try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+const registerLimiter = rateLimit({
+  windowMs: parseInt(process.env.AUTH_REGISTER_WINDOW_MS || '3600000', 10), // 1hr
+  max: parseInt(process.env.AUTH_REGISTER_MAX || '3', 10),
+  message: { error: 'Too many registrations from this IP. Try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
 
 const router = express.Router();
 
@@ -17,7 +35,7 @@ function makeToken(user) {
 }
 
 // Register
-router.post('/register', async (req, res) => {
+router.post('/register', registerLimiter, async (req, res) => {
   try {
     const { username, fullName, password, registrationSecret } = req.body;
 
@@ -57,7 +75,7 @@ router.post('/register', async (req, res) => {
 });
 
 // Login
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
   try {
     const { username, password } = req.body;
     if (!username || !password) return res.status(400).json({ error: 'Missing username or password' });
@@ -68,6 +86,7 @@ router.post('/login', async (req, res) => {
 
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) {
+      // Increment failed attempts (for monitoring) but do NOT lock the account
       await User.updateOne({ _id: user._id }, { $inc: { failedLogins: 1 } });
       return res.status(401).json({ error: 'Invalid credentials' });
     }
