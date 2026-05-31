@@ -9,6 +9,7 @@ import path from 'path';
 import csurf from 'csurf';
 import 'dotenv/config';
 import { fileURLToPath } from 'url';
+import { randomBytes } from 'crypto';
 import { seedAdmin } from './scripts/seedAdmin.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -152,11 +153,21 @@ if (process.env.NODE_ENV === 'production' && (!process.env.JWT_SECRET || process
 app.use(express.json());
 
 // CSRF protection for /api routes (double-submit via cookie)
-const csrfProtection = csurf({ cookie: { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' } });
-app.use('/api', csrfProtection);
+// Exempt the csrf-token endpoint and GET requests from CSRF
+const csrfProtection = csurf({ cookie: { httpOnly: true, sameSite: 'none', secure: process.env.NODE_ENV === 'production' } });
+app.use('/api', (req, res, next) => {
+  // Skip CSRF for GET/HEAD/OPTIONS and the csrf-token endpoint itself
+  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS' || req.path === '/api/csrf-token') {
+    return next();
+  }
+  csrfProtection(req, res, next);
+});
 // Provide CSRF token endpoint for SPA to fetch and include in request headers
 app.get('/api/csrf-token', (req, res) => {
-  res.json({ csrfToken: req.csrfToken() });
+  // Generate a simple token without CSRF dependency
+  const token = randomBytes(32).toString('hex');
+  res.cookie('csrf-token', token, { httpOnly: false, secure: process.env.NODE_ENV === 'production', sameSite: 'none' });
+  res.json({ csrfToken: token });
 });
 
 app.use(async (req, res, next) => {
