@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { MOCK_HANDLERS } from '../data/mockData';
-import { UserPlus, Trash2, ShieldCheck, FileText, Database, Settings as SettingsIcon, AlertCircle } from 'lucide-react';
+import { UserPlus, Trash2, ShieldCheck, FileText, Database, Settings as SettingsIcon, AlertCircle, Users, Activity, Server, ChevronRight, Download, Plus, X, Check, Edit3 } from 'lucide-react';
 import type { Handler } from '../types';
 import { addLog, downloadLogsForDate, downloadAllLogs, saveLogsFromServer, saveSingleLogFromServer } from '../utils/logger';
 import { socket, syncData } from '../utils/socket';
 
 const SettingsPage: React.FC = () => {
   const [handlers, setHandlers] = useState<Handler[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
 
   useEffect(() => {
     const handleHandlers = (data: any) => {
@@ -29,7 +31,6 @@ const SettingsPage: React.FC = () => {
       }
     });
 
-    // Initial load from localStorage as fallback
     const savedHandlers = localStorage.getItem('handlers');
     if (savedHandlers) setHandlers(JSON.parse(savedHandlers));
     else setHandlers(MOCK_HANDLERS);
@@ -52,6 +53,17 @@ const SettingsPage: React.FC = () => {
     const updated = handlers.map(a => a.id === id ? { ...a, name } : a);
     saveHandlers(updated);
     addLog('Update Handler Name', `${oldName} -> ${name}`);
+    setEditingId(null);
+  };
+
+  const startEditing = (id: string, currentName: string) => {
+    setEditingId(id);
+    setEditName(currentName);
+  };
+
+  const cancelEditing = () => {
+    setEditingId(null);
+    setEditName('');
   };
 
   const toggleQH = (id: string) => {
@@ -79,140 +91,218 @@ const SettingsPage: React.FC = () => {
     }
   };
 
+  const qhCount = handlers.filter(h => h.isQH).length;
+  const standardCount = handlers.length - qhCount;
+
   return (
-    <div className="h-full flex flex-col overflow-hidden px-4 pb-4">
-      {/* Header - Light Minimal */}
-      <div className="mb-10 flex flex-col xl:flex-row justify-between items-center gap-6 shrink-0 mt-2">
-        <div className="flex items-center space-x-4">
-          <div className="w-10 h-10 bg-[#393E46] rounded-xl flex items-center justify-center shadow-lg shadow-[#393E46]/20">
-            <SettingsIcon size={22} className="text-white" />
+    <div className="h-full flex flex-col overflow-hidden p-6">
+      {/* ── Header ── */}
+      <div className="flex items-center justify-between mb-8 shrink-0">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 bg-gradient-to-br from-slate-900 to-slate-700 rounded-2xl flex items-center justify-center shadow-lg shadow-slate-900/20">
+            <SettingsIcon size={24} className="text-white" />
           </div>
           <div>
-            <h1 className="text-2xl font-black text-[#222831] tracking-tight leading-none uppercase">System Control</h1>
-            <p className="text-[9px] text-slate-500 font-black uppercase tracking-[0.2em] mt-1.5">Management & Logistics</p>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Settings</h1>
+            <p className="text-sm text-slate-500">System control & handler management</p>
           </div>
         </div>
-        
-        <div className="flex gap-3 w-full xl:w-auto">
-          <button 
+        <div className="flex items-center gap-3">
+          <button
             onClick={() => downloadLogsForDate(new Date().toISOString().split('T')[0])}
-            className="flex-1 xl:flex-none flex items-center justify-center gap-3 bg-white/30 backdrop-blur-md border border-white/30 text-slate-700 px-5 py-3 rounded-full font-black text-[10px] uppercase tracking-widest hover:bg-white/50 transition-all shadow-sm active:scale-95"
+            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm active:scale-95"
           >
             <FileText size={16} className="text-blue-600" />
-            <span>Daily Logs</span>
+            Daily Logs
           </button>
-          <button 
+          <button
             onClick={() => downloadAllLogs()}
-            className="flex-1 xl:flex-none flex items-center justify-center gap-3 bg-white/30 backdrop-blur-md border border-white/30 text-slate-700 px-5 py-3 rounded-full font-black text-[10px] uppercase tracking-widest hover:bg-white/50 transition-all shadow-sm active:scale-95"
+            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm active:scale-95"
           >
             <Database size={16} className="text-indigo-600" />
-            <span>Archive</span>
+            Archive
           </button>
           <button
             onClick={addHandler}
-            className="flex-1 xl:flex-none flex items-center justify-center gap-3 bg-[#222831] text-white px-6 py-3 rounded-full font-black text-[10px] uppercase tracking-widest hover:bg-[#222831]/90 transition-all shadow-lg active:scale-95"
+            className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-lg shadow-slate-900/20 active:scale-95"
           >
-            <UserPlus size={16} />
-            <span>Deploy New</span>
+            <Plus size={16} />
+            Add Handler
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 flex-1 overflow-hidden min-h-0">
-        {/* Handler Matrix */}
-        <div className="bg-white/40 backdrop-blur-3xl rounded-4xl border border-white/40 overflow-hidden flex flex-col shadow-xl">
-          <div className="px-8 py-5 border-b border-slate-100 bg-white/40 shrink-0 flex items-center justify-between">
-            <h2 className="text-[10px] font-black text-[#222831] uppercase tracking-widest">Handler Matrix</h2>
-            <span className="text-[9px] font-black text-[#00ADB5] bg-black/5 px-2.5 py-1 rounded-full border border-slate-200">
-              {handlers.length} Active IDs
+      {/* ── Stats Cards ── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 shrink-0">
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm flex items-center gap-4">
+          <div className="w-11 h-11 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 shrink-0">
+            <Users size={22} />
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-slate-900">{handlers.length}</p>
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Total Handlers</p>
+          </div>
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm flex items-center gap-4">
+          <div className="w-11 h-11 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 shrink-0">
+            <Activity size={22} />
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-slate-900">{qhCount}</p>
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Queue Handlers (QH)</p>
+          </div>
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm flex items-center gap-4">
+          <div className="w-11 h-11 bg-amber-50 rounded-xl flex items-center justify-center text-amber-600 shrink-0">
+            <Server size={22} />
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-slate-900">{standardCount}</p>
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Standard Handlers</p>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Main Content ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 overflow-hidden min-h-0">
+        {/* Handler List */}
+        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+          <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 shrink-0 flex items-center justify-between">
+            <h2 className="text-sm font-bold text-slate-800">Handler Matrix</h2>
+            <span className="text-xs font-semibold text-slate-500 bg-white px-3 py-1.5 rounded-lg border border-slate-200">
+              {handlers.length} active
             </span>
           </div>
-          <div className="overflow-y-auto flex-1 p-6 scrollbar-hide">
-            <div className="space-y-4">
-              {handlers.map((handler) => (
-                <div key={handler.id} className="group bg-white/60 border border-white/40 rounded-2xl p-4 flex items-center justify-between transition-transform hover:scale-[1.01] shadow-xl backdrop-blur-md">
-                  <div className="flex items-center space-x-4 flex-1">
-                    <button 
-                      onClick={() => toggleQH(handler.id)}
-                      className={`w-12 h-12 rounded-lg flex items-center justify-center transition-all shrink-0 border shadow-sm ${
-                        handler.isQH 
-                          ? 'bg-[#00ADB5] border-[#00ADB5] text-white shadow-[#00ADB5]/20' 
-                          : 'bg-white border-slate-200 text-slate-400 hover:border-[#00ADB5]/60 hover:text-[#00ADB5]'
-                      }`}
-                      title={handler.isQH ? "Queue Handler (QH)" : "Assign as QH"}
-                    >
-                      <ShieldCheck size={20} strokeWidth={handler.isQH ? 2.5 : 2} className={handler.isQH ? 'animate-pulse' : ''} />
-                    </button>
+          <div className="overflow-y-auto flex-1 p-4 space-y-3 scrollbar-hide">
+            {handlers.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+                <Users size={48} className="mb-3 opacity-30" />
+                <p className="text-sm font-semibold">No handlers configured</p>
+                <p className="text-xs mt-1">Click "Add Handler" to get started</p>
+              </div>
+            )}
+            {handlers.map((handler) => (
+              <div
+                key={handler.id}
+                className="group bg-slate-50/70 border border-slate-200 rounded-xl p-4 flex items-center justify-between hover:bg-slate-50 hover:border-slate-300 transition-all"
+              >
+                <div className="flex items-center gap-4 flex-1 min-w-0">
+                  <button
+                    onClick={() => toggleQH(handler.id)}
+                    className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all shrink-0 border ${
+                      handler.isQH
+                        ? 'bg-emerald-500 border-emerald-500 text-white shadow-sm shadow-emerald-500/20'
+                        : 'bg-white border-slate-200 text-slate-400 hover:border-emerald-400 hover:text-emerald-500'
+                    }`}
+                    title={handler.isQH ? 'Queue Handler (QH)' : 'Assign as QH'}
+                  >
+                    <ShieldCheck size={18} strokeWidth={handler.isQH ? 2.5 : 2} />
+                  </button>
 
-                    <div className="flex-1 min-w-0">
-                      <input 
-                        type="text" 
-                        value={handler.name}
-                        onChange={(e) => updateHandlerName(handler.id, e.target.value)}
-                        className="bg-transparent text-slate-900 font-extrabold text-lg w-full focus:outline-none focus:text-[#00ADB5] transition-colors placeholder:text-slate-300 uppercase tracking-tight"
-                        placeholder="Full Name"
-                      />
-                      <div className="flex items-center gap-2 mt-2">
-                        <span className={`text-[9px] font-black uppercase tracking-[0.2em] px-2 py-1 rounded-md border ${
-                          handler.isQH 
-                            ? 'bg-[#00ADB5]/10 text-[#00ADB5] border-[#00ADB5]/20' 
-                            : 'bg-black/5 text-slate-400 border-slate-200'
-                        }`}>
-                          {handler.isQH ? 'Queue Handler (QH)' : 'Standard Handler'}
-                        </span>
+                  <div className="flex-1 min-w-0">
+                    {editingId === handler.id ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          className="bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 w-full max-w-xs"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') updateHandlerName(handler.id, editName);
+                            if (e.key === 'Escape') cancelEditing();
+                          }}
+                        />
+                        <button
+                          onClick={() => updateHandlerName(handler.id, editName)}
+                          className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
+                        >
+                          <Check size={16} />
+                        </button>
+                        <button
+                          onClick={cancelEditing}
+                          className="p-1.5 text-slate-400 hover:bg-slate-200 rounded-lg transition-all"
+                        >
+                          <X size={16} />
+                        </button>
                       </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-slate-900 truncate">{handler.name}</span>
+                        <button
+                          onClick={() => startEditing(handler.id, handler.name)}
+                          className="p-1 text-slate-300 hover:text-slate-500 hover:bg-slate-200 rounded-md transition-all opacity-0 group-hover:opacity-100"
+                        >
+                          <Edit3 size={13} />
+                        </button>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md border ${
+                        handler.isQH
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : 'bg-slate-100 text-slate-500 border-slate-200'
+                      }`}>
+                        {handler.isQH ? 'QH' : 'Standard'}
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-mono">ID: {handler.id.slice(0, 8)}</span>
                     </div>
                   </div>
-                  
-                  <div className="flex items-center gap-2">
-                    <button 
-                      onClick={() => deleteHandler(handler.id)}
-                      className="p-3 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all ml-2"
-                      title="Decommission"
-                    >
-                      <Trash2 size={18} />
-                    </button>
-                  </div>
                 </div>
-              ))}
-            </div>
+
+                <button
+                  onClick={() => deleteHandler(handler.id)}
+                  className="p-2.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all ml-2 opacity-0 group-hover:opacity-100"
+                  title="Decommission"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* System Diagnostics / Help */}
-        <div className="flex flex-col gap-6 flex-1 overflow-hidden">
-          <div className="bg-white/40 backdrop-blur-3xl rounded-4xl border border-white/40 p-8 shadow-xl flex-1 flex flex-col min-h-0">
-             <div className="flex items-center gap-3 mb-6 shrink-0">
-               <div className="w-10 h-10 bg-indigo-600/10 rounded-xl flex items-center justify-center text-indigo-700 border border-slate-100">
-                 <AlertCircle size={22} />
-               </div>
-               <h2 className="text-[11px] font-black text-slate-950 uppercase tracking-[0.2em]">Operational Protocol</h2>
-             </div>
-             <div className="space-y-4 overflow-hidden pr-2 scrollbar-hide">
-               <div className="bg-white/60 rounded-2xl p-6 border border-white/40 hover:bg-white/80 transition-all backdrop-blur-md">
-                 <p className="text-slate-950 font-black text-[13px] mb-1.5 uppercase tracking-tighter">Automated Synchronization</p>
-                 <p className="text-slate-600 text-[12px] leading-relaxed font-bold">Changes broadcast instantly to all connected terminals via the encrypted fleet link.</p>
-               </div>
-               <div className="bg-white/60 rounded-2xl p-6 border border-white/40 hover:bg-white/80 transition-all backdrop-blur-md">
-                 <p className="text-slate-950 font-black text-[13px] mb-1.5 uppercase tracking-tighter">Data Persistence</p>
-                 <p className="text-slate-600 text-[12px] leading-relaxed font-bold">Log records are stored centrally. Use archive tools for compliance audits.</p>
-               </div>
-               <div className="bg-white/60 rounded-2xl p-6 border border-white/40 hover:bg-white/80 transition-all backdrop-blur-md">
-                 <p className="text-slate-950 font-black text-[13px] mb-1.5 uppercase tracking-tighter">Hierarchy Level</p>
-                 <p className="text-slate-600 text-[12px] leading-relaxed font-bold">Queue Handlers (QH) enable priority identifiers across tracking matrices.</p>
-               </div>
-             </div>
+        {/* Sidebar */}
+        <div className="flex flex-col gap-4 overflow-y-auto scrollbar-hide">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-9 h-9 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 border border-indigo-100">
+                <AlertCircle size={18} />
+              </div>
+              <h2 className="text-sm font-bold text-slate-800">System Info</h2>
+            </div>
+            <div className="space-y-4">
+              <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+                <p className="text-xs font-bold text-slate-800 mb-1 uppercase tracking-wide">Sync Status</p>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+                  <span className="text-xs font-medium text-emerald-700">Connected</span>
+                </div>
+              </div>
+              <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+                <p className="text-xs font-bold text-slate-800 mb-1 uppercase tracking-wide">Auto-Sync</p>
+                <p className="text-xs text-slate-600 leading-relaxed">Changes broadcast instantly to all connected terminals via encrypted fleet link.</p>
+              </div>
+              <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+                <p className="text-xs font-bold text-slate-800 mb-1 uppercase tracking-wide">Persistence</p>
+                <p className="text-xs text-slate-600 leading-relaxed">Log records stored centrally. Use archive tools for compliance audits.</p>
+              </div>
+              <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+                <p className="text-xs font-bold text-slate-800 mb-1 uppercase tracking-wide">QH Priority</p>
+                <p className="text-xs text-slate-600 leading-relaxed">Queue Handlers (QH) enable priority identifiers across tracking matrices.</p>
+              </div>
+            </div>
           </div>
 
-          <div className="bg-white/60 backdrop-blur-3xl rounded-[2.5rem] border border-white/40 p-8 flex flex-col items-center justify-center text-center shadow-2xl shrink-0">
-            <div className="w-16 h-16 bg-slate-900 rounded-2xl flex items-center justify-center text-white font-black text-3xl shadow-xl shadow-slate-900/30 mb-4 shrink-0">
-              P
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 text-center">
+            <div className="w-14 h-14 bg-slate-900 rounded-2xl flex items-center justify-center text-white font-bold text-2xl mx-auto mb-3 shadow-lg shadow-slate-900/20">
+              Q
             </div>
-            <p className="text-slate-950 font-black text-xl tracking-tight mb-1 uppercase">Queue Tracker</p>
-            <p className="text-[11px] text-slate-500 font-black uppercase tracking-[0.3em] mb-6">Version 4.0.0-Titanium</p>
-            <div className="flex items-center gap-3 px-5 py-2.5 bg-green-500/10 backdrop-blur-md rounded-full border border-green-500/20">
-              <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse" />
-              <span className="text-[10px] font-black text-green-700 uppercase tracking-widest">Engine Status: Nominal</span>
+            <p className="text-base font-bold text-slate-900 mb-0.5">Queue Tracker</p>
+            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-4">v4.0.0</p>
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-50 border border-emerald-200 rounded-full">
+              <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+              <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">All Systems Nominal</span>
             </div>
           </div>
         </div>
