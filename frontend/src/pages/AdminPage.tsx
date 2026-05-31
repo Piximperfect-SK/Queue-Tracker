@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, ShieldCheck, Users, ChevronDown, RefreshCw, AlertCircle } from 'lucide-react';
-import { useAuth } from '../auth/AuthContext';
+import { ShieldCheck, Users, ChevronDown, RefreshCw, AlertCircle } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
 
 interface UserWithRole {
@@ -36,7 +35,7 @@ const AdminPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [pendingChange, setPendingChange] = useState<PendingChange | null>(null);
-  const { user } = useAuth();
+  const [updateError, setUpdateError] = useState<string | null>(null);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -69,6 +68,7 @@ const AdminPage: React.FC = () => {
     const { userId, toRole } = pendingChange;
     setPendingChange(null);
     setUpdatingId(userId);
+    setUpdateError(null);
     try {
       const csrfRes = await fetch('/api/csrf-token', { credentials: 'include' });
       const { csrfToken } = await csrfRes.json();
@@ -80,12 +80,12 @@ const AdminPage: React.FC = () => {
       });
       if (!res.ok) {
         const errData = await res.json();
-        alert(errData.error || 'Failed to update role');
+        setUpdateError(errData.error || 'Failed to update role');
         return;
       }
       await fetchUsers();
     } catch (err) {
-      alert('Failed to update role');
+      setUpdateError('Failed to update role');
     } finally {
       setUpdatingId(null);
     }
@@ -119,10 +119,10 @@ const AdminPage: React.FC = () => {
       </div>
 
       {/* Error */}
-      {error && (
+      {(error || updateError) && (
         <div className="flex items-center gap-3 mb-6 px-5 py-4 bg-red-50 border border-red-200 rounded-xl text-sm font-semibold text-red-700 shrink-0">
           <AlertCircle size={18} />
-          {error}
+          {error || updateError}
         </div>
       )}
 
