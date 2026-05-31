@@ -1,553 +1,477 @@
-  import React, { useState, useMemo, useEffect } from 'react';
-    import { MOCK_HANDLERS, MOCK_ROSTER } from '../data/mockData';
-    import { ShieldCheck, PhoneCall, X, Check } from 'lucide-react';
-    import type { DailyStats, Handler, RosterEntry, ShiftType } from '../types';
-    import { addLog, saveLogsFromServer, saveSingleLogFromServer } from '../utils/logger';
-    import { socket, syncData } from '../utils/socket';
+import React, { useState, useMemo, useEffect } from 'react';
+import { MOCK_HANDLERS, MOCK_ROSTER } from '../data/mockData';
+import { ShieldCheck, PhoneCall, X, Check, ChevronLeft, ChevronRight, Shield } from 'lucide-react';
+import type { DailyStats, Handler, RosterEntry, ShiftType } from '../types';
+import { addLog, saveLogsFromServer, saveSingleLogFromServer } from '../utils/logger';
+import { socket, syncData } from '../utils/socket';
 
-    const getShiftColor = (shift: string) => {
-      switch (shift) {
-        case '6AM-3PM': return { bg: 'bg-blue-600', text: 'text-blue-700', light: 'bg-blue-50', border: 'border-blue-200', rowBg: 'bg-blue-50/10' };
-        case '12PM-9PM': return { bg: 'bg-yellow-400', text: 'text-yellow-600', light: 'bg-yellow-50', border: 'border-yellow-200', rowBg: 'bg-yellow-50/10' };
-        case '1PM-10PM': return { bg: 'bg-orange-500', text: 'text-orange-600', light: 'bg-orange-50', border: 'border-orange-200', rowBg: 'bg-orange-50/10' };
-        case '2PM-11PM': return { bg: 'bg-orange-700', text: 'text-orange-700', light: 'bg-orange-50', border: 'border-orange-200', rowBg: 'bg-orange-50/10' };
-        case '10PM-7AM': return { bg: 'bg-blue-900', text: 'text-blue-900', light: 'bg-blue-50', border: 'border-blue-300', rowBg: 'bg-blue-50/10' };
-        case 'WO': return { bg: 'bg-slate-400', text: 'text-slate-500', light: 'bg-slate-50', border: 'border-slate-200', rowBg: 'bg-slate-50/10' };
-        case 'ML': return { bg: 'bg-pink-500', text: 'text-pink-600', light: 'bg-pink-50', border: 'border-pink-200', rowBg: 'bg-pink-50/10' };
-        case 'PL': return { bg: 'bg-rose-500', text: 'text-rose-600', light: 'bg-rose-50', border: 'border-rose-200', rowBg: 'bg-rose-50/10' };
-        case 'EL': return { bg: 'bg-red-600', text: 'text-red-700', light: 'bg-red-50', border: 'border-red-200', rowBg: 'bg-red-50/10' };
-        case 'UL': return { bg: 'bg-gray-500', text: 'text-gray-600', light: 'bg-gray-50', border: 'border-gray-200', rowBg: 'bg-gray-50/10' };
-        case 'CO': return { bg: 'bg-emerald-600', text: 'text-emerald-700', light: 'bg-emerald-50', border: 'border-emerald-200', rowBg: 'bg-emerald-50/10' };
-        case 'MID-LEAVE': return { bg: 'bg-rose-600', text: 'text-rose-600', light: 'bg-rose-50', border: 'border-rose-100', rowBg: 'bg-rose-50/10' };
-        default: return { bg: 'bg-slate-500', text: 'text-slate-500', light: 'bg-slate-50', border: 'border-slate-200', rowBg: 'bg-slate-50/10' };
-      }
-    };
-
-const getShiftLabel = (shift: string) => {
-  switch (shift) {
-    case '6AM-3PM': return 'Morning Shift';
-    case '12PM-9PM': return 'Afternoon Shift';
-    case '1PM-10PM': return 'Afternoon Team';
-    case '2PM-11PM': return 'Noon Night Shift';
-    case '10PM-7AM': return 'Night Shift';
-    default: return shift;
-  }
+// ─── Shift colour system (matches RosterPage spec) ───────────────────────────
+const SHIFT_META: Record<string, {
+  label: string;
+  time: string;
+  accent: string;        // tailwind text colour for badges
+  accentHex: string;
+  rowBg: string;         // subtle row tint
+  badgeBg: string;
+  badgeText: string;
+  badgeBorder: string;
+  timeBg: string;
+  timeText: string;
+}> = {
+  '6AM-3PM':  { label: 'Morning Shift',    time: '6AM–3PM',   accent: 'text-sky-400',    accentHex: '#38BDF8', rowBg: 'bg-sky-950/20',     badgeBg: 'bg-sky-900/60',    badgeText: 'text-sky-200',    badgeBorder: 'border-sky-700/50',    timeBg: 'bg-sky-900/40',    timeText: 'text-sky-300' },
+  '12PM-9PM': { label: 'Afternoon Shift',  time: '12PM–9PM',  accent: 'text-yellow-400', accentHex: '#FACC15', rowBg: 'bg-yellow-950/20',   badgeBg: 'bg-yellow-900/60', badgeText: 'text-yellow-200', badgeBorder: 'border-yellow-700/50', timeBg: 'bg-yellow-900/40', timeText: 'text-yellow-300' },
+  '1PM-10PM': { label: 'Afternoon Team',   time: '1PM–10PM',  accent: 'text-amber-400',  accentHex: '#FBBF24', rowBg: 'bg-amber-950/20',    badgeBg: 'bg-amber-900/60',  badgeText: 'text-amber-200',  badgeBorder: 'border-amber-700/50',  timeBg: 'bg-amber-900/40',  timeText: 'text-amber-300' },
+  '2PM-11PM': { label: 'Evening Shift',    time: '2PM–11PM',  accent: 'text-orange-400', accentHex: '#FB923C', rowBg: 'bg-orange-950/20',   badgeBg: 'bg-orange-900/60', badgeText: 'text-orange-200', badgeBorder: 'border-orange-700/50', timeBg: 'bg-orange-900/40', timeText: 'text-orange-300' },
+  '10PM-7AM': { label: 'Night Shift',      time: '10PM–7AM',  accent: 'text-indigo-400', accentHex: '#818CF8', rowBg: 'bg-indigo-950/30',   badgeBg: 'bg-indigo-900/70', badgeText: 'text-indigo-200', badgeBorder: 'border-indigo-700/50', timeBg: 'bg-indigo-900/50', timeText: 'text-indigo-300' },
 };
+const getShiftMeta = (shift: string) =>
+  SHIFT_META[shift] ?? { label: shift, time: shift, accent: 'text-slate-400', accentHex: '#94A3B8', rowBg: 'bg-slate-800/20', badgeBg: 'bg-slate-800', badgeText: 'text-slate-300', badgeBorder: 'border-slate-600', timeBg: 'bg-slate-800', timeText: 'text-slate-300' };
 
-    interface TrackerPageProps {
-      selectedDate: string;
-      setSelectedDate: (date: string) => void;
+interface TrackerPageProps {
+  selectedDate: string;
+  setSelectedDate: (date: string) => void;
+}
+
+const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate }) => {
+  const [handlers, setHandlers] = useState<Handler[]>(() => {
+    const s = localStorage.getItem('handlers');
+    return s ? JSON.parse(s) : MOCK_HANDLERS;
+  });
+  const [roster, setRoster] = useState<RosterEntry[]>(() => {
+    const s = localStorage.getItem('roster');
+    return s ? JSON.parse(s) : MOCK_ROSTER;
+  });
+  const [stats, setStats] = useState<DailyStats[]>(() => {
+    const s = localStorage.getItem('stats');
+    return s ? JSON.parse(s) : [];
+  });
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [flashMap, setFlashMap] = useState<Record<string, 'positive' | 'negative'>>({});
+  const [times, setTimes] = useState({ ist: '', uk: '' });
+  const [isCallModalOpen, setIsCallModalOpen] = useState(false);
+  const [callData, setCallData] = useState({ handlerId: '', ticketNumber: '', type: 'New' as 'New' | 'Update' });
+
+  useEffect(() => {
+    const update = () => {
+      const fmt = (tz: string) => new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: true }).format(new Date());
+      setTimes({ ist: fmt('Asia/Kolkata'), uk: fmt('Europe/London') });
+    };
+    update();
+    const id = setInterval(update, 10000);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    const id = setInterval(() => setCurrentTime(new Date()), 30000);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    const onHandlers = (d: Handler[]) => { if (d) { setHandlers(d); localStorage.setItem('handlers', JSON.stringify(d)); } };
+    const onRoster   = (d: RosterEntry[]) => { if (d) { setRoster(d);   localStorage.setItem('roster',   JSON.stringify(d)); } };
+    const onStats    = (d: DailyStats[])  => { if (d) { setStats(d);    localStorage.setItem('stats',    JSON.stringify(d)); } };
+    const onInit = (db: any) => {
+      if (!db) return;
+      const h = db.handlers || db.agents;
+      if (Array.isArray(h))        { setHandlers(h);     localStorage.setItem('handlers', JSON.stringify(h)); }
+      if (Array.isArray(db.roster)){ setRoster(db.roster); localStorage.setItem('roster',   JSON.stringify(db.roster)); }
+      if (Array.isArray(db.stats)) { setStats(db.stats);  localStorage.setItem('stats',    JSON.stringify(db.stats)); }
+      if (db.logs) saveLogsFromServer(db.logs);
+    };
+    socket.on('handlers_updated', onHandlers);
+    socket.on('roster_updated',   onRoster);
+    socket.on('stats_updated',    onStats);
+    socket.on('log_added', ({ dateStr, logEntry }) => saveSingleLogFromServer(dateStr, logEntry));
+    socket.on('init', onInit);
+    if (socket.connected) socket.emit('get_initial_data');
+    return () => {
+      socket.off('handlers_updated', onHandlers);
+      socket.off('roster_updated',   onRoster);
+      socket.off('stats_updated',    onStats);
+      socket.off('log_added');
+      socket.off('init', onInit);
+    };
+  }, []);
+
+  const isShiftNearEnd = (shift: ShiftType) => {
+    const now = currentTime;
+    const todayStr = now.toLocaleDateString('en-CA');
+    const mins = now.getHours() * 60 + now.getMinutes();
+    if (selectedDate === todayStr) {
+      if (shift === '6AM-3PM'  && mins >= 870)  return true;
+      if (shift === '1PM-10PM' && mins >= 1290) return true;
+      if (shift === '2PM-11PM' && mins >= 1350) return true;
+      if (shift === '12PM-9PM' && mins >= 1230) return true;
     }
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yStr = yesterday.toLocaleDateString('en-CA');
+    if (selectedDate === yStr && shift === '10PM-7AM' && mins >= 390) return true;
+    if (selectedDate < yStr) return true;
+    if (selectedDate === yStr && shift !== '10PM-7AM') return true;
+    return false;
+  };
 
-    const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate }) => {
-      const [handlers, setHandlers] = useState<Handler[]>(() => {
-        const saved = localStorage.getItem('handlers');
-        return saved ? JSON.parse(saved) as Handler[] : MOCK_HANDLERS;
-      });
-      const [roster, setRoster] = useState<RosterEntry[]>(() => {
-        const saved = localStorage.getItem('roster');
-        return saved ? JSON.parse(saved) as RosterEntry[] : MOCK_ROSTER;
-      });
-      const [stats, setStats] = useState<DailyStats[]>(() => {
-        const saved = localStorage.getItem('stats');
-        return saved ? JSON.parse(saved) as DailyStats[] : [];
-      });
-      const [currentTime, setCurrentTime] = useState(new Date());
-      const [flashMap, setFlashMap] = useState<Record<string, 'positive' | 'negative'>>({});
-      const [times, setTimes] = useState({ ist: '', uk: '' });
+  const saveStats = (u: DailyStats[]) => {
+    setStats(u); localStorage.setItem('stats', JSON.stringify(u)); syncData.updateStats(u);
+  };
 
-      // Call Modal State
-      const [isCallModalOpen, setIsCallModalOpen] = useState(false);
-      const [callData, setCallData] = useState({
-        handlerId: '',
-        ticketNumber: '',
-        type: 'New' as 'New' | 'Update'
-      });
+  const getHandlerStats = (handlerId: string): DailyStats => {
+    const s = stats.find(s => s.handlerId === handlerId && s.date === selectedDate);
+    return { handlerId, date: selectedDate, incidents: Number(s?.incidents||0), sctasks: Number(s?.sctasks||0), calls: Number(s?.calls||0), comments: s?.comments||'' };
+  };
 
-      useEffect(() => {
-        const updateClocks = () => {
-          const now = new Date();
-          const istFormat = new Intl.DateTimeFormat('en-US', {
-            timeZone: 'Asia/Kolkata',
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: true
-          });
-          const ukFormat = new Intl.DateTimeFormat('en-US', {
-            timeZone: 'Europe/London',
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: true
-          });
-      
-          const istStr = istFormat.format(now);
-          const ukStr = ukFormat.format(now);
+  const activeHandlers = useMemo(() => {
+    const hidden = new Set(['WO','ML','PL','EL','UL','CO','MID-LEAVE']);
+    const order: Record<string,number> = { '6AM-3PM':0,'12PM-9PM':1,'1PM-10PM':2,'2PM-11PM':3,'10PM-7AM':4 };
+    return roster
+      .filter(r => r.date === selectedDate && !hidden.has(r.shift))
+      .map(r => { const h = handlers.find(a => a.id === r.handlerId); return h ? { ...h, shift: r.shift as ShiftType } : null; })
+      .filter((a): a is Handler & { shift: ShiftType } => a !== null)
+      .sort((a,b) => (order[a.shift]??999) - (order[b.shift]??999));
+  }, [selectedDate, roster, handlers]);
 
-          setTimes({
-            ist: istStr.replace(/\s(AM|PM)/, '\u00A0\u00A0$1'),
-            uk: ukStr.replace(/\s(AM|PM)/, '\u00A0\u00A0$1')
-          });
-        };
-        updateClocks();
-        const timer = setInterval(updateClocks, 10000);
-        return () => clearInterval(timer);
-      }, []);
+  const totalStats = useMemo(() =>
+    activeHandlers.reduce((acc, h) => {
+      const s = getHandlerStats(h.id);
+      acc.incidents += s.incidents; acc.sctasks += s.sctasks; acc.calls += s.calls;
+      return acc;
+    }, { incidents: 0, sctasks: 0, calls: 0 }),
+  [activeHandlers, stats, selectedDate]);
 
-      useEffect(() => {
-        const timer = setInterval(() => setCurrentTime(new Date()), 30000);
-        return () => clearInterval(timer);
-      }, []);
+  const updateStat = (handlerId: string, field: keyof DailyStats, value: any) => {
+    const handler = handlers.find(a => a.id === handlerId);
+    const existing = stats.find(s => s.handlerId === handlerId && s.date === selectedDate);
+    const final = (field === 'incidents'||field === 'sctasks'||field === 'calls') ? Number(value)||0 : value;
+    const old = existing ? existing[field] : (field === 'comments' ? '' : 0);
+    const updated = existing
+      ? stats.map(s => (s.handlerId===handlerId&&s.date===selectedDate) ? {...s,[field]:final} : s)
+      : [...stats, { handlerId, date:selectedDate, incidents:0, sctasks:0, calls:0, comments:'', [field]:final }];
+    saveStats(updated);
+    if (field !== 'comments') {
+      const type = Number(final) > Number(old) ? 'positive' : Number(final) < Number(old) ? 'negative' : 'neutral';
+      if (type !== 'neutral') {
+        const key = `${handlerId}-${field}`;
+        setFlashMap(p => ({...p,[key]:type as 'positive'|'negative'}));
+        setTimeout(() => setFlashMap(p => { const n={...p}; delete n[key]; return n; }), 1200);
+      }
+      addLog('Update Stat', `${handler?.name||handlerId} - ${field}: ${old} -> ${final} (${selectedDate})`, type as any);
+    }
+  };
 
+  const handleCallSubmit = () => {
+    if (!callData.ticketNumber.trim()) return;
+    const s = getHandlerStats(callData.handlerId);
+    updateStat(callData.handlerId, 'calls', s.calls + 1);
+    const h = handlers.find(a => a.id === callData.handlerId);
+    addLog('Call Logged', `${h?.name}: Ticket #${callData.ticketNumber} (${callData.type})`, 'positive');
+    setCallData({ handlerId:'', ticketNumber:'', type:'New' });
+    setIsCallModalOpen(false);
+  };
 
-      useEffect(() => {
-          const handleHandlers = (data: Handler[]) => {
-            if (data) {
-              setHandlers(data);
-              localStorage.setItem('handlers', JSON.stringify(data));
-            }
-          };
-          const handleRoster = (data: RosterEntry[]) => {
-            if (data) {
-              setRoster(data);
-              localStorage.setItem('roster', JSON.stringify(data));
-            }
-          };
-          const handleStats = (data: DailyStats[]) => {
-            if (data) {
-              setStats(data);
-              localStorage.setItem('stats', JSON.stringify(data));
-            }
-          };
+  const navDate = (dir: number) => {
+    const [y,m,d] = selectedDate.split('-').map(Number);
+    const dt = new Date(y,m-1,d); dt.setDate(dt.getDate()+dir);
+    setSelectedDate(dt.toLocaleDateString('en-CA'));
+  };
 
-        socket.on('handlers_updated', handleHandlers);
-        socket.on('roster_updated', handleRoster);
-        socket.on('stats_updated', handleStats);
-        socket.on('log_added', ({ dateStr, logEntry }) => {
-          saveSingleLogFromServer(dateStr, logEntry);
-        });
-    
-        const handleInit = (db: any) => {
-          if (!db) return;
-          if (Array.isArray(db.handlers)) {
-            setHandlers(db.handlers as Handler[]);
-            localStorage.setItem('handlers', JSON.stringify(db.handlers));
-          } else if (Array.isArray(db.agents)) {
-            setHandlers(db.agents as Handler[]);
-            localStorage.setItem('handlers', JSON.stringify(db.agents));
-          }
-          if (Array.isArray(db.roster)) {
-            setRoster(db.roster as RosterEntry[]);
-            localStorage.setItem('roster', JSON.stringify(db.roster));
-          }
-          if (Array.isArray(db.stats)) {
-            setStats(db.stats as DailyStats[]);
-            localStorage.setItem('stats', JSON.stringify(db.stats));
-          }
-          if (db.logs) saveLogsFromServer(db.logs);
-        };
+  const dayLabel = new Date(selectedDate+'T00:00:00').toLocaleDateString('en-US', { day:'numeric', month:'short', year:'numeric' });
 
-        socket.on('init', handleInit);
+  // Group handlers by shift for the section dividers
+  const handlersByShift = useMemo(() => {
+    const groups: { shift: ShiftType; handlers: (Handler & { shift: ShiftType })[] }[] = [];
+    activeHandlers.forEach(h => {
+      const last = groups[groups.length - 1];
+      if (last && last.shift === h.shift) last.handlers.push(h);
+      else groups.push({ shift: h.shift, handlers: [h] });
+    });
+    return groups;
+  }, [activeHandlers]);
 
-        // initial loading handled by lazy initializers above
+  return (
+    <div className="h-full w-full flex flex-col overflow-hidden bg-slate-950">
 
-        if (socket.connected) {
-          socket.emit('get_initial_data');
-        }
-
-        return () => {
-          socket.off('handlers_updated', handleHandlers);
-          socket.off('roster_updated', handleRoster);
-          socket.off('stats_updated', handleStats);
-          socket.off('log_added');
-          socket.off('init', handleInit);
-        };
-      }, []);
-
-      const isShiftNearEnd = (shift: ShiftType) => {
-        const now = currentTime;
-        const todayStr = now.toLocaleDateString('en-CA');
-        const currentMinutes = now.getHours() * 60 + now.getMinutes();
-
-        if (selectedDate === todayStr) {
-          if (shift === '6AM-3PM' && currentMinutes >= 870) return true;
-          if (shift === '1PM-10PM' && currentMinutes >= 1290) return true;
-          if (shift === '2PM-11PM' && currentMinutes >= 1350) return true;
-          if (shift === '12PM-9PM' && currentMinutes >= 1230) return true;
-        }
-
-        const yesterday = new Date(now);
-        yesterday.setDate(yesterday.getDate() - 1);
-        const yesterdayStr = yesterday.toLocaleDateString('en-CA');
-
-        if (selectedDate === yesterdayStr && shift === '10PM-7AM') {
-          if (currentMinutes >= 390) return true;
-        }
-
-        if (selectedDate < yesterdayStr) return true;
-        if (selectedDate === yesterdayStr && shift !== '10PM-7AM') return true;
-
-        return false;
-      };
-
-      const saveStats = (updatedStats: DailyStats[]) => {
-        setStats(updatedStats);
-        localStorage.setItem('stats', JSON.stringify(updatedStats));
-        syncData.updateStats(updatedStats);
-      };
-
-      const getHandlerStats = (handlerId: string): DailyStats => {
-        const s = stats.find(s => s.handlerId === handlerId && s.date === selectedDate);
-        return {
-          handlerId,
-          date: selectedDate,
-          incidents: Number(s?.incidents || 0),
-          sctasks: Number(s?.sctasks || 0),
-          calls: Number(s?.calls || 0),
-          comments: s?.comments || ''
-        };
-      };
-
-      const activeHandlers = useMemo(() => {
-        const hiddenShifts = new Set(['WO', 'ML', 'PL', 'EL', 'UL', 'CO', 'MID-LEAVE']);
-        const rosterForDay = roster.filter(r => r.date === selectedDate);
-    
-        const visibleEntries = rosterForDay.filter(r => !hiddenShifts.has(r.shift));
-
-        const all = visibleEntries.map(r => {
-          const handler = handlers.find(a => a.id === r.handlerId);
-          if (!handler) return null;
-          return {
-            ...handler,
-            shift: r.shift as ShiftType
-          };
-        }).filter((a): a is Handler & { shift: ShiftType } => a !== null);
-
-        const shiftOrder: Record<string, number> = {
-          '6AM-3PM': 0,
-          '12PM-9PM': 1,
-          '1PM-10PM': 2,
-          '2PM-11PM': 3,
-          '10PM-7AM': 4
-        };
-
-        return all.sort((a, b) => {
-          return (shiftOrder[a.shift] ?? 999) - (shiftOrder[b.shift] ?? 999);
-        });
-      }, [selectedDate, roster, handlers]);
-
-      const totalStats = useMemo(() => {
-        return activeHandlers.reduce((acc, handler) => {
-          const s = getHandlerStats(handler.id);
-          acc.incidents += s.incidents;
-          acc.sctasks += s.sctasks;
-          acc.calls += s.calls;
-          return acc;
-        }, { incidents: 0, sctasks: 0, calls: 0 });
-      }, [activeHandlers, stats, selectedDate]);
-
-      const updateStat = (handlerId: string, field: keyof DailyStats, value: any) => {
-        const handler = handlers.find(a => a.id === handlerId);
-        const existing = stats.find(s => s.handlerId === handlerId && s.date === selectedDate);
-        let updated;
-    
-        const finalValue = (field === 'incidents' || field === 'sctasks' || field === 'calls') 
-          ? Number(value) || 0 
-          : value;
-
-        const oldValue = existing ? existing[field] : (field === 'comments' ? '' : 0);
-
-        if (existing) {
-          updated = stats.map(s => 
-            (s.handlerId === handlerId && s.date === selectedDate) ? { ...s, [field]: finalValue } : s
-          );
-        } else {
-          updated = [...stats, { 
-            handlerId, 
-            date: selectedDate, 
-            incidents: 0, 
-            sctasks: 0, 
-            calls: 0, 
-            comments: '',
-            [field]: finalValue 
-          }];
-        }
-    
-        saveStats(updated);
-    
-        let type: 'positive' | 'negative' | 'neutral' = 'neutral';
-        if (field !== 'comments') {
-          const numFinal = Number(finalValue);
-          const numOld = Number(oldValue);
-          if (numFinal > numOld) type = 'positive';
-          else if (numFinal < numOld) type = 'negative';
-
-          if (type !== 'neutral') {
-            const key = `${handlerId}-${field}`;
-            const t = type as 'positive' | 'negative';
-            setFlashMap(prev => ({ ...prev, [key]: t }));
-            setTimeout(() => {
-              setFlashMap(prev => {
-                const next = { ...prev };
-                delete next[key];
-                return next;
-              });
-            }, 1200);
-          }
-        }
-
-        addLog('Update Stat', `${handler?.name || handlerId} - ${field}: ${oldValue} -> ${finalValue} (Date: ${selectedDate})`, type);
-      };
-
-      const handleCallSubmit = () => {
-        if (!callData.ticketNumber.trim()) return;
-    
-        const statsObj = getHandlerStats(callData.handlerId);
-        updateStat(callData.handlerId, 'calls', statsObj.calls + 1);
-    
-        const handler = handlers.find(a => a.id === callData.handlerId);
-        addLog('Call Logged', `${handler?.name}: Ticket #${callData.ticketNumber} (${callData.type})`, 'positive');
-    
-        setCallData({ handlerId: '', ticketNumber: '', type: 'New' });
-        setIsCallModalOpen(false);
-      };
-
-      return (
-        <div className="h-full w-full flex flex-col overflow-hidden bg-white">
-          <div className="flex-1 flex flex-col h-full min-h-0">
-            <div className="flex flex-col h-full min-h-0 bg-white text-black border border-slate-200 overflow-hidden">
-              <div className="px-4 py-2 flex justify-between items-center shrink-0 bg-white border-b border-slate-200 productivity-header">
-                <div className="flex items-center space-x-4">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-7 h-7 bg-[#393E46] rounded-lg flex items-center justify-center border border-[#393E46] shadow-sm">
-                      <ShieldCheck size={16} className="text-white" />
-                    </div>
-                    <div className="flex flex-col">
-                      <h1 className="text-base font-black text-[#222831] tracking-tight leading-none uppercase">Productivity Tracker</h1>
-                      <p className="text-[7px] text-slate-500 font-bold uppercase tracking-[0.22em]">Live Performance Board</p>
-                    </div>
-                  </div>
-
-                  <div className="h-7 w-px bg-slate-200" />
-
-                  <div className="flex items-center h-7 gap-1 bg-white/20 backdrop-blur-md px-1.5 rounded-lg border border-slate-200">
-                    <button onClick={() => {
-                        const [y, m, d] = selectedDate.split('-').map(Number);
-                        const dateObj = new Date(y, m - 1, d);
-                        dateObj.setDate(dateObj.getDate() - 1);
-                        setSelectedDate(dateObj.toLocaleDateString('en-CA'));
-                      }} className="p-1 hover:bg-black/5 rounded-md transition-colors text-slate-400 hover:text-black">
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" />
-                      </svg>
-                    </button>
-
-                    <div className="flex items-center gap-2 cursor-pointer group px-1 relative text-[9px] font-black text-black uppercase tracking-widest min-w-20 text-center">
-                      {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
-                      <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="absolute inset-0 opacity-0 cursor-pointer z-10 w-full" />
-                    </div>
-
-                    <button onClick={() => {
-                        const [y, m, d] = selectedDate.split('-').map(Number);
-                        const dateObj = new Date(y, m - 1, d);
-                        dateObj.setDate(dateObj.getDate() + 1);
-                        setSelectedDate(dateObj.toLocaleDateString('en-CA'));
-                      }} className="p-1 hover:bg-black/5 rounded-md transition-colors text-slate-400 hover:text-black">
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </button>
-                  </div>
-
-                  <div className="flex items-center bg-white/20 rounded-lg p-0.5 border border-slate-200 overflow-hidden ml-2">
-                    <div className="flex items-center gap-2 px-2.5 py-1 bg-white/60 rounded-md shadow-sm">
-                      <span className="text-[10px] font-black text-[#00ADB5] uppercase tracking-tighter border-r border-slate-200 pr-2">IST</span>
-                      <span className="text-[12px] font-black text-[#222831] tabular-nums tracking-tighter leading-none">{times.ist}</span>
-                    </div>
-                    <div className="flex items-center gap-2 px-2.5 py-1 rounded-md ml-0.5">
-                      <span className="text-[10px] font-black text-[#393E46] uppercase tracking-tighter border-r border-slate-200 pr-2">GMT</span>
-                      <span className="text-[12px] font-black text-black tabular-nums tracking-tighter leading-none">{times.uk}</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center bg-white/90 backdrop-blur-xl rounded-xl border border-white/20 overflow-hidden divide-x divide-slate-200/50 shadow-xl">
-                  <div className="px-4 py-1.5 flex flex-col items-center min-w-20">
-                    <span className="text-[7px] font-black text-[#00ADB5] uppercase tracking-[0.2em]">Total INC</span>
-                    <span className="text-sm font-black text-[#222831] tabular-nums leading-none tracking-tight">{totalStats.incidents}</span>
-                  </div>
-                  <div className="px-4 py-1.5 flex flex-col items-center min-w-20">
-                    <span className="text-[7px] font-black text-[#393E46] uppercase tracking-[0.2em]">Total TASK</span>
-                    <span className="text-sm font-black text-[#222831] tabular-nums leading-none tracking-tight">{totalStats.sctasks}</span>
-                  </div>
-                  <div className="px-4 py-1.5 flex flex-col items-center min-w-20">
-                    <span className="text-[7px] font-black text-[#00ADB5] uppercase tracking-[0.2em]">Total Calls</span>
-                    <span className="text-sm font-black text-[#222831] tabular-nums leading-none tracking-tight">{totalStats.calls}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex-1 min-h-0 p-0 pb-2">
-                <div className="h-full overflow-hidden">
-                  <table className={`w-full text-center table-fixed border-collapse tracker-table tracker-super-compact`} style={{maxWidth: '100%', boxSizing: 'border-box'}}>
-                    <thead>
-                      
-                      <tr className="sticky top-0 z-20 bg-white/70 backdrop-blur-sm">
-                        <th className="px-3 py-2 text-center border-r border-slate-200 text-xs font-semibold text-slate-600 first:rounded-tl-md" style={{width: '22%'}}>On Shift</th>
-                        <th className="px-2 py-2 text-center border-r border-slate-200 text-xs font-semibold text-slate-600" style={{width: '12%'}}>Shift</th>
-                        <th className="px-2 py-2 text-center border-r border-slate-200 text-xs font-semibold text-slate-600" style={{width: '10%'}}>Shift Time</th>
-                        <th className="px-2 py-2 text-center border-r border-slate-200 text-xs font-semibold text-slate-600" style={{width: '9%'}}>INC</th>
-                        <th className="px-2 py-2 text-center border-r border-slate-200 text-xs font-semibold text-slate-600" style={{width: '9%'}}>TASK</th>
-                        <th className="px-2 py-2 text-center border-r border-slate-200 text-xs font-semibold text-slate-600" style={{width: '9%'}}>CALL</th>
-                        <th className="px-2 py-2 text-center border-r border-slate-200 text-xs font-semibold text-slate-600" style={{width: '20%'}}>Notes</th>
-                        <th className="px-2 py-2 text-center last:rounded-tr-md text-xs font-semibold text-slate-600" style={{width: '5%'}}>Total</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {!activeHandlers.length ? (
-                        <tr>
-                          <td colSpan={8} className="py-20 text-center opacity-30">
-                            <ShieldCheck size={64} className="mx-auto mb-4 text-slate-400" strokeWidth={1} />
-                            <p className="text-xs font-black uppercase tracking-[0.2em] text-black">No Handlers on Shift</p>
-                          </td>
-                        </tr>
-                      ) : activeHandlers.map(handler => {
-                        const handlerStats = getHandlerStats(handler.id);
-                        const isDisabled = isShiftNearEnd(handler.shift);
-                        const rowTotal = handlerStats.incidents + handlerStats.sctasks + handlerStats.calls;
-
-                        return (
-                          <tr key={handler.id} className={`group border-b border-slate-200 bg-white transition-colors hover:bg-slate-50 ${isDisabled ? 'opacity-30 grayscale' : ''}`}>
-                            <td className="px-3 py-2 text-center border-r border-slate-200">
-                              <div className="flex items-center justify-center gap-2 min-w-0">
-                                <div className="text-[15px] font-semibold text-slate-800 truncate min-w-0">{handler.name}</div>
-                                {handler.isQH && (
-                                  <span className="shrink-0 text-[10px] font-bold text-[#00ADB5] uppercase tracking-wide">QH</span>
-                                )}
-                              </div>
-                            </td>
-                            <td className="px-2 py-1.5 text-center border-r border-slate-200">
-                              <span className={`inline-flex px-2 py-0.5 rounded-md text-[12px] font-semibold tracking-tight border ${getShiftColor(handler.shift).border} ${getShiftColor(handler.shift).light} ${getShiftColor(handler.shift).text}`}>{getShiftLabel(handler.shift)}</span>
-                            </td>
-                            <td className="px-2 py-1.5 text-center border-r border-slate-200">
-                              <span className={`inline-flex px-2 py-0.5 rounded-md text-[11px] font-semibold tracking-tight border ${getShiftColor(handler.shift).border} ${getShiftColor(handler.shift).light} ${getShiftColor(handler.shift).text}`}>{handler.shift}</span>
-                            </td>
-                            <td className="px-2 py-1.5 border-r border-slate-200">
-                              <div className="flex items-center justify-center gap-2">
-                                <button onClick={() => updateStat(handler.id, 'incidents', Math.max(0, handlerStats.incidents - 1))} disabled={isDisabled} className="w-6 h-6 flex items-center justify-center rounded-full bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 transition disabled:opacity-50">−</button>
-                                <span className={`w-5 text-center font-semibold text-[14px] tabular-nums ${flashMap[`${handler.id}-incidents`] === 'positive' ? 'text-emerald-600 bg-emerald-100/60 rounded' : flashMap[`${handler.id}-incidents`] === 'negative' ? 'text-red-600 bg-red-100/60 rounded' : 'text-slate-800'}`}>{handlerStats.incidents}</span>
-                                <button onClick={() => updateStat(handler.id, 'incidents', handlerStats.incidents + 1)} disabled={isDisabled} className="w-6 h-6 flex items-center justify-center rounded-full bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 transition disabled:opacity-50">+</button>
-                              </div>
-                            </td>
-                            <td className="px-2 py-1.5 border-r border-slate-200">
-                              <div className="flex items-center justify-center gap-2">
-                                <button onClick={() => updateStat(handler.id, 'sctasks', Math.max(0, handlerStats.sctasks - 1))} disabled={isDisabled} className="w-6 h-6 flex items-center justify-center rounded-full bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 transition disabled:opacity-50">−</button>
-                                <span className={`w-5 text-center font-semibold text-[14px] tabular-nums ${flashMap[`${handler.id}-sctasks`] === 'positive' ? 'text-emerald-600 bg-emerald-100/60 rounded' : flashMap[`${handler.id}-sctasks`] === 'negative' ? 'text-red-600 bg-red-100/60 rounded' : 'text-slate-800'}`}>{handlerStats.sctasks}</span>
-                                <button onClick={() => updateStat(handler.id, 'sctasks', handlerStats.sctasks + 1)} disabled={isDisabled} className="w-6 h-6 flex items-center justify-center rounded-full bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 transition disabled:opacity-50">+</button>
-                              </div>
-                            </td>
-                            <td className="px-2 py-1.5 border-r border-slate-200">
-                              <div className="flex items-center justify-center gap-2">
-                                <button onClick={() => updateStat(handler.id, 'calls', Math.max(0, handlerStats.calls - 1))} disabled={isDisabled} className="w-6 h-6 flex items-center justify-center rounded-full bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 transition disabled:opacity-50">−</button>
-                                <span className={`w-5 text-center font-semibold text-[14px] tabular-nums ${flashMap[`${handler.id}-calls`] === 'positive' ? 'text-emerald-600 bg-emerald-100/60 rounded' : flashMap[`${handler.id}-calls`] === 'negative' ? 'text-red-600 bg-red-100/60 rounded' : 'text-slate-800'}`}>{handlerStats.calls}</span>
-                                <button onClick={() => { setCallData({ ...callData, handlerId: handler.id }); setIsCallModalOpen(true); }} disabled={isDisabled} className="w-6 h-6 flex items-center justify-center rounded-full bg-[#00ADB5] hover:bg-[#00ADB5]/90 text-white shadow-sm text-[12px] font-bold">+</button>
-                              </div>
-                            </td>
-                            <td className="px-2 py-1.5 border-r border-slate-200">
-                              <input type="text" placeholder="Log status..." disabled={isDisabled} value={handlerStats.comments} onChange={(e) => updateStat(handler.id, 'comments', e.target.value)} className="w-full px-2 py-1.5 text-[14px] text-center text-slate-800 bg-white border border-slate-200 rounded-md outline-none focus:ring-1 focus:ring-[#00ADB5]/20 transition placeholder:text-slate-400 disabled:opacity-50" />
-                            </td>
-                            <td className="px-2 py-1.5 text-center">
-                              <div className="inline-flex items-center justify-center px-2 py-0.5 bg-slate-900 text-white rounded-md font-semibold text-[13px]">{rowTotal}</div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+      {/* ── Topbar ─────────────────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between px-5 py-2.5 border-b border-slate-800 shrink-0 bg-slate-900/80 backdrop-blur-sm">
+        {/* Left */}
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-teal-500/20 border border-teal-500/30 rounded-xl flex items-center justify-center">
+              <ShieldCheck size={16} className="text-teal-400" />
+            </div>
+            <div>
+              <p className="text-[8px] text-slate-500 font-black uppercase tracking-[0.25em] leading-none">Live Performance Board</p>
+              <h1 className="text-[14px] font-black text-white tracking-tight uppercase leading-none mt-0.5">Productivity Tracker</h1>
             </div>
           </div>
 
-          {/* Call Modal - Light Glassmorphic */}
-          {isCallModalOpen && (
-            <div className="fixed inset-0 z-300 flex items-center justify-center p-4">
-              {/* Full-screen dimmer that catches clicks (no blur) */}
-              <div className="absolute inset-0 bg-black/10" onClick={() => setIsCallModalOpen(false)} />
+          <div className="w-px h-8 bg-slate-700" />
 
-              {/* Localized blur sized to the modal card */}
-              <div className="relative">
-                <div className="absolute -inset-2 rounded-[44px] bg-white/40 backdrop-blur-sm pointer-events-none" />
+          {/* Date nav */}
+          <div className="flex items-center gap-2">
+            <button onClick={() => navDate(-1)} className="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors">
+              <ChevronLeft size={14} />
+            </button>
+            <div className="relative">
+              <div className="px-3 py-1.5 bg-slate-800/80 rounded-lg border border-slate-700/60 cursor-pointer min-w-[130px] text-center">
+                <span className="text-[11px] font-black text-white uppercase tracking-widest">{dayLabel}</span>
+              </div>
+              <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="absolute inset-0 opacity-0 cursor-pointer w-full" />
+            </div>
+            <button onClick={() => navDate(1)} className="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors">
+              <ChevronRight size={14} />
+            </button>
+          </div>
 
-                <div className="relative bg-white/90 border border-white/40 rounded-[40px] w-[320px] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.1)] animate-in zoom-in-95 duration-200">
-                  {/* Header */}
-                  <div className="px-8 pt-8 pb-4 flex justify-between items-center">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-2xl bg-[#00ADB5]/10 border border-[#00ADB5]/20 flex items-center justify-center">
-                        <PhoneCall size={18} className="text-[#00ADB5]" />
-                      </div>
-                      <div>
-                        <h3 className="text-[#222831] font-black text-xs uppercase tracking-[0.2em] leading-none">Call Record</h3>
-                        <p className="text-[7px] text-slate-500 font-bold uppercase tracking-widest mt-1">Logging productivity...</p>
-                      </div>
-                    </div>
-                    <button onClick={() => setIsCallModalOpen(false)} className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-all">
-                      <X size={20} />
-                    </button>
-                  </div>
+          {/* Clocks */}
+          <div className="hidden md:flex items-center gap-1 bg-slate-800/60 rounded-lg border border-slate-700/50 overflow-hidden">
+            <div className="flex items-center gap-2 px-3 py-1.5">
+              <span className="text-[9px] font-black text-teal-400 tracking-widest">IST</span>
+              <span className="text-[12px] font-mono font-semibold text-white tabular-nums">{times.ist}</span>
+            </div>
+            <div className="w-px h-5 bg-slate-700" />
+            <div className="flex items-center gap-2 px-3 py-1.5">
+              <span className="text-[9px] font-black text-slate-400 tracking-widest">GMT</span>
+              <span className="text-[12px] font-mono font-semibold text-slate-300 tabular-nums">{times.uk}</span>
+            </div>
+          </div>
+        </div>
 
-                  <div className="px-8 pb-10 space-y-8">
-                  {/* Ticket Input Section */}
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center px-1">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">Ticket Number</label>
-                      <span className="text-[8px] font-black text-[#00ADB5] uppercase tracking-widest bg-[#00ADB5]/10 px-2 py-0.5 rounded-full">Required</span>
-                    </div>
-                    <div className="relative group">
-                      <input 
-                        autoFocus
-                        type="text"
-                        placeholder="EX: INC1234567"
-                        value={callData.ticketNumber}
-                        onChange={(e) => setCallData({...callData, ticketNumber: e.target.value.toUpperCase()})}
-                        onKeyDown={(e) => e.key === 'Enter' && handleCallSubmit()}
-                        className="w-full bg-white border border-slate-200 rounded-[20px] px-5 py-4 text-slate-900 font-bold text-sm placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all uppercase tracking-widest shadow-sm"
-                      />
-                    </div>
-                  </div>
+        {/* Right — totals */}
+        <div className="flex items-center divide-x divide-slate-700/60 bg-slate-800/60 rounded-xl border border-slate-700/50 overflow-hidden">
+          {[
+            { label: 'Total INC',   value: totalStats.incidents, color: 'text-sky-400' },
+            { label: 'Total TASK',  value: totalStats.sctasks,   color: 'text-amber-400' },
+            { label: 'Total CALLS', value: totalStats.calls,     color: 'text-teal-400' },
+          ].map(({ label, value, color }) => (
+            <div key={label} className="px-4 py-2 flex flex-col items-center min-w-[72px]">
+              <span className={`text-[7px] font-black uppercase tracking-[0.2em] ${color}`}>{label}</span>
+              <span className="text-[18px] font-black text-white tabular-nums leading-none mt-0.5">{value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
 
-                  {/* Call Type Section */}
-                  <div className="space-y-3">
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] px-1">Call Type</label>
-                    <div className="grid grid-cols-2 gap-2 p-1.5 bg-slate-100 rounded-[22px] border border-slate-200 shadow-inner">
-                      <button 
-                        onClick={() => setCallData({...callData, type: 'New'})} 
-                        className={`py-3 rounded-2xl font-black text-[9px] uppercase tracking-[0.2em] transition-all duration-300 ${callData.type === 'New' ? 'bg-white text-[#222831] shadow-md scale-[1.02]' : 'text-slate-400 hover:text-slate-600 hover:bg-white/50'}`}
-                      >
-                        New
-                      </button>
-                      <button 
-                        onClick={() => setCallData({...callData, type: 'Update'})} 
-                        className={`py-3 rounded-2xl font-black text-[9px] uppercase tracking-[0.2em] transition-all duration-300 ${callData.type === 'Update' ? 'bg-white text-[#222831] shadow-md scale-[1.02]' : 'text-slate-400 hover:text-slate-600 hover:bg-white/50'}`}
-                      >
-                        Update
-                      </button>
-                    </div>
-                  </div>
+      {/* ── Table ──────────────────────────────────────────────────────────── */}
+      <div className="flex-1 min-h-0 overflow-auto">
+        {activeHandlers.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full opacity-25">
+            <ShieldCheck size={56} strokeWidth={1} className="text-slate-400 mb-4" />
+            <p className="text-[11px] font-black uppercase tracking-[0.3em] text-slate-400">No Handlers on Shift</p>
+          </div>
+        ) : (
+          <table className="w-full table-fixed border-collapse">
+            {/* Sticky header */}
+            <thead className="sticky top-0 z-20">
+              <tr className="bg-slate-900/95 backdrop-blur-sm border-b border-slate-700/60">
+                {[
+                  { label: 'On Shift',  w: '22%' },
+                  { label: 'Shift',     w: '14%' },
+                  { label: 'Shift Time',w: '10%' },
+                  { label: 'INC',       w: '9%'  },
+                  { label: 'TASK',      w: '9%'  },
+                  { label: 'CALL',      w: '9%'  },
+                  { label: 'Notes',     w: '21%' },
+                  { label: 'Total',     w: '6%'  },
+                ].map(({ label, w }, i) => (
+                  <th key={label} className="px-3 py-2.5 text-center border-r border-slate-800/60 last:border-r-0" style={{ width: w }}>
+                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{label}</span>
+                  </th>
+                ))}
+              </tr>
+            </thead>
 
-                  {/* Submit Button */}
-                  <button 
-                    onClick={handleCallSubmit}
-                    className="w-full bg-[#222831] hover:bg-[#222831]/90 text-white pt-5 pb-5 rounded-3xl font-black text-xs uppercase tracking-[0.3em] shadow-lg transition-all active:scale-[0.97] flex items-center justify-center gap-3 group"
-                  >
-                    <Check size={18} strokeWidth={4} className="group-hover:scale-125 transition-transform" />
-                    Submit Record
-                  </button>
+            <tbody>
+              {handlersByShift.map(({ shift, handlers: groupHandlers }) => {
+                const meta = getShiftMeta(shift);
+                return (
+                  <React.Fragment key={shift}>
+                    {/* Shift group divider */}
+                    <tr>
+                      <td colSpan={8} className="px-4 py-1.5 border-b border-slate-800/40" style={{ background: `${meta.accentHex}12` }}>
+                        <div className="flex items-center gap-2">
+                          <div className="w-1.5 h-1.5 rounded-full" style={{ background: meta.accentHex, boxShadow: `0 0 6px ${meta.accentHex}80` }} />
+                          <span className={`text-[9px] font-black uppercase tracking-[0.25em] ${meta.accent}`}>{meta.label}</span>
+                          <span className="text-[8px] text-slate-600 font-black ml-1">{groupHandlers.length} handler{groupHandlers.length !== 1 ? 's' : ''}</span>
+                        </div>
+                      </td>
+                    </tr>
+
+                    {groupHandlers.map(handler => {
+                      const hs = getHandlerStats(handler.id);
+                      const disabled = isShiftNearEnd(handler.shift);
+                      const rowTotal = hs.incidents + hs.sctasks + hs.calls;
+                      const flash = (field: string) => {
+                        const f = flashMap[`${handler.id}-${field}`];
+                        return f === 'positive' ? 'text-emerald-400' : f === 'negative' ? 'text-red-400' : 'text-white';
+                      };
+
+                      return (
+                        <tr
+                          key={handler.id}
+                          className={`border-b border-slate-800/40 transition-colors group
+                            ${meta.rowBg} hover:brightness-125
+                            ${disabled ? 'opacity-30 grayscale pointer-events-none' : ''}
+                          `}
+                        >
+                          {/* Name */}
+                          <td className="px-3 py-2 border-r border-slate-800/40">
+                            <div className="flex items-center gap-2 justify-center">
+                              <span className="text-[13px] font-semibold text-white truncate">{handler.name}</span>
+                              {handler.isQH && (
+                                <Shield size={11} className="text-yellow-400 shrink-0" />
+                              )}
+                            </div>
+                          </td>
+
+                          {/* Shift label badge */}
+                          <td className="px-2 py-2 border-r border-slate-800/40 text-center">
+                            <span className={`inline-flex items-center px-2 py-1 rounded-md text-[10px] font-black border ${meta.badgeBg} ${meta.badgeText} ${meta.badgeBorder}`}>
+                              {meta.label}
+                            </span>
+                          </td>
+
+                          {/* Shift time badge */}
+                          <td className="px-2 py-2 border-r border-slate-800/40 text-center">
+                            <span className={`inline-flex items-center px-2 py-1 rounded-md text-[10px] font-black ${meta.timeBg} ${meta.timeText}`}>
+                              {handler.shift}
+                            </span>
+                          </td>
+
+                          {/* INC */}
+                          <td className="px-2 py-2 border-r border-slate-800/40">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button onClick={() => updateStat(handler.id,'incidents',Math.max(0,hs.incidents-1))} className="w-6 h-6 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 hover:text-white text-sm leading-none flex items-center justify-center transition-colors">−</button>
+                              <span className={`w-6 text-center font-black text-[14px] tabular-nums transition-colors ${flash('incidents')}`}>{hs.incidents}</span>
+                              <button onClick={() => updateStat(handler.id,'incidents',hs.incidents+1)} className="w-6 h-6 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 hover:text-white text-sm leading-none flex items-center justify-center transition-colors">+</button>
+                            </div>
+                          </td>
+
+                          {/* TASK */}
+                          <td className="px-2 py-2 border-r border-slate-800/40">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button onClick={() => updateStat(handler.id,'sctasks',Math.max(0,hs.sctasks-1))} className="w-6 h-6 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 hover:text-white text-sm leading-none flex items-center justify-center transition-colors">−</button>
+                              <span className={`w-6 text-center font-black text-[14px] tabular-nums transition-colors ${flash('sctasks')}`}>{hs.sctasks}</span>
+                              <button onClick={() => updateStat(handler.id,'sctasks',hs.sctasks+1)} className="w-6 h-6 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 hover:text-white text-sm leading-none flex items-center justify-center transition-colors">+</button>
+                            </div>
+                          </td>
+
+                          {/* CALL */}
+                          <td className="px-2 py-2 border-r border-slate-800/40">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button onClick={() => updateStat(handler.id,'calls',Math.max(0,hs.calls-1))} className="w-6 h-6 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 hover:text-white text-sm leading-none flex items-center justify-center transition-colors">−</button>
+                              <span className={`w-6 text-center font-black text-[14px] tabular-nums transition-colors ${flash('calls')}`}>{hs.calls}</span>
+                              <button
+                                onClick={() => { setCallData({...callData, handlerId: handler.id}); setIsCallModalOpen(true); }}
+                                className="w-6 h-6 rounded-full bg-teal-500 hover:bg-teal-400 text-white text-sm leading-none flex items-center justify-center transition-colors shadow-sm shadow-teal-500/30 font-black"
+                              >+</button>
+                            </div>
+                          </td>
+
+                          {/* Notes */}
+                          <td className="px-2 py-2 border-r border-slate-800/40">
+                            <input
+                              type="text"
+                              placeholder="Log status…"
+                              value={hs.comments}
+                              onChange={e => updateStat(handler.id,'comments',e.target.value)}
+                              className="w-full px-2.5 py-1.5 text-[12px] text-center text-slate-200 bg-slate-800/60 border border-slate-700/50 rounded-lg outline-none focus:border-teal-500/50 focus:bg-slate-800 transition-colors placeholder:text-slate-600"
+                            />
+                          </td>
+
+                          {/* Total */}
+                          <td className="px-2 py-2 text-center">
+                            <div
+                              className="inline-flex items-center justify-center px-2.5 py-1 rounded-lg font-black text-[13px] tabular-nums"
+                              style={{ background: rowTotal > 0 ? `${meta.accentHex}25` : '#1e293b', color: rowTotal > 0 ? meta.accentHex : '#475569' }}
+                            >
+                              {rowTotal}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* ── Call Modal ─────────────────────────────────────────────────────── */}
+      {isCallModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsCallModalOpen(false)} />
+          <div className="relative bg-slate-900 border border-slate-700 rounded-2xl w-[320px] overflow-hidden shadow-2xl">
+            {/* Header */}
+            <div className="px-6 pt-6 pb-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center">
+                  <PhoneCall size={16} className="text-teal-400" />
+                </div>
+                <div>
+                  <h3 className="text-[11px] font-black text-white uppercase tracking-widest leading-none">Call Record</h3>
+                  <p className="text-[8px] text-slate-500 uppercase tracking-widest mt-0.5">Log productivity entry</p>
                 </div>
               </div>
-              </div>
+              <button onClick={() => setIsCallModalOpen(false)} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-500 hover:text-white hover:bg-slate-700 transition-all">
+                <X size={16} />
+              </button>
             </div>
-          )}
-        </div>
-      );
-    };
 
-    export default TrackerPage;
+            <div className="px-6 pb-6 space-y-4">
+              {/* Ticket input */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Ticket Number</label>
+                  <span className="text-[8px] font-black text-teal-400 bg-teal-500/10 px-2 py-0.5 rounded-full">Required</span>
+                </div>
+                <input
+                  autoFocus
+                  type="text"
+                  placeholder="INC1234567"
+                  value={callData.ticketNumber}
+                  onChange={e => setCallData({...callData, ticketNumber: e.target.value.toUpperCase()})}
+                  onKeyDown={e => e.key === 'Enter' && handleCallSubmit()}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white font-bold text-sm placeholder:text-slate-600 focus:outline-none focus:border-teal-500/50 transition-colors uppercase tracking-widest"
+                />
+              </div>
+
+              {/* Type toggle */}
+              <div>
+                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Call Type</label>
+                <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-800 rounded-xl border border-slate-700">
+                  {(['New','Update'] as const).map(t => (
+                    <button
+                      key={t}
+                      onClick={() => setCallData({...callData, type: t})}
+                      className={`py-2.5 rounded-lg font-black text-[10px] uppercase tracking-widest transition-all ${
+                        callData.type === t
+                          ? 'bg-teal-500 text-white shadow-sm shadow-teal-500/30'
+                          : 'text-slate-500 hover:text-slate-300 hover:bg-slate-700'
+                      }`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Submit */}
+              <button
+                onClick={handleCallSubmit}
+                className="w-full bg-teal-500 hover:bg-teal-400 text-white py-3 rounded-xl font-black text-[11px] uppercase tracking-widest shadow-lg shadow-teal-500/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+              >
+                <Check size={16} strokeWidth={3} />
+                Submit Record
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default TrackerPage;

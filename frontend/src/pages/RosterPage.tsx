@@ -86,11 +86,11 @@ const SHIFT_CONFIG: Record<string, {
   pillText: string;
   pillBorder: string;
 }> = {
-  '6AM-3PM':  { accent: 'bg-sky-500',    accentHex: '#0EA5E9', label: 'Morning',    headerBg: 'bg-sky-950/80',    colBg: 'bg-sky-950/20',    pillBg: 'bg-sky-900/60',   pillText: 'text-sky-100',   pillBorder: 'border-sky-700/50' },
-  '12PM-9PM': { accent: 'bg-amber-400',  accentHex: '#FBBF24', label: 'Afternoon',  headerBg: 'bg-amber-900/80',  colBg: 'bg-amber-950/20',  pillBg: 'bg-amber-900/60', pillText: 'text-amber-100', pillBorder: 'border-amber-700/50' },
-  '1PM-10PM': { accent: 'bg-orange-500', accentHex: '#F97316', label: 'Noon-Night', headerBg: 'bg-orange-950/80', colBg: 'bg-orange-950/20', pillBg: 'bg-orange-900/60',pillText: 'text-orange-100',pillBorder: 'border-orange-700/50' },
-  '2PM-11PM': { accent: 'bg-rose-500',   accentHex: '#F43F5E', label: 'Evening',    headerBg: 'bg-rose-950/80',   colBg: 'bg-rose-950/20',   pillBg: 'bg-rose-900/60',  pillText: 'text-rose-100',  pillBorder: 'border-rose-700/50' },
-  '10PM-7AM': { accent: 'bg-violet-500', accentHex: '#8B5CF6', label: 'Night',      headerBg: 'bg-violet-950/80', colBg: 'bg-violet-950/20', pillBg: 'bg-violet-900/60',pillText: 'text-violet-100',pillBorder: 'border-violet-700/50' },
+  '6AM-3PM':  { accent: 'bg-sky-400',    accentHex: '#38BDF8', label: 'Morning',   headerBg: 'bg-sky-900/90',    colBg: 'bg-sky-950/30',    pillBg: 'bg-sky-800/70',    pillText: 'text-sky-100',    pillBorder: 'border-sky-600/60' },
+  '12PM-9PM': { accent: 'bg-yellow-400', accentHex: '#FACC15', label: 'Afternoon', headerBg: 'bg-yellow-800/90', colBg: 'bg-yellow-950/30', pillBg: 'bg-yellow-800/70', pillText: 'text-yellow-100', pillBorder: 'border-yellow-600/60' },
+  '1PM-10PM': { accent: 'bg-amber-400',  accentHex: '#FBBF24', label: 'Afternoon', headerBg: 'bg-amber-800/90',  colBg: 'bg-amber-950/30',  pillBg: 'bg-amber-800/70',  pillText: 'text-amber-100',  pillBorder: 'border-amber-600/60' },
+  '2PM-11PM': { accent: 'bg-orange-400', accentHex: '#FB923C', label: 'Evening',   headerBg: 'bg-orange-900/90', colBg: 'bg-orange-950/30', pillBg: 'bg-orange-800/70', pillText: 'text-orange-100', pillBorder: 'border-orange-600/60' },
+  '10PM-7AM': { accent: 'bg-indigo-400', accentHex: '#818CF8', label: 'Night',     headerBg: 'bg-indigo-950/95', colBg: 'bg-indigo-950/40', pillBg: 'bg-indigo-900/80', pillText: 'text-indigo-200', pillBorder: 'border-indigo-700/60' },
 };
 
 const LEAVE_CONFIG: Record<string, { label: string; color: string; textColor: string; borderColor: string }> = {
