@@ -4,7 +4,7 @@ const userSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true, lowercase: true, trim: true, index: true },
   fullName: { type: String, required: true, trim: true },
   passwordHash: { type: String, required: true },
-  role: { type: String, enum: ['handler','admin','auditor'], default: 'handler' },
+  role: { type: String, enum: ['admin', 'queue_handler', 'associate'], default: 'associate' },
   isActive: { type: Boolean, default: true },
   failedLogins: { type: Number, default: 0 },
   lastLoginAt: Date,

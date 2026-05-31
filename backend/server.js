@@ -170,6 +170,10 @@ app.use(async (req, res, next) => {
 import authRouter from './routes/auth.js';
 app.use('/api', authRouter);
 
+// Role management routes
+import rolesRouter from './routes/roles.js';
+app.use('/api', rolesRouter);
+
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: corsOptions

@@ -5,8 +5,11 @@ import type { Handler } from '../types';
 import { addLog, downloadLogsForDate, downloadAllLogs, saveLogsFromServer, saveSingleLogFromServer } from '../utils/logger';
 import { socket, syncData } from '../utils/socket';
 import ConfirmModal from '../components/ConfirmModal';
+import { useRole } from '../auth/RoleContext';
 
 const SettingsPage: React.FC = () => {
+  const { role } = useRole();
+  const isPrivileged = role === 'admin' || role === 'queue_handler';
   const [handlers, setHandlers] = useState<Handler[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
@@ -114,27 +117,37 @@ const SettingsPage: React.FC = () => {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => downloadLogsForDate(new Date().toISOString().split('T')[0])}
-            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm active:scale-95"
-          >
-            <FileText size={16} className="text-blue-600" />
-            Daily Logs
-          </button>
-          <button
-            onClick={() => downloadAllLogs()}
-            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm active:scale-95"
-          >
-            <Database size={16} className="text-indigo-600" />
-            Archive
-          </button>
-          <button
-            onClick={addHandler}
-            className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-lg shadow-slate-900/20 active:scale-95"
-          >
-            <Plus size={16} />
-            Add Handler
-          </button>
+          {isPrivileged && (
+            <>
+              <button
+                onClick={() => downloadLogsForDate(new Date().toISOString().split('T')[0])}
+                className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm active:scale-95"
+              >
+                <FileText size={16} className="text-blue-600" />
+                Daily Logs
+              </button>
+              <button
+                onClick={() => downloadAllLogs()}
+                className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm active:scale-95"
+              >
+                <Database size={16} className="text-indigo-600" />
+                Archive
+              </button>
+              <button
+                onClick={addHandler}
+                className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-lg shadow-slate-900/20 active:scale-95"
+              >
+                <Plus size={16} />
+                Add Handler
+              </button>
+            </>
+          )}
+          {!isPrivileged && (
+            <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm font-semibold text-slate-400">
+              <ShieldCheck size={16} />
+              View Only
+            </div>
+          )}
         </div>
       </div>
 

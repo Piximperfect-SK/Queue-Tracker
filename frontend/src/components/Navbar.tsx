@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Calendar, BarChart2, Settings, LogOut, Activity } from 'lucide-react';
+import { Calendar, BarChart2, Settings, LogOut, Activity, Shield } from 'lucide-react';
 import { socket } from '../utils/socket';
+import { useRole } from '../auth/RoleContext';
 
 interface NavbarProps {
   currentUser: string;
@@ -11,6 +12,7 @@ interface NavbarProps {
 
 const Navbar: React.FC<NavbarProps> = ({ currentUser, onLogout, onlineUsers }) => {
   const [isConnected, setIsConnected] = useState(socket.connected);
+  const { role } = useRole();
 
   useEffect(() => {
     const onConnect = () => setIsConnected(true);
@@ -80,14 +82,22 @@ const Navbar: React.FC<NavbarProps> = ({ currentUser, onLogout, onlineUsers }) =
                 <BarChart2 size={14} />
                 <span>Tracker</span>
               </Link>
-              <Link to="/settings" className="px-3 py-1.5 rounded-xl text-[10.5px] font-black uppercase tracking-widest text-white/80 hover:text-white hover:bg-[#393E46] transition-all flex items-center space-x-2">
-                <Settings size={14} />
-                <span>Settings</span>
-              </Link>
+              {role !== 'associate' && (
+                <Link to="/settings" className="px-3 py-1.5 rounded-xl text-[10.5px] font-black uppercase tracking-widest text-white/80 hover:text-white hover:bg-[#393E46] transition-all flex items-center space-x-2">
+                  <Settings size={14} />
+                  <span>Settings</span>
+                </Link>
+              )}
               <Link to="/logs" className="px-3 py-1.5 rounded-xl text-[10.5px] font-black uppercase tracking-widest text-white/80 hover:text-white hover:bg-[#393E46] transition-all flex items-center space-x-2">
                 <Activity size={14} />
                 <span>Monitor</span>
               </Link>
+              {role === 'admin' && (
+                <Link to="/admin" className="px-3 py-1.5 rounded-xl text-[10.5px] font-black uppercase tracking-widest text-white/80 hover:text-white hover:bg-[#393E46] transition-all flex items-center space-x-2">
+                  <Shield size={14} />
+                  <span>Admin</span>
+                </Link>
+              )}
             </div>
 
             <div className="h-8 w-px bg-white/20" />

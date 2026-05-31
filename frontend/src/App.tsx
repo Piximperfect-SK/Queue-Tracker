@@ -11,8 +11,10 @@ import signinBg from './assets/videobackground-2.mp4';
 import bgImage from './assets/background.jpg';
 import { addLog } from './utils/logger';
 import { AuthProvider } from './auth/AuthContext';
+import { RoleProvider, useRole } from './auth/RoleContext';
 import LoginPanel from './pages/Auth/LoginPanel';
 import RegisterPanel from './pages/Auth/RegisterPanel';
+import AdminPage from './pages/AdminPage';
 
 function App() {
   const [currentUser, setCurrentUser] = useState<string | null>(() => {
@@ -309,6 +311,8 @@ const AppFrame: React.FC<{
   const isTracker = location.pathname === '/tracker';
 
   return (
+    <AuthProvider>
+    <RoleProvider>
     <div className="h-screen w-full relative overflow-hidden font-sans selection:bg-blue-500/30 text-slate-900">
       {/* Background Image */}
       <img src={bgImage} alt="Background" className="absolute inset-0 w-full h-full object-cover scale-105" />
@@ -323,9 +327,12 @@ const AppFrame: React.FC<{
             <Route path="/tracker" element={<TrackerPage selectedDate={selectedDate} setSelectedDate={setSelectedDate} />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/logs" element={<LogMonitorPage />} />
+            <Route path="/admin" element={<AdminPage />} />
           </Routes>
         </main>
       </div>
     </div>
+    </RoleProvider>
+    </AuthProvider>
   );
 };
