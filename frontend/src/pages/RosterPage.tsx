@@ -210,6 +210,18 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
   const [times, setTimes] = useState({ ist: '', uk: '' });
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Screenshot import state
+  const screenshotInputRef = useRef<HTMLInputElement | null>(null);
+  const [isScreenshotModalOpen, setIsScreenshotModalOpen] = useState(false);
+  const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null);
+  const [screenshotBase64, setScreenshotBase64] = useState<string | null>(null);
+  const [isParsingScreenshot, setIsParsingScreenshot] = useState(false);
+  const [screenshotParseResult, setScreenshotParseResult] = useState<{
+    entries: RosterEntry[];
+    newHandlers: Handler[];
+    summary: string;
+  } | null>(null);
+
   useEffect(() => {
     const update = () => {
       const fmt = (tz: string) => new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: true }).format(new Date());
@@ -361,6 +373,167 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
       setImportStatus({ message: `Import failed: ${err instanceof Error ? err.message : 'Unknown'}`, tone: 'error' });
     } finally { setIsImportingRoster(false); }
   };
+
+
+  // ── Screenshot Import ────────────────────────────────────────────────────
+  const handleScreenshotFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string;
+      setScreenshotPreview(dataUrl);
+      // Extract pure base64 (strip data:image/...;base64, prefix)
+      setScreenshotBase64(dataUrl.split(',')[1]);
+      setScreenshotParseResult(null);
+      setIsScreenshotModalOpen(true);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const TIME_TO_SHIFT: [RegExp, ShiftType][] = [
+    [/6.?00\s*[Aa][Mm].*3.?00\s*[Pp][Mm]/,  '6AM-3PM' ],
+    [/12.?00\s*[Pp][Mm].*9.?00\s*[Pp][Mm]/, '12PM-9PM'],
+    [/1.?00\s*[Pp][Mm].*10.?00\s*[Pp][Mm]/, '1PM-10PM'],
+    [/2.?00\s*[Pp][Mm].*11.?00\s*[Pp][Mm]/, '2PM-11PM'],
+    [/10.?00\s*[Pp][Mm].*7.?00\s*[Aa][Mm]/, '10PM-7AM'],
+    [/9.?00\s*[Pp][Mm].*6.?00\s*[Aa][Mm]/,  '10PM-7AM'],
+  ];
+
+  const parseShiftFromText = (text: string): ShiftType => {
+    const t = text.trim().toUpperCase();
+    if (!t || t === 'WO' || t === 'WEEK OFF' || t === 'WEEKOFF') return 'WO';
+    if (t === 'PL' || t === 'PRIVILEGE LEAVE') return 'PL';
+    if (t === 'ML' || t === 'MEDICAL LEAVE')   return 'ML';
+    if (t === 'EL' || t === 'EMERGENCY LEAVE') return 'EL';
+    if (t === 'UL' || t === 'UNPAID LEAVE')    return 'UL';
+    if (t === 'CO' || t === 'COMP OFF' || t === 'COMPENSATORY') return 'CO';
+    if (t === 'MID-LEAVE' || t === 'MID LEAVE') return 'MID-LEAVE';
+    for (const [regex, shift] of TIME_TO_SHIFT) {
+      if (regex.test(text)) return shift;
+    }
+    return 'WO';
+  };
+
+  const parseScreenshotWithAI = async () => {
+    if (!screenshotBase64) return;
+    setIsParsingScreenshot(true);
+    setScreenshotParseResult(null);
+    try {
+      const prompt = `You are a roster data extractor. Analyse this roster/schedule screenshot carefully.
+
+Extract ALL data as a JSON object with this exact structure:
+{
+  "dates": ["YYYY-MM-DD", ...],
+  "roster": [
+    {
+      "name": "Agent Full Name",
+      "entries": [
+        { "date": "YYYY-MM-DD", "shift": "raw cell text exactly as shown" },
+        ...
+      ]
+    },
+    ...
+  ]
+}
+
+Rules:
+- dates array = all date columns found in the table header, converted to YYYY-MM-DD
+- For each agent row, include one entry per date column
+- shift = copy the cell text EXACTLY as shown (e.g. "06:00 AM to 03:00 PM", "WO", "PL", "CO", "01:00 PM to 10:00 PM")
+- If a cell is blank or truly empty, use "WO"
+- Do NOT skip any agent or any date
+- Return ONLY the raw JSON, no markdown, no explanation, no code fences`;
+
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 4000,
+          messages: [{
+            role: 'user',
+            content: [
+              {
+                type: 'image',
+                source: { type: 'base64', media_type: 'image/png', data: screenshotBase64 }
+              },
+              { type: 'text', text: prompt }
+            ]
+          }]
+        })
+      });
+
+      const data = await response.json();
+      const rawText = data.content?.find((b: any) => b.type === 'text')?.text ?? '';
+
+      // Strip potential markdown fences
+      const jsonText = rawText.replace(/```json|```/g, '').trim();
+      const parsed = JSON.parse(jsonText);
+
+      // Build handler lookup
+      const lookup = new Map<string, string>();
+      handlers.forEach(h => lookup.set(h.name.trim().toLowerCase(), h.id));
+
+      const newHandlers: Handler[] = [];
+      const entries: RosterEntry[] = [];
+
+      for (const agentRow of parsed.roster) {
+        const name = agentRow.name?.trim();
+        if (!name) continue;
+        const key = name.toLowerCase();
+        let hid = lookup.get(key);
+        if (!hid) {
+          hid = createAgentId();
+          lookup.set(key, hid);
+          newHandlers.push({ id: hid, name, isQH: false });
+        }
+        for (const entry of agentRow.entries) {
+          const shift = parseShiftFromText(entry.shift ?? '');
+          entries.push({ handlerId: hid, date: entry.date, shift });
+        }
+      }
+
+      const agentCount = parsed.roster?.length ?? 0;
+      const dateCount = parsed.dates?.length ?? 0;
+      setScreenshotParseResult({
+        entries,
+        newHandlers,
+        summary: `Found ${agentCount} agents × ${dateCount} dates = ${entries.length} roster entries.${newHandlers.length ? ` ${newHandlers.length} new handler(s) will be created.` : ''}`
+      });
+    } catch (err) {
+      setImportStatus({ message: `Screenshot parse failed: ${err instanceof Error ? err.message : 'Unknown error'}`, tone: 'error' });
+      setIsScreenshotModalOpen(false);
+    } finally {
+      setIsParsingScreenshot(false);
+    }
+  };
+
+  const applyScreenshotImport = () => {
+    if (!screenshotParseResult) return;
+    const { entries, newHandlers } = screenshotParseResult;
+    const merged = mergeRosterEntries(roster, entries);
+    setRoster(merged);
+    localStorage.setItem('roster', JSON.stringify(merged));
+    syncData.updateRoster(merged);
+    if (newHandlers.length) {
+      const uh = [...handlers, ...newHandlers];
+      setHandlers(uh);
+      localStorage.setItem('handlers', JSON.stringify(uh));
+      syncData.updateHandlers(uh);
+    }
+    // Navigate to first date in the import
+    const dates = [...new Set(entries.map(e => e.date))].sort();
+    if (dates.length) setSelectedDate(dates[0]);
+    addLog('Import Roster', `Screenshot import: ${entries.length} entries across ${[...new Set(entries.map(e=>e.date))].length} dates`, 'positive');
+    setImportStatus({ message: screenshotParseResult.summary.replace('Found','Imported'), tone: 'success' });
+    setIsScreenshotModalOpen(false);
+    setScreenshotPreview(null);
+    setScreenshotBase64(null);
+    setScreenshotParseResult(null);
+  };
+
 
   const handleLeaveConfirm = () => {
     if (!leaveOperation) return;
@@ -534,6 +707,17 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
                 <span className="hidden sm:inline">{isImportingRoster ? 'Importing…' : 'Import'}</span>
               </button>
               <input type="file" ref={fileInputRef} onChange={handleRosterFileChange} accept=".xlsx,.xls,.csv" className="hidden" />
+
+              {/* Screenshot import button */}
+              <button
+                onClick={() => screenshotInputRef.current?.click()}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-600 hover:text-indigo-800 text-[10px] font-black uppercase tracking-widest transition-all shadow-sm"
+                title="Import from screenshot"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                <span className="hidden sm:inline">AI Scan</span>
+              </button>
+              <input type="file" ref={screenshotInputRef} onChange={handleScreenshotFileChange} accept="image/*" className="hidden" />
 
               <button
                 onClick={() => setIsModalOpen(true)}
@@ -773,6 +957,100 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
           </div>
         </div>
       )}
+
+      {/* ── Screenshot / AI Scan Modal ─────────────────────────────────────── */}
+      {isScreenshotModalOpen && (
+        <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
+          <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={() => { setIsScreenshotModalOpen(false); setScreenshotPreview(null); setScreenshotBase64(null); setScreenshotParseResult(null); }} />
+          <div className="relative bg-white border border-slate-200 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+
+            {/* Header */}
+            <div className="px-6 pt-5 pb-4 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4F46E5" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                </div>
+                <div>
+                  <h3 className="text-[12px] font-black text-slate-900 uppercase tracking-widest leading-none">AI Roster Scan</h3>
+                  <p className="text-[8px] text-slate-400 uppercase tracking-widest mt-0.5">Claude reads the screenshot and builds the roster</p>
+                </div>
+              </div>
+              <button onClick={() => { setIsScreenshotModalOpen(false); setScreenshotPreview(null); setScreenshotBase64(null); setScreenshotParseResult(null); }} className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all">
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {/* Preview */}
+              {screenshotPreview && (
+                <div className="rounded-xl overflow-hidden border border-slate-200 shadow-sm max-h-52">
+                  <img src={screenshotPreview} alt="Roster screenshot" className="w-full object-contain" />
+                </div>
+              )}
+
+              {/* Parse result summary */}
+              {screenshotParseResult && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
+                  <p className="text-[11px] font-black text-emerald-700 uppercase tracking-wider mb-1">✓ Parse Complete</p>
+                  <p className="text-[12px] text-emerald-800 font-semibold">{screenshotParseResult.summary}</p>
+                </div>
+              )}
+
+              {/* Steps guide */}
+              {!screenshotParseResult && !isParsingScreenshot && (
+                <div className="space-y-2">
+                  {[
+                    { n: '1', text: 'Screenshot uploaded — Claude will analyse the full roster table' },
+                    { n: '2', text: 'Agent names, dates and shift times will be automatically detected' },
+                    { n: '3', text: 'Review the summary, then click Apply to update all roster days at once' },
+                  ].map(({ n, text }) => (
+                    <div key={n} className="flex items-start gap-3 px-3 py-2 bg-slate-50 rounded-lg border border-slate-100">
+                      <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 font-black text-[10px] flex items-center justify-center shrink-0 mt-0.5">{n}</span>
+                      <p className="text-[11px] text-slate-600 font-medium leading-relaxed">{text}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Parsing spinner */}
+              {isParsingScreenshot && (
+                <div className="flex flex-col items-center justify-center py-8 gap-3">
+                  <div className="w-10 h-10 rounded-full border-2 border-indigo-200 border-t-indigo-600 animate-spin" />
+                  <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">Claude is reading the roster…</p>
+                  <p className="text-[10px] text-slate-400">Extracting agents, dates and shifts</p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer actions */}
+            <div className="px-6 pb-6 flex gap-3">
+              <button
+                onClick={() => { setIsScreenshotModalOpen(false); setScreenshotPreview(null); setScreenshotBase64(null); setScreenshotParseResult(null); }}
+                className="flex-1 py-2.5 rounded-xl font-black text-[11px] uppercase tracking-widest text-slate-400 hover:bg-slate-100 transition-all"
+              >
+                Cancel
+              </button>
+              {!screenshotParseResult ? (
+                <button
+                  onClick={parseScreenshotWithAI}
+                  disabled={isParsingScreenshot || !screenshotBase64}
+                  className="flex-1 py-2.5 rounded-xl font-black text-[11px] uppercase tracking-widest bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 text-white transition-all shadow-md"
+                >
+                  {isParsingScreenshot ? 'Scanning…' : 'Scan with AI'}
+                </button>
+              ) : (
+                <button
+                  onClick={applyScreenshotImport}
+                  className="flex-1 py-2.5 rounded-xl font-black text-[11px] uppercase tracking-widest bg-emerald-600 hover:bg-emerald-700 text-white transition-all shadow-md"
+                >
+                  ✓ Apply to Roster
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
