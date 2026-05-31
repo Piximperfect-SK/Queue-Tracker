@@ -4,11 +4,13 @@ import { UserPlus, Trash2, ShieldCheck, FileText, Database, Settings as Settings
 import type { Handler } from '../types';
 import { addLog, downloadLogsForDate, downloadAllLogs, saveLogsFromServer, saveSingleLogFromServer } from '../utils/logger';
 import { socket, syncData } from '../utils/socket';
+import ConfirmModal from '../components/ConfirmModal';
 
 const SettingsPage: React.FC = () => {
   const [handlers, setHandlers] = useState<Handler[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   useEffect(() => {
     const handleHandlers = (data: any) => {
@@ -83,12 +85,16 @@ const SettingsPage: React.FC = () => {
     addLog('Add Handler', `Added new handler: ${newHandler.name}`, 'positive');
   };
 
+  const confirmDelete = () => {
+    if (!deleteConfirmId) return;
+    const handler = handlers.find(a => a.id === deleteConfirmId);
+    saveHandlers(handlers.filter(a => a.id !== deleteConfirmId));
+    addLog('Delete Handler', `Removed handler: ${handler?.name || deleteConfirmId}`, 'negative');
+    setDeleteConfirmId(null);
+  };
+
   const deleteHandler = (id: string) => {
-    if (window.confirm('Are you sure you want to decommission this handler?')) {
-      const handler = handlers.find(a => a.id === id);
-      saveHandlers(handlers.filter(a => a.id !== id));
-      addLog('Delete Handler', `Removed handler: ${handler?.name || id}`, 'negative');
-    }
+    setDeleteConfirmId(id);
   };
 
   const qhCount = handlers.filter(h => h.isQH).length;
@@ -307,6 +313,18 @@ const SettingsPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* ── Decommission Confirm Modal ── */}
+      <ConfirmModal
+        isOpen={deleteConfirmId !== null}
+        title="Decommission Handler"
+        message="Are you sure you want to decommission this handler? This action cannot be undone."
+        confirmLabel="Decommission"
+        cancelLabel="Cancel"
+        variant="danger"
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteConfirmId(null)}
+      />
     </div>
   );
 };
