@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { MOCK_HANDLERS, SHIFTS, MOCK_ROSTER } from '../data/mockData';
-import { Calendar as CalendarIcon, GripVertical, Plus, X, Trash2, AlertCircle } from 'lucide-react';
+import { GripVertical, Plus, X, Trash2, AlertCircle, Upload, ChevronLeft, ChevronRight, Shield } from 'lucide-react';
 import type { Handler, RosterEntry, ShiftType } from '../types';
 import { addLog, saveLogsFromServer, saveSingleLogFromServer } from '../utils/logger';
 import { socket, syncData } from '../utils/socket';
@@ -24,13 +24,12 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
- 
+
 const ALL_SHIFT_TYPES: ShiftType[] = [
   '6AM-3PM', '12PM-9PM', '1PM-10PM', '2PM-11PM', '10PM-7AM',
   'WO', 'ML', 'PL', 'EL', 'UL', 'CO', 'MID-LEAVE'
 ];
 
-// UI limit: maximum visible handler cards per shift (prevents internal scrolling)
 const MAX_SHIFT_VISIBLE = 8;
 
 type ImportFeedback = {
@@ -56,16 +55,11 @@ const parseExcelDate = (value: unknown) => {
       }
     }
   }
-
   const formatted = normalizeCellValue(value);
   if (!formatted) return null;
-  
-  // If it's already YYYY-MM-DD, return as is
   if (/^\d{4}-\d{2}-\d{2}$/.test(formatted)) return formatted;
-  
   const parsed = new Date(formatted);
   if (!Number.isNaN(parsed.getTime())) {
-    // Use local date components to avoid timezone shifts (e.g. midnight GMT+1 becoming previous day in UTC)
     const y = parsed.getFullYear();
     const m = String(parsed.getMonth() + 1).padStart(2, '0');
     const d = String(parsed.getDate()).padStart(2, '0');
@@ -81,24 +75,38 @@ const createAgentId = () => {
   return `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 };
 
-const getShiftColor = (shift: string) => {
-  switch (shift) {
-    case '6AM-3PM': return { bg: 'bg-blue-600', text: 'text-blue-700', light: 'bg-blue-50', border: 'border-blue-200', card: 'bg-blue-50' };
-    case '12PM-9PM': return { bg: 'bg-yellow-400', text: 'text-yellow-600', light: 'bg-yellow-50', border: 'border-yellow-200', card: 'bg-yellow-50' };
-    case '1PM-10PM': return { bg: 'bg-orange-500', text: 'text-orange-600', light: 'bg-orange-50', border: 'border-orange-200', card: 'bg-orange-50' };
-    case '2PM-11PM': return { bg: 'bg-orange-700', text: 'text-orange-700', light: 'bg-orange-50', border: 'border-orange-200', card: 'bg-orange-50' };
-    case '10PM-7AM': return { bg: 'bg-blue-900', text: 'text-blue-900', light: 'bg-blue-50', border: 'border-blue-300', card: 'bg-blue-50' };
-    case 'WO': return { bg: 'bg-slate-400', text: 'text-slate-500', light: 'bg-slate-50', border: 'border-slate-200', card: 'bg-slate-50' };
-    case 'ML': return { bg: 'bg-pink-500', text: 'text-pink-600', light: 'bg-pink-50', border: 'border-pink-200', card: 'bg-pink-50' };
-    case 'PL': return { bg: 'bg-rose-500', text: 'text-rose-600', light: 'bg-rose-50', border: 'border-rose-200', card: 'bg-rose-50' };
-    case 'EL': return { bg: 'bg-red-600', text: 'text-red-700', light: 'bg-red-50', border: 'border-red-200', card: 'bg-red-50' };
-    case 'UL': return { bg: 'bg-gray-500', text: 'text-gray-600', light: 'bg-gray-50', border: 'border-gray-200', card: 'bg-gray-50' };
-    case 'CO': return { bg: 'bg-emerald-600', text: 'text-emerald-700', light: 'bg-emerald-50', border: 'border-emerald-200', card: 'bg-emerald-50' };
-    case 'MID-LEAVE': return { bg: 'bg-rose-600', text: 'text-rose-600', light: 'bg-rose-50', border: 'border-rose-100', card: 'bg-rose-50' };
-    default: return { bg: 'bg-slate-500', text: 'text-slate-500', light: 'bg-slate-50', border: 'border-slate-200', card: 'bg-slate-50' };
-  }
+// ─── Shift Config ────────────────────────────────────────────────────────────
+const SHIFT_CONFIG: Record<string, {
+  accent: string;       // tailwind bg for dot/badge
+  accentHex: string;   // raw hex for borders / inline styles
+  label: string;
+  headerBg: string;    // column header bg
+  colBg: string;       // column body bg
+  pillBg: string;      // handler pill bg
+  pillText: string;
+  pillBorder: string;
+}> = {
+  '6AM-3PM':  { accent: 'bg-sky-500',    accentHex: '#0EA5E9', label: 'Morning',    headerBg: 'bg-sky-950/80',    colBg: 'bg-sky-950/20',    pillBg: 'bg-sky-900/60',   pillText: 'text-sky-100',   pillBorder: 'border-sky-700/50' },
+  '12PM-9PM': { accent: 'bg-amber-400',  accentHex: '#FBBF24', label: 'Afternoon',  headerBg: 'bg-amber-900/80',  colBg: 'bg-amber-950/20',  pillBg: 'bg-amber-900/60', pillText: 'text-amber-100', pillBorder: 'border-amber-700/50' },
+  '1PM-10PM': { accent: 'bg-orange-500', accentHex: '#F97316', label: 'Noon-Night', headerBg: 'bg-orange-950/80', colBg: 'bg-orange-950/20', pillBg: 'bg-orange-900/60',pillText: 'text-orange-100',pillBorder: 'border-orange-700/50' },
+  '2PM-11PM': { accent: 'bg-rose-500',   accentHex: '#F43F5E', label: 'Evening',    headerBg: 'bg-rose-950/80',   colBg: 'bg-rose-950/20',   pillBg: 'bg-rose-900/60',  pillText: 'text-rose-100',  pillBorder: 'border-rose-700/50' },
+  '10PM-7AM': { accent: 'bg-violet-500', accentHex: '#8B5CF6', label: 'Night',      headerBg: 'bg-violet-950/80', colBg: 'bg-violet-950/20', pillBg: 'bg-violet-900/60',pillText: 'text-violet-100',pillBorder: 'border-violet-700/50' },
 };
 
+const LEAVE_CONFIG: Record<string, { label: string; color: string; textColor: string; borderColor: string }> = {
+  'WO':       { label: 'Week Off',     color: '#475569', textColor: 'text-slate-300',  borderColor: 'border-slate-600' },
+  'ML':       { label: 'Medical',      color: '#EC4899', textColor: 'text-pink-200',   borderColor: 'border-pink-700' },
+  'PL':       { label: 'Privilege',    color: '#F43F5E', textColor: 'text-rose-200',   borderColor: 'border-rose-700' },
+  'EL':       { label: 'Emergency',    color: '#EF4444', textColor: 'text-red-200',    borderColor: 'border-red-700' },
+  'UL':       { label: 'Unpaid',       color: '#6B7280', textColor: 'text-gray-300',   borderColor: 'border-gray-600' },
+  'CO':       { label: 'Comp-Off',     color: '#10B981', textColor: 'text-emerald-200',borderColor: 'border-emerald-700' },
+  'MID-LEAVE':{ label: 'Mid-Leave',    color: '#FB7185', textColor: 'text-rose-200',   borderColor: 'border-rose-600' },
+};
+
+const getShiftConfig = (shift: string) =>
+  SHIFT_CONFIG[shift] ?? { accent: 'bg-slate-500', accentHex: '#64748B', label: shift, headerBg: 'bg-slate-800', colBg: 'bg-slate-900/20', pillBg: 'bg-slate-800/60', pillText: 'text-slate-200', pillBorder: 'border-slate-600' };
+
+// ─── Blueprint helpers ───────────────────────────────────────────────────────
 const BLUEPRINT_CACHE_KEY = 'roster_blueprint';
 
 const mergeRosterEntries = (base: RosterEntry[], additions: RosterEntry[]) => {
@@ -112,12 +120,8 @@ const mergeRosterEntries = (base: RosterEntry[], additions: RosterEntry[]) => {
 };
 
 const loadBlueprint = (): Record<string, RosterEntry[]> => {
-  try {
-    return JSON.parse(localStorage.getItem(BLUEPRINT_CACHE_KEY) || '{}');
-  } catch (error) {
-    console.warn('Invalid roster blueprint payload', error);
-    return {};
-  }
+  try { return JSON.parse(localStorage.getItem(BLUEPRINT_CACHE_KEY) || '{}'); }
+  catch { return {}; }
 };
 
 const applyBlueprint = (base: RosterEntry[]) => {
@@ -126,94 +130,91 @@ const applyBlueprint = (base: RosterEntry[]) => {
   return mergeRosterEntries(base, blueprintEntries);
 };
 
-interface DroppableContainerProps {
-  id: string;
-  children: React.ReactNode;
-  className?: string;
-}
-
-const DroppableContainer: React.FC<DroppableContainerProps> = ({ id, children, className }) => {
+// ─── DroppableContainer ──────────────────────────────────────────────────────
+const DroppableContainer: React.FC<{ id: string; children: React.ReactNode; className?: string }> = ({ id, children, className }) => {
   const { setNodeRef, isOver } = useDroppable({ id });
-  
   return (
-    <div 
-      ref={setNodeRef} 
-      className={`${className} ${isOver ? 'ring-2 ring-blue-500/50 bg-blue-500/5' : ''} transition-all duration-300`}
-    >
+    <div ref={setNodeRef} className={`${className ?? ''} ${isOver ? 'ring-2 ring-inset ring-white/20 bg-white/5' : ''} transition-all duration-200`}>
       {children}
     </div>
   );
 };
 
+// ─── SortableHandler (the pill card) ────────────────────────────────────────
 interface SortableHandlerProps {
   handler: Handler;
   shift: string;
-  colors: any;
   onShiftChange: (handlerId: string, shift: ShiftType) => void;
   onDelete: (handlerId: string) => void;
   shiftOptions: ShiftType[];
+  compact?: boolean;
 }
 
-const SortableHandler: React.FC<SortableHandlerProps> = ({ handler, shift, colors, onShiftChange, onDelete, shiftOptions }) => {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: handler.id });
+const SortableHandler: React.FC<SortableHandlerProps> = ({ handler, shift, onShiftChange, onDelete, shiftOptions, compact }) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: handler.id });
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.3 : 1,
-    scale: isDragging ? 1.05 : 1,
+    opacity: isDragging ? 0.2 : 1,
     zIndex: isDragging ? 50 : 1,
   };
 
-  const handleDelete = (event: React.MouseEvent) => {
-    event.stopPropagation();
-    onDelete(handler.id);
-  };
+  const cfg = getShiftConfig(shift);
 
   return (
     <li
       ref={setNodeRef}
       style={style}
-      className={`flex items-center justify-between px-3 py-2 min-h-12 rounded-xl transition-all group ${colors.card} hover:opacity-95 shadow-sm active:scale-[0.98] cursor-default` }
+      className={`
+        group relative flex items-center gap-2 rounded-lg border transition-all cursor-default
+        ${compact ? 'px-2.5 py-1.5' : 'px-3 py-2.5'}
+        ${cfg.pillBg} ${cfg.pillBorder} border
+        hover:brightness-110 active:scale-[0.98]
+      `}
     >
-      <div className="flex items-center space-x-2 flex-1 min-w-0">
-        <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-slate-800/40 hover:text-slate-900 transition-colors shrink-0">
-          <GripVertical size={14} />
-        </div>
-        <div className="flex-1 min-w-0 text-center">
-          <span className="text-slate-900 font-semibold text-[16px] block leading-tight whitespace-normal break-words">{handler.name}</span>
-        </div>
+      {/* Drag handle */}
+      <div
+        {...attributes}
+        {...listeners}
+        className="cursor-grab active:cursor-grabbing text-white/20 hover:text-white/60 shrink-0 transition-colors"
+      >
+        <GripVertical size={12} />
       </div>
 
-      <div className="flex items-center shrink-0 gap-2">
-        <button
-          onClick={handleDelete}
-          className="p-1 rounded-md text-red-600 hover:bg-white/30 transition-all opacity-0 group-hover:opacity-100"
-          title="Delete Agent"
-        >
-          <Trash2 size={14} />
-        </button>
-        <select 
+      {/* QH badge */}
+      {handler.isQH && (
+        <Shield size={10} className="text-yellow-400 shrink-0" />
+      )}
+
+      {/* Name */}
+      <span className={`flex-1 font-semibold truncate ${cfg.pillText} ${compact ? 'text-[11px]' : 'text-[12px]'} leading-none`}>
+        {handler.name}
+      </span>
+
+      {/* Hover controls */}
+      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+        <select
           value={shift}
           onChange={(e) => onShiftChange(handler.id, e.target.value as ShiftType)}
-          className={`text-[9px] font-black bg-white/30 px-1 py-0.5 rounded-md border-none focus:ring-0 ${colors.text} cursor-pointer outline-none opacity-0 group-hover:opacity-100 transition-opacity uppercase tracking-widest text-center`}
+          className="text-[8px] font-black bg-black/30 text-white/70 px-1 py-0.5 rounded border-none focus:ring-0 outline-none cursor-pointer uppercase tracking-wider max-w-[58px]"
         >
           {shiftOptions.map(s => (
-            <option key={s} value={s} className="bg-white text-slate-900 font-bold text-center">{s}</option>
+            <option key={s} value={s} className="bg-slate-900 text-white">{s}</option>
           ))}
         </select>
+        <button
+          onClick={(e) => { e.stopPropagation(); onDelete(handler.id); }}
+          className="p-1 rounded text-red-400 hover:bg-red-500/20 transition-colors"
+        >
+          <Trash2 size={10} />
+        </button>
       </div>
     </li>
   );
 };
 
+// ─── Main Component ──────────────────────────────────────────────────────────
 interface RosterPageProps {
   selectedDate: string;
   setSelectedDate: (date: string) => void;
@@ -229,6 +230,7 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
     const base = saved ? JSON.parse(saved) as RosterEntry[] : MOCK_ROSTER;
     return applyBlueprint(base);
   });
+
   const [activeId, setActiveId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newAgentName, setNewAgentName] = useState('');
@@ -245,110 +247,62 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
   const [times, setTimes] = useState({ ist: '', uk: '' });
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  // ── Clocks
   useEffect(() => {
-    const updateClocks = () => {
-      const now = new Date();
-      const istFormat = new Intl.DateTimeFormat('en-US', {
-        timeZone: 'Asia/Kolkata',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true
-      });
-      const ukFormat = new Intl.DateTimeFormat('en-US', {
-        timeZone: 'Europe/London',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true
-      });
-      
-      const istStr = istFormat.format(now);
-      const ukStr = ukFormat.format(now);
-
-      setTimes({
-        ist: istStr.replace(/\s(AM|PM)/, '\u00A0\u00A0$1'),
-        uk: ukStr.replace(/\s(AM|PM)/, '\u00A0\u00A0$1')
-      });
+    const update = () => {
+      const fmt = (tz: string) => new Intl.DateTimeFormat('en-US', {
+        timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: true
+      }).format(new Date());
+      setTimes({ ist: fmt('Asia/Kolkata'), uk: fmt('Europe/London') });
     };
-    updateClocks();
-    const timer = setInterval(updateClocks, 10000);
-    return () => clearInterval(timer);
+    update();
+    const id = setInterval(update, 10000);
+    return () => clearInterval(id);
   }, []);
 
+  // ── Sensors
   const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
   const availableShifts = useMemo(() => {
-    const shiftSet = new Set(SHIFTS);
-    roster
-      .filter((entry) => entry.date === selectedDate)
-      .map((entry) => entry.shift)
-      .forEach((shift) => shiftSet.add(shift));
-    return Array.from(shiftSet);
+    const s = new Set(SHIFTS);
+    roster.filter(e => e.date === selectedDate).forEach(e => s.add(e.shift));
+    return Array.from(s);
   }, [roster, selectedDate]);
 
   const shiftPickerOptions = useMemo(() => {
-    const optionSet = new Set([...ALL_SHIFT_TYPES, ...availableShifts]);
-    return Array.from(optionSet);
+    return Array.from(new Set([...ALL_SHIFT_TYPES, ...availableShifts]));
   }, [availableShifts]);
 
+  // ── Socket
   useEffect(() => {
     const handleHandlers = (data: Handler[]) => {
-      if (data) {
-        setHandlers(data);
-        localStorage.setItem('handlers', JSON.stringify(data));
-      }
+      if (data) { setHandlers(data); localStorage.setItem('handlers', JSON.stringify(data)); }
     };
     const handleRoster = (data: RosterEntry[]) => {
       if (data) {
         const merged = applyBlueprint(data);
-        setRoster(merged);
-        localStorage.setItem('roster', JSON.stringify(merged));
+        setRoster(merged); localStorage.setItem('roster', JSON.stringify(merged));
       }
+    };
+    const handleInit = (db: any) => {
+      if (!db) return;
+      const h = db.handlers || db.agents;
+      if (Array.isArray(h)) { setHandlers(h); localStorage.setItem('handlers', JSON.stringify(h)); }
+      if (Array.isArray(db.roster)) {
+        const m = applyBlueprint(db.roster);
+        setRoster(m); localStorage.setItem('roster', JSON.stringify(m));
+      }
+      if (db.logs) saveLogsFromServer(db.logs);
     };
 
     socket.on('handlers_updated', handleHandlers);
     socket.on('roster_updated', handleRoster);
-    socket.on('log_added', ({ dateStr, logEntry }) => {
-      saveSingleLogFromServer(dateStr, logEntry);
-    });
-    
-    const handleInit = (db: any) => {
-      if (!db) return;
-      if (Array.isArray(db.handlers)) {
-        setHandlers(db.handlers as Handler[]);
-        localStorage.setItem('handlers', JSON.stringify(db.handlers));
-      } else if (Array.isArray(db.agents)) {
-        setHandlers(db.agents as Handler[]);
-        localStorage.setItem('handlers', JSON.stringify(db.agents));
-      }
-      if (Array.isArray(db.roster)) {
-        const merged = applyBlueprint(db.roster as RosterEntry[]);
-        setRoster(merged);
-        localStorage.setItem('roster', JSON.stringify(merged));
-      }
-      if (db.logs) {
-        saveLogsFromServer(db.logs);
-      }
-    };
-
+    socket.on('log_added', ({ dateStr, logEntry }) => saveSingleLogFromServer(dateStr, logEntry));
     socket.on('init', handleInit);
-
-    // initial data loaded via lazy initializers above
-
-    // CRITICAL: If the socket is already connected (e.g. from App.tsx),
-    // we need to request the state manually because we missed the 'init' event
-    // that happened on connection.
-    if (socket.connected) {
-      socket.emit('get_initial_data');
-    }
+    if (socket.connected) socket.emit('get_initial_data');
 
     return () => {
       socket.off('handlers_updated', handleHandlers);
@@ -358,198 +312,123 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
     };
   }, []);
 
-  // Log navigation when selectedDate changes (skip initial mount)
+  // ── Nav log
   const firstNavRef = useRef(true);
   useEffect(() => {
-    if (firstNavRef.current) {
-      firstNavRef.current = false;
-      return;
-    }
-    // Save a NAVIGATE log under the date we navigated to
+    if (firstNavRef.current) { firstNavRef.current = false; return; }
     addLogForDate(selectedDate, 'NAVIGATE', `Visited ${selectedDate}`);
-    // Also add a regular log for today about navigation action
     addLog('NAVIGATE', `Visited ${selectedDate}`);
   }, [selectedDate]);
-
-  
 
   const LEAVE_TYPES = ['EL', 'PL', 'UL', 'MID-LEAVE', 'WO', 'ML', 'CO'];
 
   const updateShift = (handlerId: string, shift: ShiftType) => {
-    // If assigning to a leave type, require confirmation
     if (LEAVE_TYPES.includes(shift)) {
       setLeaveOperation({ type: 'assign', handlerId, toShift: shift });
       return;
     }
-
-    // Normal update
     executeShiftUpdate(handlerId, shift);
   };
 
   const executeShiftUpdate = (handlerId: string, shift: ShiftType) => {
     const handler = handlers.find(a => a.id === handlerId);
-    const updatedRoster = [...roster];
-    const index = updatedRoster.findIndex(r => r.handlerId === handlerId && r.date === selectedDate);
-    
-    const oldShift = index > -1 ? updatedRoster[index].shift : 'Unassigned';
-
-    if (index > -1) {
-      updatedRoster[index] = { ...updatedRoster[index], shift };
-    } else {
-      updatedRoster.push({ handlerId, date: selectedDate, shift });
-    }
-    
-    setRoster(updatedRoster);
-    localStorage.setItem('roster', JSON.stringify(updatedRoster));
-    syncData.updateRoster(updatedRoster);
+    const updated = [...roster];
+    const idx = updated.findIndex(r => r.handlerId === handlerId && r.date === selectedDate);
+    const oldShift = idx > -1 ? updated[idx].shift : 'Unassigned';
+    if (idx > -1) updated[idx] = { ...updated[idx], shift };
+    else updated.push({ handlerId, date: selectedDate, shift });
+    setRoster(updated);
+    localStorage.setItem('roster', JSON.stringify(updated));
+    syncData.updateRoster(updated);
     addLog('Update Shift', `${handler?.name || handlerId}: ${oldShift} -> ${shift} (Date: ${selectedDate})`);
   };
 
   function deleteHandlerGlobally(handlerId: string) {
-    const handlerToDelete = handlers.find(a => a.id === handlerId);
-    const updatedHandlers = handlers.filter(a => a.id !== handlerId);
-    const updatedRoster = roster.filter(r => r.handlerId !== handlerId);
-
-    setHandlers(updatedHandlers);
-    setRoster(updatedRoster);
-
-    localStorage.setItem('handlers', JSON.stringify(updatedHandlers));
-    localStorage.setItem('roster', JSON.stringify(updatedRoster));
-    syncData.updateHandlers(updatedHandlers);
-    syncData.updateRoster(updatedRoster);
-    addLog('Delete Agent', `Permanently deleted handler: ${handlerToDelete?.name || handlerId}`, 'negative');
+    const h = handlers.find(a => a.id === handlerId);
+    const uh = handlers.filter(a => a.id !== handlerId);
+    const ur = roster.filter(r => r.handlerId !== handlerId);
+    setHandlers(uh); setRoster(ur);
+    localStorage.setItem('handlers', JSON.stringify(uh));
+    localStorage.setItem('roster', JSON.stringify(ur));
+    syncData.updateHandlers(uh); syncData.updateRoster(ur);
+    addLog('Delete Agent', `Permanently deleted handler: ${h?.name || handlerId}`, 'negative');
   }
 
-  const handleRosterFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+  const handleRosterFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
     if (!file) return;
     importRosterFromFile(file);
-    event.target.value = '';
+    e.target.value = '';
   };
 
   const importRosterFromFile = async (file: File) => {
     setImportStatus(null);
     setIsImportingRoster(true);
-
     try {
-      const arrayBuffer = await file.arrayBuffer();
-      const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-      const sheetName = workbook.SheetNames[0];
-      if (!sheetName) {
-        setImportStatus({ message: 'File contains no sheets.', tone: 'error' });
-        return;
-      }
-
-      const worksheet = workbook.Sheets[sheetName];
-      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, { defval: '', raw: false });
-      if (!rows.length) {
-        setImportStatus({ message: 'File does not contain any rows.', tone: 'error' });
-        return;
-      }
+      const ab = await file.arrayBuffer();
+      const wb = XLSX.read(ab, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      if (!ws) { setImportStatus({ message: 'File contains no sheets.', tone: 'error' }); return; }
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '', raw: false });
+      if (!rows.length) { setImportStatus({ message: 'No rows found.', tone: 'error' }); return; }
 
       const newHandlers: Handler[] = [];
       const parsedEntries: RosterEntry[] = [];
       const rowErrors: string[] = [];
-      const handlerLookup = new Map<string, string>();
-      handlers.forEach((handler) => {
-        handlerLookup.set(handler.name.trim().toLowerCase(), handler.id);
-      });
+      const lookup = new Map<string, string>();
+      handlers.forEach(h => lookup.set(h.name.trim().toLowerCase(), h.id));
 
-      const extractEntry = (key: string, requiredTerms: string[], forbiddenTerms: string[] = []) => {
-        const normalizedKey = key.trim().toLowerCase();
-        const hasRequired = requiredTerms.every((term) => normalizedKey.includes(term));
-        const hasForbidden = forbiddenTerms.some((term) => normalizedKey.includes(term));
-        return hasRequired && !hasForbidden;
+      const match = (key: string, req: string[], forb: string[] = []) => {
+        const k = key.trim().toLowerCase();
+        return req.every(t => k.includes(t)) && !forb.some(t => k.includes(t));
       };
 
-      rows.forEach((row, rowIndex) => {
-        const rowEntries = Object.entries(row);
-        const isEmptyRow = rowEntries.every(([, value]) => normalizeCellValue(value) === '');
-        if (isEmptyRow) return;
+      rows.forEach((row, ri) => {
+        const entries = Object.entries(row);
+        if (entries.every(([, v]) => normalizeCellValue(v) === '')) return;
+        const hCell = entries.find(([k]) => match(k, ['agent'])) ?? entries.find(([k]) => match(k, ['handler'])) ?? entries.find(([k]) => match(k, ['name'], ['shift']));
+        const sCell = entries.find(([k]) => match(k, ['shift'])) ?? entries.find(([k]) => match(k, ['status']));
+        const dCell = entries.find(([k]) => match(k, ['date'])) ?? entries.find(([k]) => match(k, ['day']));
 
-        const handlerCell = rowEntries.find(([key]) => extractEntry(key, ['agent', 'handler', 'name']))
-          ?? rowEntries.find(([key]) => extractEntry(key, ['name'], ['shift']))
-          ?? rowEntries.find(([key]) => extractEntry(key, ['personnel']));
-        const shiftCell = rowEntries.find(([key]) => extractEntry(key, ['shift']))
-          ?? rowEntries.find(([key]) => extractEntry(key, ['status']))
-          ?? rowEntries.find(([key]) => extractEntry(key, ['roster']));
-        const dateCell = rowEntries.find(([key]) => extractEntry(key, ['date']))
-          ?? rowEntries.find(([key]) => extractEntry(key, ['day']))
-          ?? rowEntries.find(([key]) => extractEntry(key, ['work']));
+        const name = normalizeCellValue(hCell?.[1]);
+        const rawShift = normalizeCellValue(sCell?.[1]);
+        const date = parseExcelDate(dCell?.[1]);
+        const label = `Row ${ri + 2}`;
 
-        const handlerName = normalizeCellValue(handlerCell?.[1]);
-        const rawShiftValue = normalizeCellValue(shiftCell?.[1]);
-        const parsedDate = parseExcelDate(dateCell?.[1]);
-        const label = `Row ${rowIndex + 2}`;
+        if (!name) { rowErrors.push(`${label}: name missing`); return; }
+        if (!date) { rowErrors.push(`${label}: invalid date`); return; }
+        if (!rawShift) { rowErrors.push(`${label}: shift missing`); return; }
 
-        if (!handlerName) {
-          rowErrors.push(`${label}: Handler Name missing.`);
-          return;
-        }
-        if (!parsedDate) {
-          rowErrors.push(`${label}: Invalid or missing date.`);
-          return;
-        }
-        if (!rawShiftValue) {
-          rowErrors.push(`${label}: Shift value missing.`);
-          return;
-        }
+        let sv = rawShift.toUpperCase().replace(/\s+/g, '');
+        if (sv === 'OFF' || sv === 'WEEKOFF') sv = 'WO';
+        const matched = ALL_SHIFT_TYPES.find(s => s.toUpperCase().replace(/\s+/g, '') === sv);
+        if (matched) sv = matched;
 
-        // Normalize Shift: Upper case, no spaces, and try to match predefined types
-        let shiftValue = rawShiftValue.toUpperCase().replace(/\s+/g, '');
-        
-        // Handle common variations
-        if (shiftValue === 'OFF') shiftValue = 'WO';
-        if (shiftValue === 'WEEKOFF') shiftValue = 'WO';
-
-        // Try to find an exact match in our defined shifts (ignoring case/spaces)
-        const match = ALL_SHIFT_TYPES.find(s => 
-          s.toUpperCase().replace(/\s+/g, '') === shiftValue
-        );
-        if (match) shiftValue = match;
-
-        const lookupKey = handlerName.toLowerCase();
-        let handlerId = handlerLookup.get(lookupKey);
-        if (!handlerId) {
-          handlerId = createAgentId();
-          handlerLookup.set(lookupKey, handlerId);
-          newHandlers.push({ id: handlerId, name: handlerName, isQH: false });
-        }
-
-        parsedEntries.push({ handlerId, date: parsedDate, shift: shiftValue });
+        const key = name.toLowerCase();
+        let hid = lookup.get(key);
+        if (!hid) { hid = createAgentId(); lookup.set(key, hid); newHandlers.push({ id: hid, name, isQH: false }); }
+        parsedEntries.push({ handlerId: hid, date, shift: sv });
       });
 
-      if (!parsedEntries.length) {
-        setImportStatus({ message: 'No valid rows were found in the file.', tone: 'error' });
-        return;
-      }
+      if (!parsedEntries.length) { setImportStatus({ message: 'No valid rows found.', tone: 'error' }); return; }
 
-      const mergedRoster = mergeRosterEntries(roster, parsedEntries);
-      setRoster(mergedRoster);
-      localStorage.setItem('roster', JSON.stringify(mergedRoster));
-      syncData.updateRoster(mergedRoster);
-
+      const merged = mergeRosterEntries(roster, parsedEntries);
+      setRoster(merged); localStorage.setItem('roster', JSON.stringify(merged)); syncData.updateRoster(merged);
       if (newHandlers.length) {
-        const updatedHandlers = [...handlers, ...newHandlers];
-        setHandlers(updatedHandlers);
-        localStorage.setItem('handlers', JSON.stringify(updatedHandlers));
-        syncData.updateHandlers(updatedHandlers);
+        const uh = [...handlers, ...newHandlers];
+        setHandlers(uh); localStorage.setItem('handlers', JSON.stringify(uh)); syncData.updateHandlers(uh);
       }
+      const dates = parsedEntries.map(e => e.date).sort();
+      if (dates.length) setSelectedDate(dates[0]);
 
-      const datesFromImport = parsedEntries.map((entry) => entry.date).sort();
-      if (datesFromImport.length) {
-        setSelectedDate(datesFromImport[0]);
-      }
-
-      const summaryParts = [`Imported ${parsedEntries.length} row(s).`];
-      if (newHandlers.length) summaryParts.push(`Added ${newHandlers.length} new handler(s).`);
-      if (rowErrors.length) summaryParts.push(`Skipped ${rowErrors.length} row(s).`);
       const tone: ImportFeedback['tone'] = rowErrors.length ? 'warning' : 'success';
-      setImportStatus({ message: `${summaryParts.join(' ')}${rowErrors.length ? ` First issue: ${rowErrors[0]}` : ''}`, tone });
+      setImportStatus({
+        message: `Imported ${parsedEntries.length} row(s).${newHandlers.length ? ` +${newHandlers.length} new handler(s).` : ''}${rowErrors.length ? ` (${rowErrors.length} skipped)` : ''}`,
+        tone
+      });
       addLog('Import Roster', `Imported ${parsedEntries.length} rows from ${file.name}`, 'positive');
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown import failure.';
-      setImportStatus({ message: `Import failed: ${message}`, tone: 'error' });
+    } catch (err) {
+      setImportStatus({ message: `Import failed: ${err instanceof Error ? err.message : 'Unknown error'}`, tone: 'error' });
     } finally {
       setIsImportingRoster(false);
     }
@@ -557,30 +436,20 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
 
   const handleLeaveConfirm = () => {
     if (!leaveOperation) return;
-
     if (leaveOperation.type === 'assign' && leaveOperation.toShift) {
       executeShiftUpdate(leaveOperation.handlerId, leaveOperation.toShift as ShiftType);
     }
-
     if (leaveOperation.type === 'remove') {
-      // Removing from leave: either unassign or place into target shift
       const to = leaveOperation.toShift;
       if (to === 'UNASSIGNED') {
-        const updatedRoster = roster.filter(r => !(r.handlerId === leaveOperation.handlerId && r.date === selectedDate));
-        setRoster(updatedRoster);
-        localStorage.setItem('roster', JSON.stringify(updatedRoster));
-        syncData.updateRoster(updatedRoster);
-        const handler = handlers.find(a => a.id === leaveOperation.handlerId);
-        addLog('Update Shift', `${handler?.name || leaveOperation.handlerId}: ${leaveOperation.fromShift} -> Unassigned (Date: ${selectedDate})`);
-      } else if (to && to !== 'UNASSIGNED') {
+        const ur = roster.filter(r => !(r.handlerId === leaveOperation.handlerId && r.date === selectedDate));
+        setRoster(ur); localStorage.setItem('roster', JSON.stringify(ur)); syncData.updateRoster(ur);
+        const h = handlers.find(a => a.id === leaveOperation.handlerId);
+        addLog('Update Shift', `${h?.name || leaveOperation.handlerId}: ${leaveOperation.fromShift} -> Unassigned`);
+      } else if (to) {
         executeShiftUpdate(leaveOperation.handlerId, to as ShiftType);
       }
     }
-
-    setLeaveOperation(null);
-  };
-
-  const handleLeaveCancel = () => {
     setLeaveOperation(null);
   };
 
@@ -589,538 +458,427 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
     if (!name) return;
     const id = createAgentId();
     const newHandler: Handler = { id, name, isQH: false };
-    const updatedHandlers = [...handlers, newHandler];
-    setHandlers(updatedHandlers);
-    localStorage.setItem('handlers', JSON.stringify(updatedHandlers));
-    syncData.updateHandlers(updatedHandlers);
-
-    // If a shift was selected, add roster entry for selectedDate
+    const uh = [...handlers, newHandler];
+    setHandlers(uh); localStorage.setItem('handlers', JSON.stringify(uh)); syncData.updateHandlers(uh);
     if (newAgentShift) {
-      const newEntry: RosterEntry = { handlerId: id, date: selectedDate, shift: newAgentShift };
-      const updatedRoster = mergeRosterEntries(roster, [newEntry]);
-      setRoster(updatedRoster);
-      localStorage.setItem('roster', JSON.stringify(updatedRoster));
-      syncData.updateRoster(updatedRoster);
-      addLog('Register Agent', `Registered agent: ${name} and assigned to ${newAgentShift} on ${selectedDate}`, 'positive');
+      const ur = mergeRosterEntries(roster, [{ handlerId: id, date: selectedDate, shift: newAgentShift }]);
+      setRoster(ur); localStorage.setItem('roster', JSON.stringify(ur)); syncData.updateRoster(ur);
+      addLog('Register Agent', `Registered: ${name} → ${newAgentShift} on ${selectedDate}`, 'positive');
     } else {
-      addLog('Register Agent', `Registered agent: ${name}`, 'positive');
+      addLog('Register Agent', `Registered: ${name}`, 'positive');
     }
-
-    setNewAgentName('');
-    setNewAgentShift('');
-    setIsModalOpen(false);
+    setNewAgentName(''); setNewAgentShift(''); setIsModalOpen(false);
   };
 
-  const handleAddAgentCancel = () => {
-    setNewAgentName('');
-    setNewAgentShift('');
-    setIsModalOpen(false);
-  };
-
-  const handleDragStart = (event: DragStartEvent) => {
-    setActiveId(event.active.id as string);
-  };
+  const handleDragStart = (e: DragStartEvent) => setActiveId(e.active.id as string);
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over, delta } = event;
     setActiveId(null);
-
     if (!over) return;
-
     const handlerId = active.id as string;
     const overId = over.id as string;
-
-    // Only allow delete if dragged horizontally (left/right)
-    const isHorizontalDrag = Math.abs(delta.x) > Math.abs(delta.y);
-
-    // Find current roster entry for this handler on selected date
+    const isHorizontal = Math.abs(delta.x) > Math.abs(delta.y);
     const currentEntry = roster.find(r => r.handlerId === handlerId && r.date === selectedDate);
 
-    // If the handler is currently on leave and is being dragged out, require confirmation to remove
     if (currentEntry && LEAVE_TYPES.includes(currentEntry.shift)) {
-      // If dropping onto OFF_DUTY and same leave type, do nothing
-      if (overId === 'OFF_DUTY') {
-        return;
-      }
-
-      // Determine target: shift or unassigned
+      if (overId === 'OFF_DUTY') return;
       if (availableShifts.includes(overId as ShiftType)) {
-        const targetShift = overId as ShiftType;
-        if (targetShift === currentEntry.shift) return; // no-op
-        setLeaveOperation({ type: 'remove', handlerId, fromShift: currentEntry.shift, toShift: targetShift });
+        if (overId === currentEntry.shift) return;
+        setLeaveOperation({ type: 'remove', handlerId, fromShift: currentEntry.shift, toShift: overId as ShiftType });
         return;
       }
-
       if (overId === 'UNASSIGNED') {
         setLeaveOperation({ type: 'remove', handlerId, fromShift: currentEntry.shift, toShift: 'UNASSIGNED' });
         return;
       }
     }
 
-    if (availableShifts.includes(overId as ShiftType)) {
-      updateShift(handlerId, overId as ShiftType);
-    } else if (overId === 'OFF_DUTY') {
-      updateShift(handlerId, 'WO');
-    }
+    if (availableShifts.includes(overId as ShiftType)) updateShift(handlerId, overId as ShiftType);
+    else if (overId === 'OFF_DUTY') updateShift(handlerId, 'WO');
     else if (overId === 'UNASSIGNED') {
-      const updatedRoster = roster.filter(r => !(r.handlerId === handlerId && r.date === selectedDate));
-      setRoster(updatedRoster);
-      localStorage.setItem('roster', JSON.stringify(updatedRoster));
-    }
-    else if (overId === 'TRASH' && isHorizontalDrag) {
+      const ur = roster.filter(r => !(r.handlerId === handlerId && r.date === selectedDate));
+      setRoster(ur); localStorage.setItem('roster', JSON.stringify(ur));
+    } else if (overId === 'TRASH' && isHorizontal) {
       deleteHandlerGlobally(handlerId);
-    }
-    else {
-      const overHandlerRoster = roster.find(r => r.handlerId === overId && r.date === selectedDate);
-      if (overHandlerRoster) {
-        updateShift(handlerId, overHandlerRoster.shift);
-      } else {
-        const isUnassigned = getUnassignedHandlers().some(a => a.id === overId);
-        if (isUnassigned) {
-          const updatedRoster = roster.filter(r => !(r.handlerId === handlerId && r.date === selectedDate));
-          setRoster(updatedRoster);
-          localStorage.setItem('roster', JSON.stringify(updatedRoster));
-        }
+    } else {
+      const overEntry = roster.find(r => r.handlerId === overId && r.date === selectedDate);
+      if (overEntry) updateShift(handlerId, overEntry.shift);
+      else if (getUnassignedHandlers().some(a => a.id === overId)) {
+        const ur = roster.filter(r => !(r.handlerId === handlerId && r.date === selectedDate));
+        setRoster(ur); localStorage.setItem('roster', JSON.stringify(ur));
       }
     }
   };
 
   const getHandlersForShift = (shift: string) => {
-    const rosterForDay = roster.filter(r => r.date === selectedDate && r.shift === shift);
-    return rosterForDay.map(r => handlers.find(a => a.id === r.handlerId)).filter(Boolean) as Handler[];
+    return roster
+      .filter(r => r.date === selectedDate && r.shift === shift)
+      .map(r => handlers.find(a => a.id === r.handlerId))
+      .filter(Boolean) as Handler[];
   };
 
   const getOffDutyHandlers = () => {
-    const offDutyTypes = ['WO', 'ML', 'PL', 'EL', 'UL', 'CO', 'MID-LEAVE'];
-    const offDuty = roster.filter(r => r.date === selectedDate && offDutyTypes.includes(r.shift));
-    return offDuty.map(r => ({
-      handler: handlers.find(a => a.id === r.handlerId),
-      reason: r.shift
-    })).filter(item => item.handler) as { handler: Handler, reason: ShiftType }[];
+    const types = ['WO', 'ML', 'PL', 'EL', 'UL', 'CO', 'MID-LEAVE'];
+    return roster
+      .filter(r => r.date === selectedDate && types.includes(r.shift))
+      .map(r => ({ handler: handlers.find(a => a.id === r.handlerId), reason: r.shift }))
+      .filter(item => item.handler) as { handler: Handler; reason: ShiftType }[];
   };
 
   const getUnassignedHandlers = () => {
-    const assignedIds = roster.filter(r => r.date === selectedDate).map(r => r.handlerId);
-    return handlers.filter(a => !assignedIds.includes(a.id));
+    const assigned = roster.filter(r => r.date === selectedDate).map(r => r.handlerId);
+    return handlers.filter(a => !assigned.includes(a.id));
   };
 
   const activeHandler = activeId ? handlers.find(a => a.id === activeId) : null;
+  const totalOnShift = SHIFTS.reduce((acc, s) => acc + getHandlersForShift(s).length, 0);
+  const totalOffDuty = getOffDutyHandlers().length;
+
+  const navDate = (dir: number) => {
+    const [y, m, d] = selectedDate.split('-').map(Number);
+    const dt = new Date(y, m - 1, d);
+    dt.setDate(dt.getDate() + dir);
+    setSelectedDate(dt.toLocaleDateString('en-CA'));
+  };
+
+  const dayLabel = new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', {
+    weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'
+  }).toUpperCase();
+
+  // ── RENDER ─────────────────────────────────────────────────────────────────
   return (
-    <div className="h-full flex flex-col overflow-hidden px-4 pb-4">
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-      >
-        <div className="flex-1 flex overflow-hidden gap-4">
-          <div className="flex-1 flex flex-col gap-4 overflow-hidden">
-            <div className="flex-1 min-h-0">
-              <div className={`relative overflow-hidden flex flex-col h-full min-h-0 bg-white/90 rounded-2xl text-black border border-white/30 ${isModalOpen ? 'filter blur-sm' : ''}`}>
-                {/* Header Section - Part of Main Container */}
-                <div className="bg-white/90 backdrop-blur-sm border-b border-white/30 flex justify-between items-center shrink-0 px-5 py-3 rounded-t-2xl">
-                  <div className="flex items-center space-x-6">
-                    <div className="flex items-center space-x-4">
-                      <div className="w-8 h-8 bg-[#393E46] rounded-xl flex items-center justify-center border border-[#393E46] shadow-sm">
-                        <CalendarIcon size={16} className="text-white" />
-                      </div>
-                      <div className="flex flex-col">
-                        <h1 className="text-lg font-black text-[#222831] tracking-tight leading-none uppercase">Roster</h1>
-                        <p className="text-[8px] text-slate-500 font-bold uppercase tracking-[0.25em] mt-0.5">Agent Roster</p>
-                      </div>
-                    </div>
-                    <div className="h-8 w-px bg-slate-200" />
+    <div className="h-full flex flex-col overflow-hidden">
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
 
-                    {/* Integrated Date Selector */}
-                    <div className="flex items-center h-8 gap-2">
-                      <button 
-                        onClick={() => {
-                          const [y, m, d] = selectedDate.split('-').map(Number);
-                          const dateObj = new Date(y, m - 1, d);
-                          dateObj.setDate(dateObj.getDate() - 1);
-                          setSelectedDate(dateObj.toLocaleDateString('en-CA'));
-                        }}
-                        className="p-1 rounded-lg transition-colors text-slate-400 hover:text-slate-900 bg-white/60"
-                        aria-label="Previous day"
-                      >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" />
-                        </svg>
-                      </button>
+        {/* ── Main card ────────────────────────────────────────────────── */}
+        <div className={`
+          flex-1 flex flex-col overflow-hidden mx-3 my-2
+          bg-slate-900/80 backdrop-blur-xl
+          border border-slate-700/60
+          rounded-2xl shadow-2xl shadow-black/40
+          ${isModalOpen || leaveOperation ? 'brightness-50' : ''}
+          transition-all duration-300
+        `}>
 
-                      <div className="flex items-center gap-2 cursor-pointer px-3 py-1 bg-white/90 rounded-full border border-slate-200 shadow-sm relative">
-                        <div className="text-center min-w-[140px]">
-                          <div className="text-[#222831] font-black text-[12px] uppercase tracking-widest">{new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toUpperCase()}</div>
-                        </div>
-                        <input 
-                          type="date" 
-                          value={selectedDate}
-                          onChange={(e) => setSelectedDate(e.target.value)}
-                          className="absolute inset-0 opacity-0 cursor-pointer z-10 w-full"
-                          aria-label="Select date"
-                          style={{ color: '#222831', WebkitTextFillColor: '#222831' }}
-                        />
-                      </div>
+          {/* ── Topbar ─────────────────────────────────────────────────── */}
+          <div className="flex items-center justify-between px-5 py-3 border-b border-slate-700/60 shrink-0 bg-slate-800/50">
+            {/* Left: title + date nav */}
+            <div className="flex items-center gap-5">
+              <div>
+                <p className="text-[9px] font-black text-slate-500 uppercase tracking-[0.25em] leading-none mb-0.5">Agent Roster</p>
+                <h1 className="text-[15px] font-black text-white tracking-tight uppercase leading-none">Schedule</h1>
+              </div>
 
-                      <button 
-                        onClick={() => {
-                          const [y, m, d] = selectedDate.split('-').map(Number);
-                          const dateObj = new Date(y, m - 1, d);
-                          dateObj.setDate(dateObj.getDate() + 1);
-                          setSelectedDate(dateObj.toLocaleDateString('en-CA'));
-                        }}
-                        className="p-1 rounded-lg transition-colors text-slate-400 hover:text-slate-900 bg-white/60"
-                        aria-label="Next day"
-                      >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
-                        </svg>
-                      </button>
-                    </div>
+              <div className="w-px h-8 bg-slate-700" />
 
-                    {/* Integrated Time Center */}
-                    <div className="flex items-center bg-black/5 rounded-xl p-1 border border-slate-200 overflow-hidden ml-2">
-                      <div className="flex items-center gap-3 px-4 py-1.5 bg-white/60 rounded-lg">
-                          <span className="text-[12px] font-semibold text-[#00ADB5] uppercase tracking-tighter border-r border-slate-200 pr-3">IST</span>
-                          <span className="text-[15px] font-medium text-[#222831] tabular-nums tracking-tighter leading-none">{times.ist}</span>
-                        </div>
-                        <div className="flex items-center gap-3 px-4 py-1.5 rounded-lg ml-0.5">
-                          <span className="text-[12px] font-semibold text-[#393E46] uppercase tracking-tighter border-r border-slate-200 pr-3">GMT</span>
-                          <span className="text-[15px] font-medium text-[#222831] tabular-nums tracking-tighter leading-none">{times.uk}</span>
-                        </div>
-                    </div>
+              {/* Date nav */}
+              <div className="flex items-center gap-2">
+                <button onClick={() => navDate(-1)} className="w-7 h-7 rounded-lg bg-slate-700/60 hover:bg-slate-600 text-slate-400 hover:text-white flex items-center justify-center transition-colors">
+                  <ChevronLeft size={14} />
+                </button>
+                <div className="relative">
+                  <div className="px-4 py-1.5 bg-slate-700/40 rounded-lg border border-slate-600/50 cursor-pointer min-w-[160px] text-center">
+                    <span className="text-[11px] font-black text-white uppercase tracking-widest">{dayLabel}</span>
                   </div>
-                  
-                  <div className="flex items-center gap-4">
-                    <button 
-                      onClick={() => setIsModalOpen(!isModalOpen)}
-                      className={`w-10 h-10 ${isModalOpen ? 'bg-rose-500 text-white shadow-rose-500/30' : 'bg-[#393E46] text-white shadow-[#393E46]/30'} rounded-2xl flex items-center justify-center transition-all shadow-lg active:scale-[0.98]`}
-                      title="Register Agent"
-                    >
-                      <Plus size={18} className={`${isModalOpen ? 'rotate-45' : ''}`} />
-                    </button>
-
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={isImportingRoster}
-                      className="px-4 py-1.5 rounded-xl font-black text-[9px] uppercase tracking-widest bg-[#222831] text-white hover:bg-[#222831]/90 transition-all shadow-md disabled:opacity-50"
-                    >
-                      {isImportingRoster ? 'Importing...' : 'Import Roster'}
-                    </button>
-                    <input 
-                      type="file"
-                      ref={fileInputRef}
-                      onChange={handleRosterFileChange}
-                      accept=".xlsx,.xls,.csv"
-                      className="hidden"
-                    />
-                  </div>
+                  <input
+                    type="date"
+                    value={selectedDate}
+                    onChange={e => setSelectedDate(e.target.value)}
+                    className="absolute inset-0 opacity-0 cursor-pointer w-full"
+                  />
                 </div>
+                <button onClick={() => navDate(1)} className="w-7 h-7 rounded-lg bg-slate-700/60 hover:bg-slate-600 text-slate-400 hover:text-white flex items-center justify-center transition-colors">
+                  <ChevronRight size={14} />
+                </button>
+              </div>
 
-                {importStatus && (
-                  <div className={`mx-2 mt-2 p-3 rounded-2xl flex items-center justify-between backdrop-blur-md border animate-in fade-in slide-in-from-top-2 duration-300 shadow-sm ${
-                    importStatus.tone === 'success' ? 'bg-green-100 border-green-200 text-green-700' :
-                    importStatus.tone === 'warning' ? 'bg-[#00ADB5]/10 border-[#00ADB5]/30 text-[#00ADB5]' :
-                    'bg-rose-100 border-rose-200 text-rose-700'
-                  }`}>
-                    <div className="flex items-center gap-3">
-                      <div className={`w-2 h-2 rounded-full ${
-                        importStatus.tone === 'success' ? 'bg-green-500' :
-                        importStatus.tone === 'warning' ? 'bg-[#00ADB5]' :
-                        'bg-rose-500'
-                      }`} />
-                      <span className="text-[11px] font-black uppercase tracking-wider">{importStatus.message}</span>
-                    </div>
-                    <button onClick={() => setImportStatus(null)} className="p-1 hover:bg-black/5 rounded-lg transition-colors text-inherit opacity-50 hover:opacity-100">
-                      <X size={14} />
-                    </button>
-                  </div>
-                )}
+              {/* Clocks */}
+              <div className="hidden lg:flex items-center gap-1 bg-slate-800/60 rounded-lg border border-slate-700/50 overflow-hidden">
+                <div className="flex items-center gap-2 px-3 py-1.5">
+                  <span className="text-[9px] font-black text-teal-400 tracking-widest">IST</span>
+                  <span className="text-[12px] font-mono font-semibold text-white tabular-nums">{times.ist}</span>
+                </div>
+                <div className="w-px h-5 bg-slate-700" />
+                <div className="flex items-center gap-2 px-3 py-1.5">
+                  <span className="text-[9px] font-black text-slate-400 tracking-widest">GMT</span>
+                  <span className="text-[12px] font-mono font-semibold text-slate-300 tabular-nums">{times.uk}</span>
+                </div>
+              </div>
+            </div>
 
-                {/* Table Content Section */}
-                <div className="p-2 flex flex-col flex-1 min-h-0">
-                  <div className="flex-1 overflow-auto">
-                    <table className="w-full table-fixed border-collapse h-full">
-                      <thead>
-                        <tr className="text-[10px] font-black text-slate-900 uppercase tracking-widest border-b-2 border-slate-300">
-                          {SHIFTS.map(shift => {
-                            const colors = getShiftColor(shift);
-                            const shiftHandlers = getHandlersForShift(shift);
-                            return (
-                              <th key={shift} className={`px-4 py-3 text-center border-r border-slate-300 ${colors.light}`}>
-                                <div className="flex items-center justify-center gap-3">
-                                  <span className="inline-block">{shift}</span>
-                                  <div className="flex items-center gap-2">
-                                    <div className={`w-2.5 h-2.5 rounded-full ${colors.bg}`} />
-                                    <span className="text-[12px] font-black text-slate-900">{shiftHandlers.length}</span>
-                                  </div>
-                                </div>
-                              </th>
-                            );
-                          })}
-                        </tr>
-                      </thead>
-                      <tbody className="h-full">
-                        <tr className="h-full">
-                          {SHIFTS.map((shift) => {
-                            const colors = getShiftColor(shift);
-                            const shiftHandlers = getHandlersForShift(shift);
-                            return (
-                              <td key={shift} className="align-top px-2 pb-3 border-r border-slate-300 h-full">
-                                <div className="sr-only">{shift}</div>
-                                <DroppableContainer id={shift} className="px-0 pt-3 pb-3 h-full">
-                                  <div className="flex flex-col">
-                                    <SortableContext
-                                      id={shift}
-                                      items={shiftHandlers.map(a => a.id)}
-                                      strategy={verticalListSortingStrategy}
-                                    >
-                                      <ul className="flex flex-col gap-1.5 pb-2">
-                                        {shiftHandlers.slice(0, MAX_SHIFT_VISIBLE).map(handler => (
-                                          <SortableHandler
-                                            key={handler.id}
-                                            handler={handler}
-                                            shift={shift}
-                                            colors={colors}
-                                            onShiftChange={updateShift}
-                                            onDelete={deleteHandlerGlobally}
-                                            shiftOptions={shiftPickerOptions}
-                                          />
-                                        ))}
+            {/* Right: stats + actions */}
+            <div className="flex items-center gap-3">
+              {/* Live stats */}
+              <div className="flex items-center gap-3 px-3 py-1.5 bg-slate-800/60 rounded-lg border border-slate-700/50">
+                <div className="text-center">
+                  <p className="text-[8px] text-slate-500 uppercase tracking-widest font-black leading-none">On Shift</p>
+                  <p className="text-[16px] font-black text-white tabular-nums leading-none mt-0.5">{totalOnShift}</p>
+                </div>
+                <div className="w-px h-6 bg-slate-700" />
+                <div className="text-center">
+                  <p className="text-[8px] text-slate-500 uppercase tracking-widest font-black leading-none">Off Duty</p>
+                  <p className="text-[16px] font-black text-slate-400 tabular-nums leading-none mt-0.5">{totalOffDuty}</p>
+                </div>
+              </div>
 
-                                        {shiftHandlers.length === 0 && (
-                                          <li className="flex items-center justify-center h-12 opacity-80 shrink-0 border-2 border-dashed border-slate-200 rounded-3xl mt-2 bg-transparent">
-                                            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Empty</span>
-                                          </li>
-                                        )}
-                                      </ul>
-                                    </SortableContext>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isImportingRoster}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-700/60 hover:bg-slate-600/60 border border-slate-600/50 text-slate-300 hover:text-white text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-40"
+              >
+                <Upload size={13} />
+                <span className="hidden sm:inline">{isImportingRoster ? 'Importing…' : 'Import'}</span>
+              </button>
+              <input type="file" ref={fileInputRef} onChange={handleRosterFileChange} accept=".xlsx,.xls,.csv" className="hidden" />
 
-                                    {shiftHandlers.length > MAX_SHIFT_VISIBLE && (
-                                      <div className="mx-2 mb-1 rounded-xl bg-white/70 border border-slate-200 text-center text-[11px] font-black text-slate-700 py-2">
-                                        +{shiftHandlers.length - MAX_SHIFT_VISIBLE} more
-                                      </div>
-                                    )}
-                                  </div>
-                                </DroppableContainer>
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-teal-500 hover:bg-teal-400 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-teal-500/20"
+              >
+                <Plus size={13} />
+                <span className="hidden sm:inline">Register</span>
+              </button>
+            </div>
+          </div>
 
-                  {/* Leaves / Week Off Section - pinned inside main card */}
-                  <div className="flex-shrink-0 bg-white/90 backdrop-blur-sm rounded-b-3xl border-t border-white/30 flex flex-col h-auto shadow-inner mt-auto text-black">
-                    <div className="px-6 py-4 flex items-center justify-between shrink-0 rounded-b-3xl">
-                      <div className="flex items-center gap-3">
-                          <h2 className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Leaves / Week Off</h2>
-                          <span className="bg-black/5 text-slate-600 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider border border-slate-200">
-                            {getOffDutyHandlers().length} Agents
+          {/* ── Import status banner ────────────────────────────────────── */}
+          {importStatus && (
+            <div className={`mx-4 mt-3 px-4 py-2.5 rounded-lg flex items-center justify-between text-[11px] font-bold border shrink-0 ${
+              importStatus.tone === 'success' ? 'bg-emerald-900/40 border-emerald-700/50 text-emerald-300' :
+              importStatus.tone === 'warning' ? 'bg-amber-900/40 border-amber-700/50 text-amber-300' :
+              'bg-red-900/40 border-red-700/50 text-red-300'
+            }`}>
+              <span>{importStatus.message}</span>
+              <button onClick={() => setImportStatus(null)} className="opacity-60 hover:opacity-100 ml-4"><X size={13} /></button>
+            </div>
+          )}
+
+          {/* ── Shift grid ──────────────────────────────────────────────── */}
+          <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+            <div className="flex-1 overflow-auto">
+              <div className="flex h-full min-w-[700px]" style={{ minHeight: '300px' }}>
+                {SHIFTS.map((shift, idx) => {
+                  const cfg = getShiftConfig(shift);
+                  const shiftHandlers = getHandlersForShift(shift);
+                  const isLast = idx === SHIFTS.length - 1;
+
+                  return (
+                    <div key={shift} className={`flex flex-col flex-1 min-w-0 ${!isLast ? 'border-r border-slate-700/50' : ''}`}>
+                      {/* Column header */}
+                      <div className={`${cfg.headerBg} px-3 py-2.5 border-b border-slate-700/60 shrink-0`}>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-2 h-2 rounded-full ${cfg.accent} shadow-sm`} style={{ boxShadow: `0 0 6px ${cfg.accentHex}80` }} />
+                            <div>
+                              <p className="text-[8px] text-white/40 font-black uppercase tracking-widest leading-none">{cfg.label}</p>
+                              <p className="text-[11px] text-white font-black uppercase tracking-wider leading-none mt-0.5">{shift}</p>
+                            </div>
+                          </div>
+                          <span
+                            className="text-[11px] font-black tabular-nums px-2 py-0.5 rounded-md"
+                            style={{ background: `${cfg.accentHex}25`, color: cfg.accentHex }}
+                          >
+                            {shiftHandlers.length}
                           </span>
+                        </div>
                       </div>
 
-                      <div className="w-10 h-10" />
-                    </div>
-
-                    <DroppableContainer id="OFF_DUTY" className="p-4 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
-                      <SortableContext
-                        id="OFF_DUTY"
-                        items={getOffDutyHandlers().map(item => item.handler.id)}
-                        strategy={verticalListSortingStrategy}
-                      >
-                        <div className="flex flex-wrap gap-2 h-auto content-start pb-2">
-                          {getOffDutyHandlers().map(({ handler, reason }) => (
-                            <div key={handler.id} className="w-56 shrink-0">
-                              <SortableHandler 
-                                handler={handler} 
-                                shift={reason} 
-                                colors={getShiftColor(reason)} 
+                      {/* Column body */}
+                      <DroppableContainer id={shift} className={`flex-1 ${cfg.colBg} px-2 py-2`}>
+                        <SortableContext id={shift} items={shiftHandlers.map(h => h.id)} strategy={verticalListSortingStrategy}>
+                          <ul className="flex flex-col gap-1.5">
+                            {shiftHandlers.slice(0, MAX_SHIFT_VISIBLE).map(handler => (
+                              <SortableHandler
+                                key={handler.id}
+                                handler={handler}
+                                shift={shift}
                                 onShiftChange={updateShift}
                                 onDelete={deleteHandlerGlobally}
                                 shiftOptions={shiftPickerOptions}
                               />
+                            ))}
+                            {shiftHandlers.length === 0 && (
+                              <li className="flex items-center justify-center h-10 rounded-lg border border-dashed border-white/10 mt-1">
+                                <span className="text-[9px] font-black text-white/20 uppercase tracking-widest">Empty</span>
+                              </li>
+                            )}
+                          </ul>
+                          {shiftHandlers.length > MAX_SHIFT_VISIBLE && (
+                            <div className="mt-1.5 py-1.5 text-center text-[9px] font-black text-white/40 bg-white/5 rounded-lg border border-white/10">
+                              +{shiftHandlers.length - MAX_SHIFT_VISIBLE} more
                             </div>
-                          ))}
-                        </div>
-                      </SortableContext>
-                    </DroppableContainer>
-                  </div>
-                </div>
+                          )}
+                        </SortableContext>
+                      </DroppableContainer>
+                    </div>
+                  );
+                })}
               </div>
+            </div>
+
+            {/* ── Off Duty strip ──────────────────────────────────────── */}
+            <div className="shrink-0 border-t border-slate-700/60 bg-slate-800/40">
+              <div className="flex items-center gap-3 px-4 py-2 border-b border-slate-700/30">
+                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Leaves / Week Off</span>
+                <span className="px-2 py-0.5 rounded-full bg-slate-700/60 border border-slate-600/50 text-[9px] font-black text-slate-400">
+                  {totalOffDuty} agents
+                </span>
+              </div>
+              <DroppableContainer id="OFF_DUTY" className="px-4 py-2.5">
+                <SortableContext id="OFF_DUTY" items={getOffDutyHandlers().map(i => i.handler.id)} strategy={verticalListSortingStrategy}>
+                  <div className="flex flex-wrap gap-2 min-h-[28px]">
+                    {getOffDutyHandlers().map(({ handler, reason }) => {
+                      const lc = LEAVE_CONFIG[reason] ?? { label: reason, color: '#64748B', textColor: 'text-slate-300', borderColor: 'border-slate-600' };
+                      return (
+                        <SortableHandler
+                          key={handler.id}
+                          handler={handler}
+                          shift={reason}
+                          onShiftChange={updateShift}
+                          onDelete={deleteHandlerGlobally}
+                          shiftOptions={shiftPickerOptions}
+                          compact
+                        />
+                      );
+                    })}
+                    {totalOffDuty === 0 && (
+                      <p className="text-[9px] text-slate-600 font-black uppercase tracking-widest self-center">No agents on leave today</p>
+                    )}
+                  </div>
+                </SortableContext>
+              </DroppableContainer>
             </div>
           </div>
         </div>
 
+        {/* ── Drag Overlay ────────────────────────────────────────────────── */}
         <DragOverlay>
-          {activeId && activeHandler ? (
-            <div className={`flex items-center justify-between p-4 rounded-2xl border border-slate-200 bg-white/60 backdrop-blur-2xl shadow-2xl scale-110 w-64`}>
-              <div className="flex items-center space-x-3 ml-2">
-                <div>
-                  <span className="text-[#222831] font-black text-sm block leading-tight">{activeHandler.name}</span>
-                  <span className="text-[8px] font-black text-[#393E46] uppercase tracking-widest mt-1 block">Relocating...</span>
-                </div>
-              </div>
+          {activeId && activeHandler && (
+            <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg bg-slate-700/90 backdrop-blur-xl border border-white/20 shadow-2xl w-48 scale-105">
+              <GripVertical size={12} className="text-white/40" />
+              <span className="text-[12px] font-semibold text-white truncate">{activeHandler.name}</span>
             </div>
-          ) : null}
+          )}
         </DragOverlay>
 
-        {/* Trash Zone */}
+        {/* Trash zones */}
         {activeId && (
           <>
-            <div className="fixed left-0 top-1/2 -translate-y-1/2 z-50 w-20 h-24" id="TRASH"></div>
-            <div className="fixed right-0 top-1/2 -translate-y-1/2 z-50 w-20 h-24" id="TRASH"></div>
+            <div className="fixed left-0 top-1/2 -translate-y-1/2 z-50 w-16 h-24" id="TRASH" />
+            <div className="fixed right-0 top-1/2 -translate-y-1/2 z-50 w-16 h-24" id="TRASH" />
           </>
         )}
       </DndContext>
 
-      {/* Leave Confirmation Modal */}
+      {/* ── Leave Confirmation Modal ─────────────────────────────────────── */}
       {leaveOperation && (
-        <div className="fixed inset-0 flex items-center justify-center z-100 p-6">
-          <div className="absolute inset-0 bg-white/20 backdrop-blur-sm" onClick={handleLeaveCancel} />
-          <div className="bg-white/90 backdrop-blur-3xl rounded-4xl border border-slate-200 shadow-2xl w-full max-w-sm overflow-hidden relative animate-in fade-in zoom-in duration-200">
-            <div className="p-8 pb-4">
-              <div className="flex items-center justify-between mb-8">
-                <div className="w-12 h-12 bg-[#00ADB5]/10 rounded-2xl flex items-center justify-center border border-[#00ADB5]/20">
-                  <AlertCircle size={24} className="text-[#00ADB5]" />
+        <div className="fixed inset-0 flex items-center justify-center z-50 p-6">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setLeaveOperation(null)} />
+          <div className="relative bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-5">
+                <div className="w-10 h-10 bg-teal-500/10 rounded-xl flex items-center justify-center border border-teal-500/20">
+                  <AlertCircle size={20} className="text-teal-400" />
                 </div>
-                <button 
-                  onClick={handleLeaveCancel}
-                  className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-full transition-all"
-                >
-                  <X size={20} />
+                <button onClick={() => setLeaveOperation(null)} className="w-8 h-8 flex items-center justify-center text-slate-500 hover:text-white hover:bg-slate-700 rounded-lg transition-all">
+                  <X size={16} />
                 </button>
               </div>
-              <h3 className="text-2xl font-black text-[#222831] tracking-tight mb-2">
-                {leaveOperation.type === 'assign' ? 'Confirm Leave Assignment' : 'Confirm Remove From Leave'}
+              <h3 className="text-lg font-black text-white mb-1">
+                {leaveOperation.type === 'assign' ? 'Confirm Leave Assignment' : 'Remove From Leave?'}
               </h3>
-              <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mb-8">
-                {leaveOperation.type === 'assign' ? 'Assign this handler to leave status' : 'Remove this handler from leave status?'}
+              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-5">
+                {leaveOperation.type === 'assign' ? 'This handler will be marked as on leave' : 'Handler will be moved back to active shift'}
               </p>
-              
-              <div className="space-y-4 mb-8">
-                <div className="p-4 bg-[#00ADB5]/10 rounded-xl border border-[#00ADB5]/20">
-                  <p className="text-[11px] text-slate-400 font-bold uppercase tracking-widest mb-2">Handler</p>
-                  <p className="text-lg font-black text-slate-900">{handlers.find(a => a.id === leaveOperation.handlerId)?.name || 'Unknown'}</p>
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between px-3 py-2.5 bg-slate-800/60 rounded-lg border border-slate-700/50">
+                  <span className="text-[10px] text-slate-400 font-black uppercase tracking-wider">Handler</span>
+                  <span className="text-[13px] font-black text-white">{handlers.find(a => a.id === leaveOperation.handlerId)?.name}</span>
                 </div>
                 {leaveOperation.type === 'assign' && (
-                  <div className="p-4 bg-[#00ADB5]/10 rounded-xl border border-[#00ADB5]/20">
-                    <p className="text-[11px] text-slate-400 font-bold uppercase tracking-widest mb-2">Leave Type</p>
-                    <p className="text-lg font-black text-[#00ADB5]">{leaveOperation.toShift}</p>
+                  <div className="flex items-center justify-between px-3 py-2.5 bg-slate-800/60 rounded-lg border border-slate-700/50">
+                    <span className="text-[10px] text-slate-400 font-black uppercase tracking-wider">Leave Type</span>
+                    <span className="text-[13px] font-black text-teal-400">{leaveOperation.toShift}</span>
                   </div>
                 )}
-                {leaveOperation.type === 'remove' && (
-                  <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-                    <p className="text-[11px] text-slate-400 font-bold uppercase tracking-widest mb-2">Current Leave</p>
-                    <p className="text-lg font-black text-slate-900">{leaveOperation.fromShift}</p>
-                    <p className="text-sm text-slate-500 mt-2">This will be replaced by: {leaveOperation.toShift === 'UNASSIGNED' ? 'Unassigned' : leaveOperation.toShift}</p>
-                  </div>
-                )}
-                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-                  <p className="text-[11px] text-slate-400 font-bold uppercase tracking-widest mb-2">Date</p>
-                  <p className="text-lg font-black text-slate-900">{new Date(selectedDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</p>
+                <div className="flex items-center justify-between px-3 py-2.5 bg-slate-800/60 rounded-lg border border-slate-700/50">
+                  <span className="text-[10px] text-slate-400 font-black uppercase tracking-wider">Date</span>
+                  <span className="text-[13px] font-black text-white">{dayLabel}</span>
                 </div>
               </div>
             </div>
-            
-            <div className="p-8 pt-4 flex gap-4">
-              <button 
-                onClick={handleLeaveCancel}
-                className="flex-1 px-6 py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest text-slate-500 hover:bg-slate-50 transition-all active:scale-95"
-              >
+            <div className="px-6 pb-6 flex gap-3">
+              <button onClick={() => setLeaveOperation(null)} className="flex-1 py-2.5 rounded-xl font-black text-[11px] uppercase tracking-widest text-slate-400 hover:bg-slate-800 transition-all">
                 Cancel
               </button>
-              <button 
-                onClick={handleLeaveConfirm}
-                className="flex-1 px-6 py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest bg-[#222831] text-white hover:bg-[#222831]/90 transition-all shadow-xl shadow-[#222831]/20 active:scale-95"
-              >
+              <button onClick={handleLeaveConfirm} className="flex-1 py-2.5 rounded-xl font-black text-[11px] uppercase tracking-widest bg-teal-500 hover:bg-teal-400 text-white transition-all shadow-lg shadow-teal-500/20">
                 Confirm
               </button>
             </div>
           </div>
         </div>
       )}
-      {/* Register Agent Modal */}
+
+      {/* ── Register Agent Modal ─────────────────────────────────────────── */}
       {isModalOpen && (
-        <div className="fixed inset-0 flex items-center justify-center z-100 p-6">
-          <div className="absolute inset-0 bg-black/10" onClick={handleAddAgentCancel} />
-          <div className="bg-white/90 rounded-4xl border border-slate-200 shadow-2xl w-full max-w-sm overflow-hidden relative animate-in fade-in zoom-in duration-200">
+        <div className="fixed inset-0 flex items-center justify-center z-50 p-6">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => { setNewAgentName(''); setNewAgentShift(''); setIsModalOpen(false); }} />
+          <div className="relative bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
             <div className="p-6">
-              <div className="flex items-center justify-between mb-6">
-                <div className="w-12 h-12 bg-[#393E46]/10 rounded-2xl flex items-center justify-center border border-[#393E46]/20">
-                  <CalendarIcon size={24} className="text-[#393E46]" />
+              <div className="flex items-center justify-between mb-5">
+                <div className="w-10 h-10 bg-teal-500/10 rounded-xl flex items-center justify-center border border-teal-500/20">
+                  <Plus size={20} className="text-teal-400" />
                 </div>
-                <button 
-                  onClick={handleAddAgentCancel}
-                  className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-full transition-all"
-                >
-                  <X size={20} />
+                <button onClick={() => { setNewAgentName(''); setNewAgentShift(''); setIsModalOpen(false); }} className="w-8 h-8 flex items-center justify-center text-slate-500 hover:text-white hover:bg-slate-700 rounded-lg transition-all">
+                  <X size={16} />
                 </button>
               </div>
+              <h3 className="text-lg font-black text-white mb-1">Register Agent</h3>
+              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-5">Add to roster</p>
 
-              <h3 className="text-2xl font-black text-[#222831] tracking-tight mb-2">Register Agent</h3>
-              <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mb-6">Add a new agent to the roster</p>
-
-              <div className="space-y-4">
+              <div className="space-y-3">
                 <div>
-                  <label className="text-[11px] text-slate-400 font-bold uppercase tracking-widest">Name</label>
+                  <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest block mb-1.5">Name</label>
                   <input
+                    autoFocus
                     value={newAgentName}
-                    onChange={(e) => setNewAgentName(e.target.value)}
-                    className="mt-2 w-full px-4 py-3 rounded-2xl border border-slate-200 bg-white/80 focus:outline-none"
-                    placeholder="Agent name"
+                    onChange={e => setNewAgentName(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleAddAgentConfirm()}
+                    className="w-full px-3 py-2.5 bg-slate-800/60 border border-slate-700/60 rounded-lg text-white text-[13px] font-semibold focus:outline-none focus:border-teal-500/60 transition-colors placeholder:text-slate-600"
+                    placeholder="Full name"
                   />
                 </div>
-
                 <div className="relative">
-                  <label className="text-[11px] text-slate-400 font-bold uppercase tracking-widest">Shift</label>
-                  <p className="text-xs text-slate-500">Assign agent to a shift for the selected date (optional)</p>
-
-                  <div className="mt-2">
-                    <button
-                      type="button"
-                      onClick={() => setNewAgentShiftOpen(s => !s)}
-                      className="w-full flex items-center justify-between px-4 py-3 rounded-2xl border border-slate-200 bg-white/90 text-left"
-                    >
-                      <span className="truncate">{newAgentShift || 'No initial shift'}</span>
-                      <svg className="w-4 h-4 text-slate-500" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 8l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                    </button>
-
-                    {newAgentShiftOpen && (
-                      <div className="absolute z-50 mt-2 w-full max-h-56 overflow-auto rounded-xl border border-slate-200 bg-white shadow-lg">
-                        <ul className="divide-y divide-slate-100">
-                          <li>
-                            <button type="button" className="w-full text-left px-4 py-3 hover:bg-slate-50" onClick={() => { setNewAgentShift(''); setNewAgentShiftOpen(false); }}>
-                              No initial shift
-                            </button>
-                          </li>
-                          {shiftPickerOptions.map((s) => (
-                            <li key={s}>
-                              <button type="button" className="w-full text-left px-4 py-3 hover:bg-slate-50" onClick={() => { setNewAgentShift(s); setNewAgentShiftOpen(false); }}>
-                                {s}
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
+                  <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest block mb-1.5">Initial Shift <span className="text-slate-600">(optional)</span></label>
+                  <button
+                    type="button"
+                    onClick={() => setNewAgentShiftOpen(s => !s)}
+                    className="w-full flex items-center justify-between px-3 py-2.5 bg-slate-800/60 border border-slate-700/60 rounded-lg text-left transition-colors hover:border-slate-600"
+                  >
+                    <span className={`text-[13px] font-semibold ${newAgentShift ? 'text-white' : 'text-slate-600'}`}>{newAgentShift || 'No shift assigned'}</span>
+                    <ChevronRight size={14} className={`text-slate-500 transition-transform ${newAgentShiftOpen ? 'rotate-90' : ''}`} />
+                  </button>
+                  {newAgentShiftOpen && (
+                    <div className="absolute z-50 mt-1 w-full max-h-52 overflow-auto rounded-lg border border-slate-700 bg-slate-800 shadow-2xl">
+                      <button type="button" className="w-full text-left px-3 py-2.5 text-[12px] text-slate-400 hover:bg-slate-700 transition-colors" onClick={() => { setNewAgentShift(''); setNewAgentShiftOpen(false); }}>
+                        No shift assigned
+                      </button>
+                      {shiftPickerOptions.map(s => (
+                        <button key={s} type="button" className="w-full text-left px-3 py-2.5 text-[12px] text-white hover:bg-slate-700 transition-colors font-medium" onClick={() => { setNewAgentShift(s); setNewAgentShiftOpen(false); }}>
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
-
-            <div className="p-6 pt-4 flex gap-4">
-              <button 
-                onClick={handleAddAgentCancel}
-                className="flex-1 px-6 py-3 rounded-2xl font-black text-[11px] uppercase tracking-widest text-slate-500 hover:bg-slate-50 transition-all active:scale-95"
-              >
+            <div className="px-6 pb-6 flex gap-3">
+              <button onClick={() => { setNewAgentName(''); setNewAgentShift(''); setIsModalOpen(false); }} className="flex-1 py-2.5 rounded-xl font-black text-[11px] uppercase tracking-widest text-slate-400 hover:bg-slate-800 transition-all">
                 Cancel
               </button>
-              <button 
-                onClick={handleAddAgentConfirm}
-                className="flex-1 px-6 py-3 rounded-2xl font-black text-[11px] uppercase tracking-widest bg-[#222831] text-white hover:bg-[#222831]/90 transition-all shadow-xl shadow-[#222831]/20 active:scale-95"
-              >
+              <button onClick={handleAddAgentConfirm} disabled={!newAgentName.trim()} className="flex-1 py-2.5 rounded-xl font-black text-[11px] uppercase tracking-widest bg-teal-500 hover:bg-teal-400 disabled:bg-slate-700 disabled:text-slate-500 text-white transition-all shadow-lg shadow-teal-500/20 disabled:shadow-none">
                 Register
               </button>
             </div>

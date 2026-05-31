@@ -6,6 +6,7 @@ import cookieParser from 'cookie-parser';
 import { rateLimit } from 'express-rate-limit';
 import mongoose from 'mongoose';
 import path from 'path';
+import csurf from 'csurf';
 import 'dotenv/config';
 import { fileURLToPath } from 'url';
 
@@ -137,6 +138,23 @@ app.use(cors({
   credentials: true
 }));
 app.use(cookieParser());
+
+// Enforce secure JWT_SECRET in production
+if (process.env.NODE_ENV === 'production' && (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32)) {
+  console.error('FATAL: JWT_SECRET must be set and at least 32 characters in production. Exiting.');
+  process.exit(1);
+}
+
+app.use(express.json());
+
+// CSRF protection for /api routes (double-submit via cookie)
+const csrfProtection = csurf({ cookie: { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' } });
+app.use('/api', csrfProtection);
+// Provide CSRF token endpoint for SPA to fetch and include in request headers
+app.get('/api/csrf-token', (req, res) => {
+  res.json({ csrfToken: req.csrfToken() });
+});
+
 app.use(async (req, res, next) => {
   // Attach user object if token present (non-blocking)
   try {
@@ -147,7 +165,6 @@ app.use(async (req, res, next) => {
   }
   return next();
 });
-app.use(express.json());
 
 // Auth routes
 import authRouter from './routes/auth.js';

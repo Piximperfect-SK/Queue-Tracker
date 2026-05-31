@@ -28,11 +28,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     fetchMe();
   }, []);
 
+  const getCsrf = async () => {
+    try {
+      const r = await fetch(`${import.meta.env.VITE_BACKEND_URL || ''}/api/csrf-token`, { credentials: 'include' });
+      if (r.ok) {
+        const j = await r.json();
+        return j.csrfToken;
+      }
+    } catch (err) { /* ignore */ }
+    return null;
+  };
+
   const login = async (username: string, password: string) => {
+    const csrf = await getCsrf();
     const res = await fetch(`${import.meta.env.VITE_BACKEND_URL || ''}/api/login`, {
       method: 'POST',
       credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrf || '' },
       body: JSON.stringify({ username, password })
     });
     if (!res.ok) throw new Error((await res.json()).error || 'Login failed');
@@ -42,17 +54,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const register = async (fullName: string, username: string, password: string, registrationSecret: string) => {
+    const csrf = await getCsrf();
     const res = await fetch(`${import.meta.env.VITE_BACKEND_URL || ''}/api/register`, {
       method: 'POST',
       credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrf || '' },
       body: JSON.stringify({ fullName, username, password, registrationSecret })
     });
     if (!res.ok) throw new Error((await res.json()).error || 'Register failed');
     const data = await res.json();
     setUser(data.user);
     return data.user;
-  };
+  }; 
 
   const logout = async () => {
     try {

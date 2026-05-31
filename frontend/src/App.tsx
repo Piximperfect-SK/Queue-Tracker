@@ -28,6 +28,7 @@ function App() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [isBackendDown, setIsBackendDown] = useState(false);
   const [selectedDate, setSelectedDate] = useState(() => new Date().toLocaleDateString('en-CA'));
+  const [useAccountFlow, setUseAccountFlow] = useState<'none'|'login'|'register'>('none');
 
   const handleLogout = () => {
     localStorage.removeItem('currentUser');
@@ -148,7 +149,6 @@ function App() {
   }
 
   // 2. Auth State
-  const [useAccountFlow, setUseAccountFlow] = React.useState<'none'|'login'|'register'>('none');
 
   if (!isAuthenticated) {
     return (

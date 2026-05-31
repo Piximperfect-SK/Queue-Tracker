@@ -9,15 +9,20 @@
     "seed-admin": "node scripts/seedAdmin.js"
   },
   "dependencies": {
+    "bcrypt": "^5.1.0",
+    "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
+    "csurf": "^1.11.0",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "express-rate-limit": "^8.2.1",
-    "mongoose": "^9.1.2",
-    "socket.io": "^4.8.3",
-    "bcrypt": "^5.1.0",
-    "cookie-parser": "^1.4.6",
+    "fetch-cookie": "^3.2.0",
     "jsonwebtoken": "^9.0.0",
+    "marked": "^17.0.1",
+    "mongoose": "^9.1.2",
+    "puppeteer": "^24.35.0",
+    "socket.io": "^4.8.3",
+    "tough-cookie": "^6.0.0",
     "validator": "^13.9.0"
   }
 }
