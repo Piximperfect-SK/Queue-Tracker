@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { MOCK_HANDLERS } from '../data/mockData';
-import { UserPlus, Trash2, ShieldCheck, FileText, Database, Settings as SettingsIcon, AlertCircle, Users, Activity, Server, ChevronRight, Download, Plus, X, Check, Edit3 } from 'lucide-react';
+import { Trash2, ShieldCheck, FileText, Database, Settings as SettingsIcon, AlertCircle, Users, Activity, Server, Plus, X, Check, Edit3 } from 'lucide-react';
 import type { Handler } from '../types';
 import { addLog, downloadLogsForDate, downloadAllLogs, saveLogsFromServer, saveSingleLogFromServer } from '../utils/logger';
 import { socket, syncData } from '../utils/socket';
