@@ -9,6 +9,7 @@ import path from 'path';
 import csurf from 'csurf';
 import 'dotenv/config';
 import { fileURLToPath } from 'url';
+import { seedAdmin } from './scripts/seedAdmin.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,7 +22,10 @@ app.set('trust proxy', 1);
 // MongoDB Connection
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/queue_tracker";
 mongoose.connect(MONGODB_URI)
-  .then(() => console.log('Successfully connected to MongoDB'))
+  .then(async () => {
+    console.log('Successfully connected to MongoDB');
+    await seedAdmin();
+  })
   .catch(err => console.error('MongoDB connection error:', err));
 
 // Define Schema
@@ -173,6 +177,10 @@ app.use('/api', authRouter);
 // Role management routes
 import rolesRouter from './routes/roles.js';
 app.use('/api', rolesRouter);
+
+// User role lookup by name (bridges socket auth with JWT roles)
+import userLookupRouter from './routes/userLookup.js';
+app.use('/api', userLookupRouter);
 
 const server = http.createServer(app);
 const io = new Server(server, {

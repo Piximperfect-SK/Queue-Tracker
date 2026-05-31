@@ -1,30 +1,45 @@
-import mongoose from 'mongoose';
-import 'dotenv/config';
 import bcrypt from 'bcrypt';
 import User from '../models/User.js';
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/queue_tracker';
-const ADMIN_USERNAME = process.env.ADMIN_USERNAME;
-const ADMIN_PWD = process.env.ADMIN_PWD;
-const BCRYPT_ROUNDS = parseInt(process.env.BCRYPT_ROUNDS || '12', 10);
+/**
+ * Seed the default admin user.
+ * Credentials: username = "shubham.kumar", password = "QHAdmin"
+ * Full name: "Shubham Kumar", Role: admin
+ */
+export async function seedAdmin() {
+  try {
+    const existing = await User.findOne({ username: 'shubham.kumar' });
+    if (existing) {
+      // Ensure admin role
+      if (existing.role !== 'admin') {
+        existing.role = 'admin';
+        await existing.save();
+        console.log('Default admin user found. Role set to admin.');
+      } else {
+        console.log('Default admin user already exists with admin role.');
+      }
+      return;
+    }
 
-const run = async () => {
-  if (!ADMIN_USERNAME || !ADMIN_PWD) {
-    console.log('ADMIN_USERNAME or ADMIN_PWD not set; skipping admin seed.');
-    process.exit(0);
+    const BCRYPT_ROUNDS = parseInt(process.env.BCRYPT_ROUNDS || '12', 10);
+    const hash = await bcrypt.hash('QHAdmin', BCRYPT_ROUNDS);
+
+    await User.create({
+      username: 'shubham.kumar',
+      fullName: 'Shubham Kumar',
+      passwordHash: hash,
+      role: 'admin',
+      isActive: true,
+    });
+
+    console.log('Default admin user created:');
+    console.log('  Username: shubham.kumar');
+    console.log('  Password: QHAdmin');
+    console.log('  Role: admin');
+    console.log('  Full Name: Shubham Kumar');
+    console.log('');
+    console.log('⚠️  IMPORTANT: Change the default password after first login!');
+  } catch (err) {
+    console.error('Failed to seed admin user:', err.message);
   }
-
-  await mongoose.connect(MONGODB_URI);
-  const existing = await User.findOne({ username: ADMIN_USERNAME.toLowerCase() });
-  if (existing) {
-    console.log('Admin already exists.');
-    process.exit(0);
-  }
-
-  const hash = await bcrypt.hash(ADMIN_PWD, BCRYPT_ROUNDS);
-  await User.create({ username: ADMIN_USERNAME.toLowerCase(), fullName: 'Admin', passwordHash: hash, role: 'admin' });
-  console.log('Admin user created.');
-  process.exit(0);
-};
-
-run().catch(err => { console.error(err); process.exit(1); });
+}
