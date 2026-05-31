@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, ShieldCheck, Users, ChevronDown, RefreshCw, AlertCircle } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
+import ConfirmModal from '../components/ConfirmModal';
 
 interface UserWithRole {
   _id: string;
@@ -8,6 +9,13 @@ interface UserWithRole {
   username: string;
   role: 'admin' | 'queue_handler' | 'associate';
   isActive: boolean;
+}
+
+interface PendingChange {
+  userId: string;
+  fullName: string;
+  fromRole: string;
+  toRole: string;
 }
 
 const ROLE_LABELS: Record<string, string> = {
@@ -27,6 +35,7 @@ const AdminPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [pendingChange, setPendingChange] = useState<PendingChange | null>(null);
   const { user } = useAuth();
 
   const fetchUsers = async () => {
@@ -51,7 +60,14 @@ const AdminPage: React.FC = () => {
     }
   };
 
-  const updateRole = async (userId: string, newRole: string) => {
+  const confirmRoleChange = (userId: string, fullName: string, fromRole: string, toRole: string) => {
+    setPendingChange({ userId, fullName, fromRole, toRole });
+  };
+
+  const executeRoleChange = async () => {
+    if (!pendingChange) return;
+    const { userId, toRole } = pendingChange;
+    setPendingChange(null);
     setUpdatingId(userId);
     try {
       const csrfRes = await fetch('/api/csrf-token', { credentials: 'include' });
@@ -60,14 +76,13 @@ const AdminPage: React.FC = () => {
         method: 'PUT',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfToken || '' },
-        body: JSON.stringify({ userId, role: newRole }),
+        body: JSON.stringify({ userId, role: toRole }),
       });
       if (!res.ok) {
         const errData = await res.json();
         alert(errData.error || 'Failed to update role');
         return;
       }
-      // Refresh the list
       await fetchUsers();
     } catch (err) {
       alert('Failed to update role');
@@ -160,14 +175,7 @@ const AdminPage: React.FC = () => {
                       <div className="relative inline-block">
                         <select
                           value={u.role}
-                          onChange={(e) => {
-                            if (window.confirm(`Change ${u.fullName}'s role from "${ROLE_LABELS[u.role]}" to "${ROLE_LABELS[e.target.value]}"?`)) {
-                              updateRole(u._id, e.target.value);
-                            } else {
-                              // Reset select value
-                              e.target.value = u.role;
-                            }
-                          }}
+                          onChange={(e) => confirmRoleChange(u._id, u.fullName, u.role, e.target.value)}
                           disabled={updatingId === u._id}
                           className="appearance-none bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-400 pr-8 cursor-pointer disabled:opacity-50"
                         >
@@ -192,6 +200,18 @@ const AdminPage: React.FC = () => {
           Only users who have logged in via account credentials are shown here.
         </p>
       </div>
+
+      {/* Confirm Role Change Modal */}
+      <ConfirmModal
+        isOpen={pendingChange !== null}
+        title="Change User Role"
+        message={pendingChange ? `Change ${pendingChange.fullName}'s role from "${ROLE_LABELS[pendingChange.fromRole] || pendingChange.fromRole}" to "${ROLE_LABELS[pendingChange.toRole] || pendingChange.toRole}"?` : ''}
+        confirmLabel="Change Role"
+        cancelLabel="Cancel"
+        variant="default"
+        onConfirm={executeRoleChange}
+        onCancel={() => setPendingChange(null)}
+      />
     </div>
   );
 };
