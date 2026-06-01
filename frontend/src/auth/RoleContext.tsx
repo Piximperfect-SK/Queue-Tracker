@@ -15,34 +15,40 @@ const RoleContext = createContext<RoleContextValue>({
   refreshRole: async () => {},
 });
 
+const BACKEND = (import.meta.env.VITE_BACKEND_URL || '').replace(/\/$/, '');
+
 export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [role, setRole] = useState<UserRole>(null);
+  const [role, setRole] = useState<UserRole>(() => {
+    const saved = localStorage.getItem('userRole');
+    return (saved && ['admin','queue_handler','associate'].includes(saved))
+      ? saved as UserRole : null;
+  });
   const [loadingRole, setLoadingRole] = useState(true);
 
   const refreshRole = useCallback(async () => {
     setLoadingRole(true);
 
-    // Strategy 1: Try JWT auth (account login)
+    // Strategy 1: JWT account login → /api/me
     try {
-      const res = await fetch('/api/me', { credentials: 'include' });
+      const res = await fetch(`${BACKEND}/api/me`, { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
-        if (data.user && data.user.role) {
+        if (data.user?.role) {
           setRole(data.user.role);
           localStorage.setItem('userRole', data.user.role);
           setLoadingRole(false);
           return;
         }
       }
-    } catch (err) {
-      // ignore
-    }
+    } catch (_) { /* backend unreachable */ }
 
-    // Strategy 2: Look up by fullName from localStorage currentUser (socket auth)
+    // Strategy 2: Socket/name-based login → look up by full name
     const currentUser = localStorage.getItem('currentUser');
     if (currentUser && currentUser !== 'Guest') {
       try {
-        const res = await fetch(`/api/get-role-by-name?name=${encodeURIComponent(currentUser)}`);
+        const res = await fetch(
+          `${BACKEND}/api/get-role-by-name?name=${encodeURIComponent(currentUser)}`
+        );
         if (res.ok) {
           const data = await res.json();
           if (data.role) {
@@ -52,38 +58,30 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
             return;
           }
         }
-      } catch (err) {
-        // ignore
-      }
+      } catch (_) { /* ignore */ }
     }
 
-    // Fallback: localStorage
+    // Fallback: localStorage cache
     const saved = localStorage.getItem('userRole');
-    if (saved && ['admin', 'queue_handler', 'associate'].includes(saved)) {
+    if (saved && ['admin','queue_handler','associate'].includes(saved)) {
       setRole(saved as UserRole);
     } else {
-      setRole(null);
+      // Default new/unknown users to associate
+      setRole('associate');
+      localStorage.setItem('userRole', 'associate');
     }
     setLoadingRole(false);
   }, []);
 
-  // Refresh role on socket connect/init (fires after socket-based login)
+  // Re-run on socket auth events
   useEffect(() => {
-    const handleEvent = () => {
-      // Small delay to let localStorage get set in handleInit
-      setTimeout(refreshRole, 100);
-    };
-    socket.on('connect', handleEvent);
-    socket.on('init', handleEvent);
-    return () => {
-      socket.off('connect', handleEvent);
-      socket.off('init', handleEvent);
-    };
+    const onInit = () => setTimeout(refreshRole, 150);
+    socket.on('init', onInit);
+    socket.on('connect', onInit);
+    return () => { socket.off('init', onInit); socket.off('connect', onInit); };
   }, [refreshRole]);
 
-  useEffect(() => {
-    refreshRole();
-  }, [refreshRole]);
+  useEffect(() => { refreshRole(); }, [refreshRole]);
 
   return (
     <RoleContext.Provider value={{ role, loadingRole, refreshRole }}>

@@ -133,7 +133,7 @@ const corsOptions = {
     console.warn(`BLOCKED CORS connection from: ${origin}. Allowed: ${ALLOWED_ORIGINS.length ? ALLOWED_ORIGINS.join(', ') : FRONTEND_URL}`);
     callback(new Error('Not allowed by CORS'));
   },
-  methods: ["GET", "POST"],
+  methods: ["GET", "POST", "PUT"],
   credentials: true
 };
 
@@ -154,7 +154,8 @@ app.use(express.json());
 
 // CSRF protection for /api routes (double-submit via cookie)
 // Exempt the csrf-token endpoint and GET requests from CSRF
-const csrfProtection = csurf({ cookie: { httpOnly: true, sameSite: 'none', secure: process.env.NODE_ENV === 'production' } });
+const isProd = process.env.NODE_ENV === 'production';
+const csrfProtection = csurf({ cookie: { httpOnly: true, sameSite: isProd ? 'none' : 'lax', secure: isProd } });
 app.use('/api', (req, res, next) => {
   // Skip CSRF for GET/HEAD/OPTIONS and the csrf-token endpoint itself
   if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS' || req.path === '/api/csrf-token') {
@@ -166,7 +167,7 @@ app.use('/api', (req, res, next) => {
 app.get('/api/csrf-token', (req, res) => {
   // Generate a simple token without CSRF dependency
   const token = randomBytes(32).toString('hex');
-  res.cookie('csrf-token', token, { httpOnly: false, secure: process.env.NODE_ENV === 'production', sameSite: 'none' });
+  res.cookie('csrf-token', token, { httpOnly: false, secure: isProd, sameSite: isProd ? 'none' : 'lax' });
   res.json({ csrfToken: token });
 });
 
@@ -295,7 +296,7 @@ app.get('/download-all-logs', async (req, res) => {
   });
 
   res.setHeader('Content-Type', 'text/plain');
-  res.setHeader('Content-Disposition', 'attachment; filename=QueueTracker_FullHistory.txt');
+  res.setHeader('Content-Disposition', `attachment; filename=QueueTracker_FullHistory.txt`);
   res.send(content);
 });
 
