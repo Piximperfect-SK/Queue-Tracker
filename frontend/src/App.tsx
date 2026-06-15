@@ -7,7 +7,7 @@ import SettingsPage from './pages/SettingsPage';
 import LogMonitorPage from './pages/LogMonitorPage';
 import { User, LogIn, ShieldAlert, Lock, Fingerprint, Loader2 } from 'lucide-react';
 import { syncData, socket } from './utils/socket';
-import signinBg from './assets/videobackground-2.mp4';
+import signinBg from './assets/Background.mp4';
 import bgImage from './assets/background.jpg';
 import { addLog } from './utils/logger';
 import { AuthProvider } from './auth/AuthContext';
