@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>LLD - Queue Tracker</title>
+<style>
+body{font-family:Arial,sans-serif;padding:40px;color:#1e293b;max-width:1000px;margin:auto}
+h1{color:#0f172a;border-bottom:4px solid #6366f1;padding-bottom:8px}
+h2{color:#0f172a;margin-top:30px;margin-bottom:12px;border-bottom:2px solid #e2e8f0;padding-bottom:4px}
+h3{color:#334155;margin-top:20px;margin-bottom:8px}
+p{color:#475569;margin:10px 0;line-height:1.6}
+table{width:100%;border-collapse:collapse;margin:16px 0;font-size:12px}
+th{background:#0f172a;color:white;padding:8px 10px;text-align:left;font-weight:600}
+td{padding:6px 10px;border-bottom:1px solid #e2e8f0;vertical-align:top}
+tr:nth-child(even){background:#f8fafc}
+.footer{margin-top:40px;padding-top:12px;border-top:1px solid #e2e8f0;font-size:11px;color:#94a3b8;text-align:center}
+code{background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:12px;border:1px solid #e2e8f0}
+pre.code{background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;font-size:11px;line-height:1.7;overflow-x:auto;margin-bottom:16px}
+.card{border:1px solid #e2e8f0;border-radius:8px;padding:14px;margin-bottom:14px;background:#fafafa}
+.card-title{font-weight:700;font-size:14px;color:#0f172a;margin-bottom:6px}
+.meta{background:#f0fdfa;border:1px solid #6366f1;border-radius:8px;padding:16px;margin:16px 0}
+.subtitle{color:#64748b;font-size:14px;font-weight:600;margin-bottom:30px}
+ul,ol{margin-left:20px;margin-bottom:14px}
+li{margin-bottom:4px;color:#475569}
+.toc{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px 20px;margin-bottom:24px}
+</style>
+</head>
+<body>
+<h1>Queue Tracker &mdash; Low Level Design (LLD)</h1>
+<p class="subtitle">Detailed Component Specification, APIs, Data Flow &amp; Implementation</p>
+<div class="toc">
+<strong>Contents:</strong> 1. Component Tree | 2. Types | 3. REST APIs | 4. Socket Events | 5. Backend | 6. Data Flow | 7. State Management | 8. Security | 9. Utilities | 10. Scripts
+</div>
+<div class="meta"><strong>Project:</strong> Queue Tracker v4.0.0 | <strong>Author:</strong> Piximperfect-SK</div>
+
+<h2>1. Frontend Component Tree</h2>
+<pre class="code">
+main.tsx
+  AuthProvider (JWT-based account auth)
+    App.tsx
+      Login Screen (name+key OR account login)
+        LoginPanel -- JWT login form
+        RegisterPanel -- Account registration
+      Main App
+        Router
+          NavigationLogger -- logs route changes
+          AppFrame
+            AuthProvider + RoleProvider
+              Navbar -- nav + presence indicators
+              Routes:
+                /          RosterPage    -- Shift scheduling
+                /tracker   TrackerPage   -- Live productivity
+                /settings  SettingsPage  -- Handler management
+                /logs      LogMonitorPage -- Event monitor
+                /admin     AdminPage     -- Role management
+              Components: Navbar, ConfirmModal, TrendsSplineChart
+              Utils: socket.ts, logger.ts, types.ts
+</pre>
+
+<h2>2. Type Definitions (types.ts)</h2>
+<pre class="code">
+export interface LogEntry {
+    timestamp: string; user: string;
+    action: string; details: string;
+    type?: 'positive' | 'negative' | 'neutral';
+}
+export type StandardShiftType = '6AM-3PM' | '1PM-10PM' | '2PM-11PM'
+  | '10PM-7AM' | '12PM-9PM' | 'WO' | 'ML' | 'PL' | 'EL' | 'UL' | 'CO' | 'MID-LEAVE';
+export type ShiftType = StandardShiftType | string;
+export interface Handler { id: string; name: string; isQH: boolean; }
+export interface RosterEntry { handlerId: string; date: string; shift: ShiftType; }
+export interface DailyStats { handlerId: string; date: string;
+    incidents: number; sctasks: number; calls: number; comments: string; }
+</pre>
+
+<h2>3. REST API Endpoints</h2>
+
+<h3>Authentication (routes/auth.js)</h3>
+<table>
+<tr><th>Method</th><th>Endpoint</th><th>Rate</th><th>Body / Response</th></tr>
+<tr><td>POST</td><td>/api/register</td><td>3/hr</td><td>{ username, fullName, password, registrationSecret }</td></tr>
+<tr><td>POST</td><td>/api/login</td><td>3/5min</td><td>{ username, password } -> httpOnly JWT cookie</td></tr>
+<tr><td>POST</td><td>/api/logout</td><td>None</td><td>Clears token cookie</td></tr>
+<tr><td>GET</td><td>/api/me</td><td>None</td><td>Returns user from JWT cookie</td></tr>
+<tr><td>GET</td><td>/api/csrf-token</td><td>None</td><td>CSRF token (cookie + JSON)</td></tr>
+</table>
+
+<h3>Role Management (routes/roles.js)</h3>
+<table>
+<tr><th>Method</th><th>Endpoint</th><th>Auth</th><th>Notes</th></tr>
+<tr><td>GET</td><td>/api/roles</td><td>Admin</td><td>List all users with roles</td></tr>
+<tr><td>PUT</td><td>/api/roles</td><td>Admin</td><td>{ userId, role } - prevents last admin demotion</td></tr>
+</table>
+
+<h3>User Lookup (routes/userLookup.js)</h3>
+
+<h2>4. Socket.IO Events</h2>
+<h3>Client to Server</h3>
+<table>
+<tr><th>Event</th><th>Payload</th><th>Description</th></tr>
+<tr><td>join</td><td>{ username, accessKey }</td><td>Join session; validates access key; triggers presence + state sync</td></tr>
+<tr><td>get_initial_data</td><td>none</td><td>Request full state (handlers, roster, stats)</td></tr>
+<tr><td>get_presence</td><td>none</td><td>Request online users list</td></tr>
+<tr><td>update_handlers</td><td>Handler[]</td><td>Update handlers list (also legacy update_agents)</td></tr>
+<tr><td>update_roster</td><td>RosterEntry[]</td><td>Update roster entries</td></tr>
+<tr><td>update_stats</td><td>DailyStats[]</td><td>Update daily stats</td></tr>
+<tr><td>add_log</td><td>LogEntry</td><td>Add new audit log entry</td></tr>
+</table>
+
+<h3>Server to Client</h3>
+<table>
+<tr><th>Event</th><th>Payload</th><th>Description</th></tr>
+<tr><td>init</td><td>{ handlers, roster, stats, logs }</td><td>Full state on connect/join</td></tr>
+<tr><td>presence_updated</td><td>string[]</td><td>Updated online user list</td></tr>
+<tr><td>handlers_updated</td><td>Handler[]</td><td>Handler list changed</td></tr>
+<tr><td>roster_updated</td><td>RosterEntry[]</td><td>Roster changed</td></tr>
+<tr><td>stats_updated</td><td>DailyStats[]</td><td>Stats changed</td></tr>
+<tr><td>log_added</td><td>{ dateStr, logEntry }</td><td>New log broadcast</td></tr>
+<tr><td>error_message</td><td>string</td><td>Error notification</td></tr>
+</table>
+
+<h2>5. Backend Structure</h2>
+<pre class="code">
+backend/
+  server.js               -- Entry: Express + Socket.IO + MongoDB
+  package.json            -- ESM, dependencies
+  middleware/
+    auth.js               -- JWT: optionalAuth, requireAuth, requireRole
+    requireRole.js        -- Role-checking middleware factory
+  models/
+    User.js               -- Mongoose User schema
+  routes/
+    auth.js               -- /api/login, register, logout, me
+    auth_routes.js        -- Alternative auth (modified rate limits)
+    roles.js              -- /api/roles GET/PUT (admin only)
+    userLookup.js         -- /api/get-role-by-name
+  scripts/
+    seedAdmin.js          -- Create initial admin user
+    testAuth.js           -- Auth smoke tests
+    loginAs.js / checkUser.js -- Testing utilities
+    rotateAdminPass.js    -- Admin password rotation
+    generateReport.js     -- PDF report via Puppeteer
+    startBackend.ps1      -- PowerShell launcher
+  reports/                -- Generated reports
+</pre>
+
+<h2>6. Data Flow Details</h2>
+
+<div class="card">
+<div class="card-title">Roster Update (Drag &amp; Drop)</div>
+<ol>
+<li>@dnd-kit fires onDragEnd with handler ID + drop zone</li>
+<li>RosterPage determines new shift, calls executeShiftUpdate()</li>
+<li>Local state + localStorage updated</li>
+<li>syncData.updateRoster() emits via Socket.IO</li>
+<li>Server updates MongoDB: State.updateOne({key:'global'}, {$set:{roster}})</li>
+<li>Server broadcasts roster_updated to other clients</li>
+<li>Other clients update local state + localStorage</li>
+</ol>
+</div>
+
+<div class="card">
+<div class="card-title">Name-Based Login</div>
+<ol>
+<li>User enters name + access key at Access Gate</li>
+<li>Socket connects; emits 'join' event</li>
+<li>Server validates access key (if configured)</li>
+
+<h2>7. State Management</h2>
+<table>
+<tr><th>State</th><th>Component(s)</th><th>Persistence</th><th>Sync</th></tr>
+<tr><td>handlers</td><td>RosterPage, TrackerPage, SettingsPage</td><td>localStorage('handlers')</td><td>Socket.IO</td></tr>
+<tr><td>roster</td><td>RosterPage, TrackerPage</td><td>localStorage('roster')</td><td>Socket.IO</td></tr>
+<tr><td>stats</td><td>TrackerPage</td><td>localStorage('stats')</td><td>Socket.IO</td></tr>
+<tr><td>logs</td><td>LogMonitorPage</td><td>localStorage('logs_YYYY-MM-DD')</td><td>Socket.IO + REST</td></tr>
+<tr><td>currentUser</td><td>App.tsx</td><td>localStorage('currentUser')</td><td>Local only</td></tr>
+<tr><td>accessKey</td><td>App.tsx</td><td>localStorage('teamAccessKey')</td><td>Local only</td></tr>
+<tr><td>onlineUsers</td><td>App.tsx</td><td>None</td><td>Socket.IO</td></tr>
+<tr><td>user (JWT)</td><td>AuthContext</td><td>httpOnly cookie</td><td>REST /api/me</td></tr>
+<tr><td>role</td><td>RoleContext</td><td>localStorage('userRole')</td><td>REST API</td></tr>
+</table>
+
+<h2>8. Security Implementation</h2>
+
+<h3>Input Sanitizer</h3>
+<pre class="code">const sanitize = (text) => {
+  if (typeof text !== 'string') return text;
+  return text.replace(/&lt;[^&gt;]*&gt;/g, '').trim();
+};</pre>
+<p>Applied to: handler names, log details, usernames, access keys (XSS prevention).</p>
+
+<h3>Rate Limiting</h3>
+<table>
+<tr><th>Limiter</th><th>Window</th><th>Max</th></tr>
+<tr><td>Global HTTP</td><td>15 min</td><td>100</td></tr>
+<tr><td>Login</td><td>5 min</td><td>3</td></tr>
+<tr><td>Registration</td><td>1 hour</td><td>3</td></tr>
+<tr><td>Socket Events</td><td>1 sec</td><td>20/socket</td></tr>
+</table>
+
+<h3>Role Access Matrix</h3>
+<table>
+<tr><th>Feature</th><th>Associate</th><th>QH</th><th>Admin</th></tr>
+<tr><td>Roster (/)</td><td>&check;</td><td>&check;</td><td>&check;</td></tr>
+<tr><td>Tracker (/tracker)</td><td>&check;</td><td>&check;</td><td>&check;</td></tr>
+<tr><td>Settings (/settings)</td><td>&mdash;</td><td>&check;</td><td>&check;</td></tr>
+<tr><td>Log Monitor (/logs)</td><td>&check;</td><td>&check;</td><td>&check;</td></tr>
+<tr><td>Admin (/admin)</td><td>&mdash;</td><td>&mdash;</td><td>&check;</td></tr>
+<tr><td>GET/PUT /api/roles</td><td>&mdash;</td><td>&mdash;</td><td>&check;</td></tr>
+</table>
+
+<h2>9. Utility Functions</h2>
+<h3>socket.ts</h3>
+<pre class="code">export const socket = io(SOCKET_URL, {
+  transports: ['websocket', 'polling'],
+  reconnection: true, reconnectionAttempts: 10,
+  withCredentials: true,
+});
+export const syncData = {
+  join, updateHandlers, updateRoster, updateStats, addLog
+};</pre>
+
+<h3>logger.ts Functions</h3>
+<table>
+<tr><th>Function</th><th>Description</th></tr>
+<tr><td>addLog(action, details, type)</td><td>Create log entry, emit via socket, store in localStorage</td></tr>
+<tr><td>addLogForDate(dateStr, ...)</td><td>Create log entry for a specific date</td></tr>
+<tr><td>getLogsForDate(dateStr)</td><td>Retrieve logs for a date from localStorage</td></tr>
+<tr><td>downloadLogsForDate(dateStr)</td><td>Open backend download URL for a date</td></tr>
+<tr><td>downloadAllLogs()</td><td>Open backend download URL for all logs</td></tr>
+<tr><td>saveLogsFromServer(allLogs)</td><td>Sync server logs into localStorage</td></tr>
+<tr><td>saveSingleLogFromServer(...)</td><td>Save incoming log with deduplication</td></tr>
+</table>
+
+<h2>10. Scripts &amp; Environment Variables</h2>
+<h3>Available Commands</h3>
+<table>
+<tr><th>Command</th><th>Description</th></tr>
+<tr><td>npm run dev-frontend</td><td>Vite dev server (port 5173)</td></tr>
+<tr><td>npm run dev-backend</td><td>Backend with --watch (port 3001)</td></tr>
+<tr><td>npm run build</td><td>Build frontend for production</td></tr>
+<tr><td>npm run start</td><td>Start backend in production</td></tr>
+</table>
+
+<h3>Key Environment Variables</h3>
+<table>
+<tr><th>Variable</th><th>Default</th><th>Description</th></tr>
+<tr><td>MONGODB_URI</td><td>mongodb://localhost:27017/queue_tracker</td><td>MongoDB connection</td></tr>
+<tr><td>JWT_SECRET</td><td>dev_jwt_secret</td><td>JWT signing (min 32 chars in prod)</td></tr>
+<tr><td>FRONTEND_URL</td><td>http://localhost:5173</td><td>CORS origin</td></tr>
+<tr><td>TEAM_ACCESS_KEY</td><td>None</td><td>Shared secret for name-based auth</td></tr>
+<tr><td>REGISTRATION_SECRET</td><td>None</td><td>Required for account registration</td></tr>
+<tr><td>PORT</td><td>3001</td><td>Backend port</td></tr>
+<tr><td>VITE_BACKEND_URL</td><td>http://localhost:3001</td><td>Frontend backend URL</td></tr>
+</table>
+
+<h3>Deployment Topology</h3>
+<pre class="code">
+User Browser
+  |-- HTTPS --> Netlify (Frontend SPA)
+  |              |-- VITE_BACKEND_URL --> Render (Backend)
+  |                                       |-- MongoDB Atlas
+  |-- WebSocket --> Render (Socket.IO)
+                    Port 3001
+</pre>
+
+<div class="footer">Queue Tracker v4.0.0 &mdash; Low Level Design Document &mdash; Confidential</div>
+</body>
+</html>
+<li>Server registers socket in onlineUsers Map</li>
+<li>Broadcasts presence_updated to all clients</li>
+<li>Sends init event with full state to joining client</li>
+<li>RoleContext refreshes via /api/get-role-by-name</li>
+</ol>
+</div>
+
+<div class="card">
+<div class="card-title">JWT Account Login</div>
+<ol>
+<li>AuthContext.login() fetches CSRF token from GET /api/csrf-token</li>
+<li>POSTs to /api/login with username, password, CSRF header</li>
+<li>Server validates via bcrypt.compare(), generates JWT</li>
+<li>Sets httpOnly cookie 'token' (8h, sameSite varies by env)</li>
+<li>Returns user object { username, fullName, role }</li>
+<li>RoleContext calls /api/me for latest role</li>
+</ol>
+</div>
+<table>
+<tr><th>Method</th><th>Endpoint</th><th>Notes</th></tr>
+<tr><td>GET</td><td>/api/get-role-by-name?name=X</td><td>Bridges socket auth with JWT roles</td></tr>
+</table>
+
+<h3>Log Downloads &amp; Health</h3>
+<table>
+<tr><th>Method</th><th>Endpoint</th><th>Notes</th></tr>
+<tr><td>GET</td><td>/download-logs/:date</td><td>Download logs for a date as .txt</td></tr>
+<tr><td>GET</td><td>/download-all-logs</td><td>Complete audit history as .txt</td></tr>
+<tr><td>GET</td><td>/</td><td>"Queue Tracker API is Live!"</td></tr>
+<tr><td>GET</td><td>/health</td><td>"Backend is running"</td></tr>
+</table>

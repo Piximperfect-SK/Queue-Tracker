@@ -31,9 +31,9 @@ dates.forEach(date => {
     if (index >= 9 && index < 11) shift = '10PM-7AM';
     if (index >= 11) shift = '12PM-9PM';
     
-    // Add some variety (WO)
+    // Add some variety (WeekOff)
     if ((index + new Date(date).getDate()) % 7 === 0) {
-      shift = 'WO';
+      shift = 'WeekOff';
     }
 
     MOCK_ROSTER.push({

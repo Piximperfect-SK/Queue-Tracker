@@ -188,7 +188,7 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
   };
 
   const activeHandlers = useMemo(() => {
-    const hidden = new Set(['WO','ML','PL','EL','UL','CO','MID-LEAVE']);
+    const hidden = new Set(['WeekOff','Medical Leave','Planned Leave','Earned Leave','Unplanned Leave','Complimentary Off','MID-LEAVE']);
     const order: Record<string, number> = {
       '6AM-3PM': 0, '12PM-9PM': 1, '1PM-10PM': 2, '2PM-11PM': 3, '10PM-7AM': 4
     };

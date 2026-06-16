@@ -105,11 +105,6 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// Root route for verification
-app.get('/', (req, res) => res.status(200).send('Queue Tracker API is Live!'));
-// Add health check endpoint
-app.get('/health', (req, res) => res.status(200).send('Backend is running'));
-
 const FRONTEND_URL = (process.env.FRONTEND_URL || "http://localhost:5173").replace(/\/$/, "");
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || process.env.FRONTEND_URL || "").split(',').map(s => s.trim()).filter(Boolean);
 
@@ -143,6 +138,12 @@ app.use(cors({
   credentials: true
 }));
 app.use(cookieParser());
+
+// === CORS-PROTECTED ROUTES MOVED HERE ===
+// Root route for verification
+app.get('/', (req, res) => res.status(200).send('Queue Tracker API is Live!'));
+// Add health check endpoint
+app.get('/health', (req, res) => res.status(200).send('Backend is running'));
 
 // Enforce secure JWT_SECRET in production
 if (process.env.NODE_ENV === 'production' && (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32)) {
