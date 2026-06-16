@@ -895,7 +895,7 @@ Rules:
       {isModalOpen && (
         <div className="fixed inset-0 flex items-center justify-center z-50 p-6">
           <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={() => { setNewAgentName(''); setNewAgentShift(''); setIsModalOpen(false); }} />
-          <div className="relative bg-white border border-slate-200 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+          <div className="relative bg-white border border-slate-200 rounded-2xl shadow-2xl w-full max-w-sm">
             <div className="p-6">
               <div className="flex items-center justify-between mb-5">
                 <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center">
