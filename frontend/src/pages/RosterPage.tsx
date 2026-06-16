@@ -19,7 +19,7 @@ import { CSS } from '@dnd-kit/utilities';
 
 const ALL_SHIFT_TYPES: ShiftType[] = [
   '6AM-3PM','12PM-9PM','1PM-10PM','2PM-11PM','10PM-7AM',
-  'WO','ML','PL','EL','UL','CO','MID-LEAVE'
+  'WeekOff','Medical Leave','Planned Leave','Earned Leave','Unplanned Leave','Complimentary Off','MID-LEAVE'
 ];
 const MAX_SHIFT_VISIBLE = 8;
 type ImportFeedback = { message: string; tone: 'success' | 'warning' | 'error' };
@@ -144,7 +144,7 @@ const SortableHandler: React.FC<SortableHandlerProps> = ({ handler, shift, onShi
   const cfg = getShiftConfig(shift);
   const lc = getLeaveConfig(shift);
   // For leave types, use leave config; otherwise shift config
-  const isLeave = ['WO','ML','PL','EL','UL','CO','MID-LEAVE'].includes(shift);
+  const isLeave = ['WeekOff','Medical Leave','Planned Leave','Earned Leave','Unplanned Leave','Complimentary Off','MID-LEAVE'].includes(shift);
   const bg = isLeave ? lc.bg : cfg.pillBg;
   const text = isLeave ? lc.text : cfg.pillText;
   const border = isLeave ? lc.border : cfg.pillBorder;
@@ -275,7 +275,7 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
     addLog('NAVIGATE', `Visited ${selectedDate}`);
   }, [selectedDate]);
 
-  const LEAVE_TYPES = ['EL','PL','UL','MID-LEAVE','WO','ML','CO'];
+  const LEAVE_TYPES = ['Earned Leave','Planned Leave','Unplanned Leave','MID-LEAVE','WeekOff','Medical Leave','Complimentary Off'];
 
   const updateShift = (handlerId: string, shift: ShiftType) => {
     if (LEAVE_TYPES.includes(shift)) { setLeaveOperation({ type: 'assign', handlerId, toShift: shift }); return; }
@@ -346,7 +346,13 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
         if (!rawShift){ rowErrors.push(`${label}: shift missing`);  return; }
 
         let sv = rawShift.toUpperCase().replace(/\s+/g,'');
-        if (sv==='OFF'||sv==='WEEKOFF') sv='WO';
+        // Map old short codes to new long-form names
+        if (sv === 'WO' || sv === 'OFF' || sv === 'WEEKOFF') sv = 'WEEKOFF';
+        else if (sv === 'ML' || sv === 'MEDICALLEAVE') sv = 'MEDICALLEAVE';
+        else if (sv === 'PL' || sv === 'PRIVILEGELEAVE') sv = 'PLANNEDLEAVE';
+        else if (sv === 'EL' || sv === 'EMERGENCYLEAVE') sv = 'EARNEDLEAVE';
+        else if (sv === 'UL' || sv === 'UNPAIDLEAVE') sv = 'UNPLANNEDLEAVE';
+        else if (sv === 'CO' || sv === 'COMPOFF' || sv === 'COMPENSATORY') sv = 'COMPLIMENTARYOFF';
         const matched = ALL_SHIFT_TYPES.find(s => s.toUpperCase().replace(/\s+/g,'') === sv);
         if (matched) sv = matched;
 
@@ -403,17 +409,17 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
 
   const parseShiftFromText = (text: string): ShiftType => {
     const t = text.trim().toUpperCase();
-    if (!t || t === 'WO' || t === 'WEEK OFF' || t === 'WEEKOFF') return 'WO';
-    if (t === 'PL' || t === 'PRIVILEGE LEAVE') return 'PL';
-    if (t === 'ML' || t === 'MEDICAL LEAVE')   return 'ML';
-    if (t === 'EL' || t === 'EMERGENCY LEAVE') return 'EL';
-    if (t === 'UL' || t === 'UNPAID LEAVE')    return 'UL';
-    if (t === 'CO' || t === 'COMP OFF' || t === 'COMPENSATORY') return 'CO';
+    if (!t || t === 'WO' || t === 'WEEK OFF' || t === 'WEEKOFF') return 'WeekOff';
+    if (t === 'PL' || t === 'PRIVILEGE LEAVE' || t === 'PLANNED LEAVE') return 'Planned Leave';
+    if (t === 'ML' || t === 'MEDICAL LEAVE')   return 'Medical Leave';
+    if (t === 'EL' || t === 'EMERGENCY LEAVE' || t === 'EARNED LEAVE') return 'Earned Leave';
+    if (t === 'UL' || t === 'UNPAID LEAVE' || t === 'UNPLANNED LEAVE')    return 'Unplanned Leave';
+    if (t === 'CO' || t === 'COMP OFF' || t === 'COMPENSATORY' || t === 'COMPLIMENTARY OFF') return 'Complimentary Off';
     if (t === 'MID-LEAVE' || t === 'MID LEAVE') return 'MID-LEAVE';
     for (const [regex, shift] of TIME_TO_SHIFT) {
       if (regex.test(text)) return shift;
     }
-    return 'WO';
+    return 'WeekOff';
   };
 
   const parseScreenshotWithAI = async () => {
@@ -441,8 +447,8 @@ Extract ALL data as a JSON object with this exact structure:
 Rules:
 - dates array = all date columns found in the table header, converted to YYYY-MM-DD
 - For each agent row, include one entry per date column
-- shift = copy the cell text EXACTLY as shown (e.g. "06:00 AM to 03:00 PM", "WO", "PL", "CO", "01:00 PM to 10:00 PM")
-- If a cell is blank or truly empty, use "WO"
+- shift = copy the cell text EXACTLY as shown (e.g. "06:00 AM to 03:00 PM", "WeekOff", "Planned Leave", "Complimentary Off", "01:00 PM to 10:00 PM")
+- If a cell is blank or truly empty, use "WeekOff"
 - Do NOT skip any agent or any date
 - Return ONLY the raw JSON, no markdown, no explanation, no code fences`;
 
@@ -585,7 +591,7 @@ Rules:
     }
 
     if (availableShifts.includes(overId as ShiftType)) updateShift(handlerId, overId as ShiftType);
-    else if (overId === 'OFF_DUTY') updateShift(handlerId, 'WO');
+    else if (overId === 'OFF_DUTY') updateShift(handlerId, 'WeekOff');
     else if (overId === 'UNASSIGNED') {
       const ur = roster.filter(r => !(r.handlerId === handlerId && r.date === selectedDate));
       setRoster(ur); localStorage.setItem('roster', JSON.stringify(ur));
@@ -605,7 +611,7 @@ Rules:
       .map(r => handlers.find(a => a.id === r.handlerId)).filter(Boolean) as Handler[];
 
   const getOffDutyHandlers = () => {
-    const types = ['WO','ML','PL','EL','UL','CO','MID-LEAVE'];
+    const types = ['WeekOff','Medical Leave','Planned Leave','Earned Leave','Unplanned Leave','Complimentary Off','MID-LEAVE'];
     return roster.filter(r => r.date === selectedDate && types.includes(r.shift))
       .map(r => ({ handler: handlers.find(a => a.id === r.handlerId), reason: r.shift }))
       .filter(i => i.handler) as { handler: Handler; reason: ShiftType }[];
