@@ -90,12 +90,12 @@ const getFallbackConfig = (shift: string) => ({
 const getShiftConfig = (shift: string) => SHIFT_CONFIG[shift] ?? getFallbackConfig(shift);
 
 const LEAVE_CONFIG: Record<string, { label:string; bg:string; text:string; border:string }> = {
-  'WO':       { label:'Week Off',  bg:'bg-slate-100',  text:'text-slate-600',  border:'border-slate-200' },
-  'ML':       { label:'Medical',   bg:'bg-pink-100',   text:'text-pink-700',   border:'border-pink-200'  },
-  'PL':       { label:'Privilege', bg:'bg-rose-100',   text:'text-rose-700',   border:'border-rose-200'  },
-  'EL':       { label:'Emergency', bg:'bg-red-100',    text:'text-red-700',    border:'border-red-200'   },
-  'UL':       { label:'Unpaid',    bg:'bg-gray-100',   text:'text-gray-600',   border:'border-gray-200'  },
-  'CO':       { label:'Comp-Off',  bg:'bg-emerald-100',text:'text-emerald-700',border:'border-emerald-200'},
+  'WeekOff':       { label:'Week Off',  bg:'bg-slate-100',  text:'text-slate-600',  border:'border-slate-200' },
+  'Medical Leave':       { label:'Medical',   bg:'bg-pink-100',   text:'text-pink-700',   border:'border-pink-200'  },
+  'Planned Leave':       { label:'Privilege', bg:'bg-rose-100',   text:'text-rose-700',   border:'border-rose-200'  },
+  'Earned Leave':       { label:'Emergency', bg:'bg-red-100',    text:'text-red-700',    border:'border-red-200'   },
+  'Unplanned Leave':       { label:'Unpaid',    bg:'bg-gray-100',   text:'text-gray-600',   border:'border-gray-200'  },
+  'Complimentary Off':       { label:'Comp-Off',  bg:'bg-emerald-100',text:'text-emerald-700',border:'border-emerald-200'},
   'MID-LEAVE':{ label:'Mid-Leave', bg:'bg-rose-100',   text:'text-rose-600',   border:'border-rose-100'  },
 };
 const getLeaveConfig = (shift: string) => LEAVE_CONFIG[shift] ?? { label:shift, bg:'bg-slate-100', text:'text-slate-600', border:'border-slate-200' };
