@@ -11,6 +11,8 @@ import 'dotenv/config';
 import { fileURLToPath } from 'url';
 import { randomBytes } from 'crypto';
 import { seedAdmin } from './scripts/seedAdmin.js';
+import { seedAccessCodes } from './scripts/seedAccessCodes.js';
+import { checkSocketAction } from './middleware/permissions.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -26,6 +28,7 @@ mongoose.connect(MONGODB_URI)
   .then(async () => {
     console.log('Successfully connected to MongoDB');
     await seedAdmin();
+    await seedAccessCodes();
   })
   .catch(err => console.error('MongoDB connection error:', err));
 
@@ -191,9 +194,15 @@ app.use('/api', authRouter);
 import rolesRouter from './routes/roles.js';
 app.use('/api', rolesRouter);
 
-// User role lookup by name (bridges socket auth with JWT roles)
-import userLookupRouter from './routes/userLookup.js';
-app.use('/api', userLookupRouter);
+// NOTE: the old '/api/get-role-by-name' lookup (routes/userLookup.js) has been
+// retired. It let anyone self-declare a role by supplying any full name, with
+// no authentication at all. Role is now always derived server-side from the
+// access code used at login (see routes/access.js). The file is left on disk
+// but intentionally not mounted here — safe to delete in a follow-up cleanup.
+
+// Access-code login, and Admin-managed codes/permissions
+import accessRouter from './routes/access.js';
+app.use('/api', accessRouter);
 
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -355,16 +364,17 @@ io.on('connection', async (socket) => {
     await sendSyncData();
   });
 
-  socket.on('join', async ({ username, accessKey }) => {
-    const cleanName = sanitize(username);
-    const cleanKey = (accessKey || "").trim();
-
-    // Security check: If a key is required, validate it
-    if (TEAM_ACCESS_KEY && cleanKey !== TEAM_ACCESS_KEY) {
-      console.warn(`Unauthorized join attempt from ${cleanName} with key: ${cleanKey}`);
-      return socket.emit('error_message', 'Invalid Team Access Key. Access Denied.');
+  socket.on('join', async ({ username }) => {
+    // Role/access is no longer decided by a client-supplied key here — the
+    // socket must already carry a valid JWT (from POST /api/access/login,
+    // where the access code determined the role). This closes the old gap
+    // where anyone typing a name plus the one shared key could claim any role.
+    if (!socket.user) {
+      console.warn(`Unauthorized join attempt from ${sanitize(username)}: no valid session`);
+      return socket.emit('error_message', 'Please log in with your access code first.');
     }
 
+    const cleanName = sanitize(username || socket.user.fullName);
     onlineUsers.set(socket.id, cleanName);
     broadcastPresence();
     
@@ -375,6 +385,7 @@ io.on('connection', async (socket) => {
   });
 
   socket.on('update_handlers', async (handlers) => {
+    if (!(await checkSocketAction(socket, 'editHandlers'))) return;
     // Sanitize handler names
     const cleanHandlers = handlers.map(a => ({ ...a, name: sanitize(a.name) }));
     await State.updateOne({ key: 'global' }, { $set: { handlers: cleanHandlers } });
@@ -383,22 +394,31 @@ io.on('connection', async (socket) => {
 
   // Legacy support for old 'update_agents' event
   socket.on('update_agents', async (agents) => {
+    if (!(await checkSocketAction(socket, 'editHandlers'))) return;
     const cleanAgents = agents.map(a => ({ ...a, name: sanitize(a.name) }));
     await State.updateOne({ key: 'global' }, { $set: { handlers: cleanAgents } });
     socket.broadcast.emit('handlers_updated', cleanAgents);
   });
 
   socket.on('update_roster', async (roster) => {
+    if (!(await checkSocketAction(socket, 'editRoster'))) return;
     await State.updateOne({ key: 'global' }, { $set: { roster: roster } });
     socket.broadcast.emit('roster_updated', roster);
   });
 
   socket.on('update_stats', async (stats) => {
+    if (!(await checkSocketAction(socket, 'editRoster'))) return;
     await State.updateOne({ key: 'global' }, { $set: { stats: stats } });
     socket.broadcast.emit('stats_updated', stats);
   });
 
   socket.on('add_log', async (logEntry) => {
+    // Any authenticated role may add a log entry (this is the audit trail
+    // itself), but an unauthenticated socket still can't write.
+    if (!socket.user) {
+      socket.emit('error', { message: 'Unauthorized: no active session' });
+      return;
+    }
     const cleanEntry = {
       ...logEntry,
       user: sanitize(logEntry.user),
