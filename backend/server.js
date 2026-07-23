@@ -2,21 +2,31 @@ import express from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import { rateLimit } from 'express-rate-limit';
 import mongoose from 'mongoose';
 import path from 'path';
+import csurf from 'csurf';
 import 'dotenv/config';
 import { fileURLToPath } from 'url';
+import { randomBytes } from 'crypto';
+import { seedAdmin } from './scripts/seedAdmin.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 
+// Trust proxy so we can get client IPs behind Render/Netlify proxies for accurate rate limiting
+app.set('trust proxy', 1);
+
 // MongoDB Connection
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/queue_tracker";
 mongoose.connect(MONGODB_URI)
-  .then(() => console.log('Successfully connected to MongoDB'))
+  .then(async () => {
+    console.log('Successfully connected to MongoDB');
+    await seedAdmin();
+  })
   .catch(err => console.error('MongoDB connection error:', err));
 
 // Define Schema
@@ -95,33 +105,95 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
+const FRONTEND_URL = (process.env.FRONTEND_URL || "http://localhost:5173").replace(/\/$/, "");
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || process.env.FRONTEND_URL || "").split(',').map(s => s.trim()).filter(Boolean);
+
+// STRICT CORS: Allow localhost and any origin listed in ALLOWED_ORIGINS (comma-separated),
+// or fall back to FRONTEND_URL. In emergencies set ALLOWED_ORIGINS='*' to allow all origins.
+const corsOptions = {
+  origin: (origin, callback) => {
+    const cleanOrigin = origin ? origin.replace(/\/$/, "") : null;
+    const isLocalhost = cleanOrigin && (cleanOrigin.includes('localhost') || cleanOrigin.includes('127.0.0.1'));
+
+    if (!origin || isLocalhost) return callback(null, true);
+
+    // Allow if '*' present
+    if (ALLOWED_ORIGINS.includes('*')) return callback(null, true);
+
+    // Allow if exact match against allowed origins or FRONTEND_URL
+    if (cleanOrigin && (ALLOWED_ORIGINS.includes(cleanOrigin) || cleanOrigin === FRONTEND_URL)) {
+      return callback(null, true);
+    }
+
+    console.warn(`BLOCKED CORS connection from: ${origin}. Allowed: ${ALLOWED_ORIGINS.length ? ALLOWED_ORIGINS.join(', ') : FRONTEND_URL}`);
+    callback(new Error('Not allowed by CORS'));
+  },
+  methods: ["GET", "POST", "PUT"],
+  credentials: true
+};
+
+app.use(cors({
+  origin: (origin, callback) => corsOptions.origin(origin, callback),
+  methods: corsOptions.methods,
+  credentials: true
+}));
+app.use(cookieParser());
+
+// === CORS-PROTECTED ROUTES MOVED HERE ===
 // Root route for verification
 app.get('/', (req, res) => res.status(200).send('Queue Tracker API is Live!'));
 // Add health check endpoint
 app.get('/health', (req, res) => res.status(200).send('Backend is running'));
 
-const FRONTEND_URL = (process.env.FRONTEND_URL || "http://localhost:5173").replace(/\/$/, "");
+// Enforce secure JWT_SECRET in production
+if (process.env.NODE_ENV === 'production' && (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32)) {
+  console.error('FATAL: JWT_SECRET must be set and at least 32 characters in production. Exiting.');
+  process.exit(1);
+}
 
-// STRICT CORS: Only allow the authorized frontend and localhost for development
-const corsOptions = {
-  origin: (origin, callback) => {
-    // If no origin (like mobile apps or curl), or if it matches our allowed patterns
-    const cleanOrigin = origin ? origin.replace(/\/$/, "") : null;
-    const isLocalhost = cleanOrigin && (cleanOrigin.includes('localhost') || cleanOrigin.includes('127.0.0.1'));
-    
-    if (!origin || isLocalhost || cleanOrigin === FRONTEND_URL) {
-      callback(null, true);
-    } else {
-      console.warn(`BLOCKED CORS connection from: ${origin}. Expected: ${FRONTEND_URL}`);
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  methods: ["GET", "POST"],
-  credentials: true
-};
-
-app.use(cors(corsOptions));
 app.use(express.json());
+
+// CSRF protection for /api routes (double-submit via cookie)
+// Exempt the csrf-token endpoint and GET requests from CSRF
+const isProd = process.env.NODE_ENV === 'production';
+const csrfProtection = csurf({ cookie: { httpOnly: true, sameSite: isProd ? 'none' : 'lax', secure: isProd } });
+app.use('/api', (req, res, next) => {
+  // Skip CSRF for GET/HEAD/OPTIONS and the csrf-token endpoint itself
+  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS' || req.path === '/api/csrf-token') {
+    return next();
+  }
+  csrfProtection(req, res, next);
+});
+// Provide CSRF token endpoint for SPA to fetch and include in request headers
+app.get('/api/csrf-token', (req, res) => {
+  // Generate a simple token without CSRF dependency
+  const token = randomBytes(32).toString('hex');
+  res.cookie('csrf-token', token, { httpOnly: false, secure: isProd, sameSite: isProd ? 'none' : 'lax' });
+  res.json({ csrfToken: token });
+});
+
+app.use(async (req, res, next) => {
+  // Attach user object if token present (non-blocking)
+  try {
+    const { optionalAuth } = await import('./middleware/auth.js');
+    await new Promise((resolve) => optionalAuth(req, resolve));
+  } catch (err) {
+    // ignore
+  }
+  return next();
+});
+
+// Auth routes
+import authRouter from './routes/auth.js';
+app.use('/api', authRouter);
+
+// Role management routes
+import rolesRouter from './routes/roles.js';
+app.use('/api', rolesRouter);
+
+// User role lookup by name (bridges socket auth with JWT roles)
+import userLookupRouter from './routes/userLookup.js';
+app.use('/api', userLookupRouter);
 
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -185,7 +257,13 @@ const getFullState = async () => {
   return state;
 };
 
+const enforceLogAuth = process.env.ENFORCE_LOG_DOWNLOAD_AUTH === 'true';
+
 app.get('/download-logs/:date', async (req, res) => {
+  if (enforceLogAuth && (!req.user || req.user.role !== 'admin')) {
+    return res.status(403).send('Forbidden');
+  }
+
   const { date } = req.params;
   const logs = await Log.find({ dateStr: date }).sort({ timestamp: 1 });
   
@@ -200,6 +278,10 @@ app.get('/download-logs/:date', async (req, res) => {
 });
 
 app.get('/download-all-logs', async (req, res) => {
+  if (enforceLogAuth && (!req.user || req.user.role !== 'admin')) {
+    return res.status(403).send('Forbidden');
+  }
+
   let content = '=== QUEUE TRACKER FULL AUDIT LOG ===\n';
   content += `Export Date: ${new Date().toLocaleString()}\n\n`;
   
@@ -215,12 +297,33 @@ app.get('/download-all-logs', async (req, res) => {
   });
 
   res.setHeader('Content-Type', 'text/plain');
-  res.setHeader('Content-Disposition', 'attachment; filename=QueueTracker_FullHistory.txt');
+  res.setHeader('Content-Disposition', `attachment; filename=QueueTracker_FullHistory.txt`);
   res.send(content);
 });
 
+// Socket-level auth: optionally attach user from JWT cookie or handshake auth token
+io.use(async (socket, next) => {
+  try {
+    const token = (socket.handshake && socket.handshake.auth && socket.handshake.auth.token) ||
+      (socket.handshake && socket.handshake.headers && (socket.handshake.headers.cookie && (socket.handshake.headers.cookie.match(/token=([^;]+)/) || [])[1]));
+
+    if (token) {
+      try {
+        const jwt = await import('jsonwebtoken');
+        const payload = jwt.verify(token, process.env.JWT_SECRET || 'dev_jwt_secret');
+        socket.user = payload; // minimal payload (userId, username, role)
+      } catch (err) {
+        // ignore invalid tokens; allow anonymous for now
+      }
+    }
+  } catch (err) {
+    // ignore
+  }
+  return next();
+});
+
 io.on('connection', async (socket) => {
-  console.log('User connected:', socket.id);
+  console.log('User connected:', socket.id, 'auth:', !!socket.user);
 
   // Apply rate limiting to all incoming socket events
   socket.use(([event, ...args], next) => {

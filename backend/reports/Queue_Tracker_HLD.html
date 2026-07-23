@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>HLD - Queue Tracker</title>
+<style>
+body{font-family:Arial,sans-serif;padding:40px;color:#1e293b;max-width:1000px;margin:auto}
+h1{color:#0f172a;border-bottom:4px solid #00ADB5;padding-bottom:8px}
+h2{color:#0f172a;margin-top:30px;margin-bottom:12px;border-bottom:2px solid #e2e8f0;padding-bottom:4px}
+h3{color:#334155;margin-top:20px;margin-bottom:8px}
+p{color:#475569;margin:10px 0;line-height:1.6}
+table{width:100%;border-collapse:collapse;margin:16px 0;font-size:13px}
+th{background:#0f172a;color:white;padding:10px;text-align:left;font-weight:600}
+td{padding:8px;border-bottom:1px solid #e2e8f0}
+tr:nth-child(even){background:#f8fafc}
+.meta{background:#f0fdfa;border:1px solid #00ADB5;border-radius:8px;padding:16px;margin:16px 0}
+.footer{margin-top:40px;padding-top:12px;border-top:1px solid #e2e8f0;font-size:11px;color:#94a3b8;text-align:center}
+.subtitle{color:#64748b;font-size:14px;font-weight:600;margin-bottom:30px}
+pre.diagram{background:#f1f5f9;border:1px solid #cbd5e1;border-radius:8px;padding:20px;font-family:'Courier New',monospace;font-size:12px;line-height:1.8;color:#334155;overflow-x:auto}
+ul li{margin-bottom:4px;color:#475569}
+</style>
+</head>
+<body>
+<h1>Queue Tracker &mdash; High Level Design (HLD)</h1>
+<p class="subtitle">System Architecture &amp; Design Overview</p>
+<div class="meta"><strong>Project:</strong> Queue Tracker v4.0.0 | <strong>Date:</strong> June 2026 | <strong>Author:</strong> Piximperfect-SK</div>
+
+<h2>1. System Overview</h2>
+<p>Queue Tracker is a real-time, multi-user productivity and roster management application designed for queue/call center operations. It enables teams to manage agent schedules, track live performance metrics (incidents, tasks, calls), and maintain an auditable activity log &mdash; all synchronized in real-time across connected clients via WebSocket.</p>
+
+<h2>2. Architecture Style</h2>
+<p><strong>Real-Time Client-Server Architecture</strong> with a React SPA frontend and an Express.js + Socket.IO + MongoDB backend. The system uses a hybrid authentication model supporting both simple name-based access (with optional team access key) and JWT-based account login with role-based access control (RBAC).</p>
+
+<h2>3. Technology Stack</h2>
+<table>
+<tr><th>Layer</th><th>Technology</th><th>Purpose</th></tr>
+<tr><td>Frontend</td><td>React 19 + TypeScript + Vite</td><td>SPA UI with HMR in dev</td></tr>
+<tr><td>Routing</td><td>React Router v7</td><td>Client-side routing</td></tr>
+<tr><td>Styling</td><td>Tailwind CSS v4</td><td>Utility-first styling</td></tr>
+<tr><td>Real-Time</td><td>Socket.IO (client + server)</td><td>Bidirectional real-time sync</td></tr>
+<tr><td>Backend</td><td>Express.js (ESM)</td><td>REST API + HTTP server</td></tr>
+<tr><td>Database</td><td>MongoDB (Mongoose ODM)</td><td>Persistence for documents</td></tr>
+<tr><td>Auth</td><td>JWT + bcrypt + httpOnly cookies</td><td>Account auth &amp; RBAC</td></tr>
+<tr><td>Security</td><td>CSRF, Rate Limiting, CORS, XSS Sanitization</td><td>Defense-in-depth</td></tr>
+<tr><td>Charts</td><td>Recharts</td><td>Real-time area charts</td></tr>
+<tr><td>Drag &amp; Drop</td><td>@dnd-kit</td><td>Roster management UI</td></tr>
+<tr><td>Excel</td><td>xlsx (SheetJS)</td><td>Roster import from files</td></tr>
+<tr><td>AI Scan</td><td>Claude API (Anthropic)</td><td>Screenshot-based extraction</td></tr>
+</table>
+
+<h2>4. Architecture Diagram</h2>
+<pre class="diagram">
+      FRONTEND (React SPA)
++------------------+  +------------------+  +------------------+
+|    RosterPage    |  |   TrackerPage    |  |  SettingsPage    |
++--------+---------+  +--------+---------+  +--------+---------+
+         |                      |                      |
++--------+---------+  +--------+---------+  +------------------+
+|  LogMonitorPage  |  |    AdminPage     |  |     Navbar       |
++--------+---------+  +------------------+  +------------------+
+         |
++--------+---------+
+|  Socket.IO Client |
+|  + Auth Layer     |
++--------+---------+
+         |
+  ====== HTTPS + WebSocket ======
+         |
++--------+---------+  +--------+---------+  +--------+---------+
+|  REST Routes     |  |  Socket Server   |  |  Auth Routes     |
++--------+---------+  +--------+---------+  +--------+---------+
+         |                      |                      |
++--------+---------------------------------------------+
+|  Middleware: CORS, Rate-Limit, CSRF, Sanitizer       |
++------------------------------------------------------+
+         |
++--------+---------+
+|    Mongoose ODM   |
++--------+---------+
+         |
++--------+---------+
+|     MongoDB       |
+|  State|Logs|Users |
++------------------+
+</pre>
+
+<h2>5. Communication Flow</h2>
+<table>
+<tr><th>Type</th><th>Protocol</th><th>Purpose</th></tr>
+<tr><td>REST API</td><td>HTTPS</td><td>Auth, Role management, Log downloads, CSRF, Health</td></tr>
+<tr><td>Real-Time</td><td>WebSocket (Socket.IO)</td><td>State sync, Log streaming, Presence</td></tr>
+<tr><td>AI Integration</td><td>HTTPS (Anthropic API)</td><td>Screenshot roster extraction</td></tr>
+</table>
+
+<h2>6. Data Models</h2>
+<table>
+<tr><th>Collection</th><th>Key Fields</th><th>Description</th></tr>
+<tr><td>State</td><td>key ("global"), handlers[], roster[], stats[]</td><td>Singleton state document</td></tr>
+<tr><td>Log</td><td>dateStr, timestamp, user, action, details</td><td>Audit log entries (date-indexed)</td></tr>
+<tr><td>User</td><td>username, fullName, passwordHash, role</td><td>Registered accounts with RBAC</td></tr>
+</table>
+
+<h2>7. Authentication &amp; RBAC</h2>
+<h3>7.1 Name-Based Access</h3>
+<p>Users enter name + optional <strong>Team Access Key</strong>. If TEAM_ACCESS_KEY is configured on server, clients must provide it.</p>
+<h3>7.2 Account-Based (JWT)</h3>
+<p>Register/login with username/password. JWT in httpOnly cookies with CSRF. Three roles: admin (full), queue_handler (elevated), associate (view-only).</p>
+
+<h2>8. Security Architecture</h2>
+<table>
+<tr><th>Measure</th><th>Implementation</th></tr>
+<tr><td>Rate Limiting</td><td>100 req/15min global; 3 login/5min; 3 reg/hr</td></tr>
+<tr><td>CORS</td><td>Whitelist-based with localhost exceptions</td></tr>
+<tr><td>CSRF</td><td>Double-submit cookie via csurf</td></tr>
+<tr><td>XSS Prevention</td><td>HTML sanitizer on all user inputs</td></tr>
+<tr><td>Socket Rate Limit</td><td>20 events/sec per socket</td></tr>
+<tr><td>Password</td><td>bcrypt (12 rounds), min 8 chars</td></tr>
+<tr><td>JWT</td><td>8h expiry, httpOnly, 32-char secret in prod</td></tr>
+</table>
+
+<h2>9. Key Workflows</h2>
+<h3>Roster Management</h3>
+<p>Create/import agents, assign shifts via drag-and-drop, import from Excel or AI-scanned screenshots. Syncs via Socket.IO and persists to MongoDB.</p>
+<h3>Live Tracking</h3>
+<p>Track INC/TASK/CALL per agent per shift in real-time. Stats auto-save and broadcast.</p>
+<h3>Audit Logging</h3>
+<p>Every action logged locally + server. Date-grouped, downloadable as plain text.</p>
+<h3>Presence Awareness</h3>
+<p>Connected users tracked via socket ID-to-name mapping, broadcast to all clients.</p>
+
+<h2>10. Deployment</h2>
+<p><strong>Frontend:</strong> Netlify (static Vite build) | <strong>Backend:</strong> Render (Node.js) | <strong>Database:</strong> MongoDB Atlas. Proxy trust enabled for IP detection.</p>
+
+<div class="footer">Queue Tracker v4.0.0 &mdash; High Level Design Document &mdash; Confidential</div>
+</body>
+</html>

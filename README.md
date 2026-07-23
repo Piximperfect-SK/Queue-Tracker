@@ -71,3 +71,36 @@ export default defineConfig([
   },
 ])
 ```
+
+---
+
+## Authentication (Register / Login)
+
+A simple registration and login system has been added as an opt-in feature. Backend endpoints live under `/api`:
+
+- `POST /api/register` — body: `{ username, fullName, password, registrationSecret }` — uses `REGISTRATION_SECRET` to authorize sign-ups. On success, the server sets a secure httpOnly cookie `token`.
+- `POST /api/login` — body: `{ username, password }` — returns user info and sets `token` cookie.
+- `POST /api/logout` — clears cookie.
+- `GET /api/me` — returns current authenticated user when `token` cookie is present.
+
+Environment variables required for auth:
+- `JWT_SECRET` — required in production
+- `REGISTRATION_SECRET` — required to allow registrations
+- `BCRYPT_ROUNDS` — optional (default 12)
+- `ADMIN_USERNAME` / `ADMIN_PWD` — optional, used by `backend/scripts/seedAdmin.js` to create an initial admin
+- `ENFORCE_LOG_DOWNLOAD_AUTH` — optional, set to `true` to require admin auth for log download endpoints
+
+To seed an admin locally:
+
+```
+cd backend
+ADMIN_USERNAME=admin ADMIN_PWD=yourpassword node scripts/seedAdmin.js
+```
+
+To run a simple smoke test (requires backend running):
+
+```
+node backend/scripts/testAuth.js
+```
+
+

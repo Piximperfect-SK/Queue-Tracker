@@ -12,12 +12,12 @@ export type StandardShiftType =
   | '2PM-11PM'
   | '10PM-7AM'
   | '12PM-9PM'
-  | 'WO'
-  | 'ML'
-  | 'PL'
-  | 'EL'
-  | 'UL'
-  | 'CO'
+  | 'WeekOff'
+  | 'Medical Leave'
+  | 'Planned Leave'
+  | 'Earned Leave'
+  | 'Unplanned Leave'
+  | 'Complimentary Off'
   | 'MID-LEAVE';
 
 export type ShiftType = StandardShiftType | string;

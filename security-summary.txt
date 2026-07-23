@@ -1,0 +1,38 @@
+Security Summary - Queue Tracker
+
+Implemented controls:
+- Environment variables for secrets (MONGODB_URI, FRONTEND_URL, ALLOWED_ORIGINS, TEAM_ACCESS_KEY)
+  - File: backend/server.js
+
+- Strict CORS (allowed origins + localhost) and limited methods (GET, POST)
+  - File: backend/server.js
+
+- HTTP rate limiting via express-rate-limit (15min window, 100 reqs)
+  - File: backend/server.js
+
+- Socket-level event rate limiting (max ~20 events/sec per socket)
+  - File: backend/server.js
+
+- Input sanitization (strips HTML tags) before persistence/broadcast
+  - File: backend/server.js
+
+- Optional Team Access Key for join access validation
+  - File: backend/server.js
+
+- Audit logging to MongoDB with safe export endpoints (text/plain + Content-Disposition)
+  - Files: backend/server.js, frontend/src/utils/logger.ts
+
+- MSAL configuration uses sessionStorage and suppresses PII in logs
+  - File: frontend/src/authConfig.ts
+
+- Client-side auth gating and reserved-name handling (no "Guest") and password input for security key
+  - File: frontend/src/App.tsx
+
+Recommended next steps:
+- Enforce HTTPS/TLS and WSS
+- Add helmet + CSP headers
+- Add auth checks for log downloads
+- Use stronger input validation libraries
+- Move sensitive tokens out of localStorage
+- Add dependency vulnerability scanning (Snyk/Dependabot)
+

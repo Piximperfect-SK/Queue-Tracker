@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Calendar, BarChart2, Settings, LogOut, Activity } from 'lucide-react';
+import { Calendar, BarChart2, Settings, LogOut, Activity, Shield } from 'lucide-react';
 import { socket } from '../utils/socket';
+import { useRole } from '../auth/RoleContext';
 
 interface NavbarProps {
   currentUser: string;
@@ -11,6 +12,7 @@ interface NavbarProps {
 
 const Navbar: React.FC<NavbarProps> = ({ currentUser, onLogout, onlineUsers }) => {
   const [isConnected, setIsConnected] = useState(socket.connected);
+  const { role } = useRole();
 
   useEffect(() => {
     const onConnect = () => setIsConnected(true);
@@ -39,9 +41,9 @@ const Navbar: React.FC<NavbarProps> = ({ currentUser, onLogout, onlineUsers }) =
             </div>
           </div>
           
-          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-4">
             {/* Online Users Indicator - Iconic Expansion */}
-            <div className="flex items-center gap-3.5 px-4 py-1.5 bg-white/10 rounded-full border border-white/20 mr-2 transition-all hover:bg-white/20 shadow-sm cursor-default group/online">
+            <div className="flex items-center gap-2.5 px-3 py-1 bg-white/10 rounded-full border border-white/20 mr-2 transition-all hover:bg-white/20 shadow-sm cursor-default group/online">
               <div className="flex items-center -space-x-3">
                 {[...new Set(onlineUsers.filter(u => u !== currentUser))].map((user, i) => (
                   <div 
@@ -49,7 +51,7 @@ const Navbar: React.FC<NavbarProps> = ({ currentUser, onLogout, onlineUsers }) =
                     className="group/item flex items-center bg-[#393E46] rounded-full border-2 border-white shadow-md transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] hover:z-30 hover:pr-4 hover:-space-x-0"
                     style={{ position: 'relative' }}
                   >
-                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-black text-white shrink-0">
+                    <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black text-white shrink-0">
                       {user.charAt(0).toUpperCase()}
                     </div>
                     <span className="max-w-0 opacity-0 overflow-hidden text-[10px] font-black text-white uppercase tracking-widest transition-all duration-500 ease-out group-hover/item:max-w-[150px] group-hover/item:opacity-100 group-hover/item:ml-2">
@@ -58,14 +60,14 @@ const Navbar: React.FC<NavbarProps> = ({ currentUser, onLogout, onlineUsers }) =
                   </div>
                 ))}
                 {onlineUsers.filter(u => u !== currentUser).length === 0 && (
-                  <div className="w-8 h-8 rounded-full border-2 border-dashed border-white/30 flex items-center justify-center bg-transparent group-hover/online:rotate-90 transition-transform duration-500">
+                  <div className="w-7 h-7 rounded-full border-2 border-dashed border-white/30 flex items-center justify-center bg-transparent group-hover/online:rotate-90 transition-transform duration-500">
                     <div className="w-2.5 h-2.5 bg-white/40 rounded-full animate-pulse" />
                   </div>
                 )}
               </div>
-              <div className="flex items-center gap-3 pl-1">
-                <div className={`w-3 h-3 rounded-full ${onlineUsers.filter(u => u !== currentUser).length > 0 ? 'bg-[#00ADB5] animate-pulse shadow-[0_0_12px_rgba(0,173,181,0.6)]' : 'bg-white/40'}`} />
-                <span className="text-[12px] font-black text-white uppercase tracking-[0.2em] leading-none">
+              <div className="flex items-center gap-2 pl-0.5">
+                <div className={`w-2.5 h-2.5 rounded-full ${onlineUsers.filter(u => u !== currentUser).length > 0 ? 'bg-[#00ADB5] animate-pulse shadow-[0_0_10px_rgba(0,173,181,0.6)]' : 'bg-white/40'}`} />
+                <span className="text-[10px] font-black text-white uppercase tracking-[0.18em] leading-none">
                   {onlineUsers.filter(u => u !== currentUser).length > 0 ? 'Live' : 'Solo'}
                 </span>
               </div>
@@ -80,14 +82,22 @@ const Navbar: React.FC<NavbarProps> = ({ currentUser, onLogout, onlineUsers }) =
                 <BarChart2 size={14} />
                 <span>Tracker</span>
               </Link>
-              <Link to="/settings" className="px-3 py-1.5 rounded-xl text-[10.5px] font-black uppercase tracking-widest text-white/80 hover:text-white hover:bg-[#393E46] transition-all flex items-center space-x-2">
-                <Settings size={14} />
-                <span>Settings</span>
-              </Link>
+              {role !== 'associate' && (
+                <Link to="/settings" className="px-3 py-1.5 rounded-xl text-[10.5px] font-black uppercase tracking-widest text-white/80 hover:text-white hover:bg-[#393E46] transition-all flex items-center space-x-2">
+                  <Settings size={14} />
+                  <span>Settings</span>
+                </Link>
+              )}
               <Link to="/logs" className="px-3 py-1.5 rounded-xl text-[10.5px] font-black uppercase tracking-widest text-white/80 hover:text-white hover:bg-[#393E46] transition-all flex items-center space-x-2">
                 <Activity size={14} />
                 <span>Monitor</span>
               </Link>
+              {role === 'admin' && (
+                <Link to="/admin" className="px-3 py-1.5 rounded-xl text-[10.5px] font-black uppercase tracking-widest text-white/80 hover:text-white hover:bg-[#393E46] transition-all flex items-center space-x-2">
+                  <Shield size={14} />
+                  <span>Admin</span>
+                </Link>
+              )}
             </div>
 
             <div className="h-8 w-px bg-white/20" />
