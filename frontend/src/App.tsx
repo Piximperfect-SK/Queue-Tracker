@@ -116,10 +116,22 @@ function App() {
     setAuthError(null);
 
     try {
+      const csrfRes = await fetch(`${BACKEND}/api/csrf-token`, { credentials: 'include' });
+      const csrfData = await csrfRes.json().catch(() => ({}));
+      const csrfToken = csrfData.csrfToken;
+      if (!csrfToken) {
+        setAuthError('Could not reach server. Please try again.');
+        setIsVerifying(false);
+        return;
+      }
+
       const res = await fetch(`${BACKEND}/api/access/login`, {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-csrf-token': csrfToken,
+        },
         body: JSON.stringify({ fullName: cleanName, code: cleanCode }),
       });
       const data = await res.json().catch(() => ({}));

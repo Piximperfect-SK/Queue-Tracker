@@ -167,10 +167,15 @@ app.use('/api', (req, res, next) => {
   }
   csrfProtection(req, res, next);
 });
-// Provide CSRF token endpoint for SPA to fetch and include in request headers
-app.get('/api/csrf-token', (req, res) => {
-  // Generate a simple token without CSRF dependency
-  const token = randomBytes(32).toString('hex');
+// Provide CSRF token endpoint for SPA to fetch and include in request headers.
+// This route is routed THROUGH csrfProtection (safe, since GET requests are
+// never validated by csurf) so that req.csrfToken() returns a token that is
+// cryptographically bound to the secret stored in csurf's own cookie. The
+// previous version generated an unrelated random string here, which meant
+// every subsequent POST/PUT from the frontend was rejected with a 403 no
+// matter what — this is the actual fix, not a workaround.
+app.get('/api/csrf-token', csrfProtection, (req, res) => {
+  const token = req.csrfToken();
   res.cookie('csrf-token', token, { httpOnly: false, secure: isProd, sameSite: isProd ? 'none' : 'lax' });
   res.json({ csrfToken: token });
 });
