@@ -1,6 +1,7 @@
 import { io } from 'socket.io-client';
 import type { Handler, RosterEntry, DailyStats } from '../types';
 import type { LogEntry } from '../types';
+import { getToken } from './authToken';
 
 const SOCKET_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
 
@@ -15,6 +16,10 @@ export const socket = io(SOCKET_URL, {
   reconnectionAttempts: 10,
   reconnectionDelay: 1000,
   withCredentials: true,
+  // Called fresh before every connection attempt, so a token set AFTER the
+  // socket module first loaded (e.g. right after login) is still picked up
+  // without needing to manually mutate socket.auth beforehand.
+  auth: (cb) => cb({ token: getToken() }),
 });
 
 export const syncData = {

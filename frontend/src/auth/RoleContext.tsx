@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { socket } from '../utils/socket';
+import { authHeaders } from '../utils/authToken';
 
 export type UserRole = 'admin' | 'queue_handler' | 'associate' | null;
 
@@ -54,7 +55,10 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const refreshRole = useCallback(async () => {
     setLoadingRole(true);
     try {
-      const res = await fetch(`${BACKEND}/api/access/permissions`, { credentials: 'include' });
+      const res = await fetch(`${BACKEND}/api/access/permissions`, {
+        credentials: 'include',
+        headers: { ...authHeaders() },
+      });
       if (res.ok) {
         const data = await res.json();
         setRole(data.role ?? null);

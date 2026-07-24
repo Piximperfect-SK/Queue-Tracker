@@ -10,6 +10,7 @@ import { syncData, socket } from './utils/socket';
 import signinBg from './assets/Background.mp4';
 import bgImage from './assets/background.jpg';
 import { addLog } from './utils/logger';
+import { setToken, clearToken } from './utils/authToken';
 import { RoleProvider, useRole } from './auth/RoleContext';
 import AdminPage from './pages/AdminPage';
 
@@ -31,6 +32,7 @@ function App() {
 
   const handleLogout = () => {
     localStorage.removeItem('currentUser');
+    clearToken();
     (async () => {
       try {
         const csrfRes = await fetch(`${BACKEND}/api/csrf-token`, { credentials: 'include' });
@@ -152,10 +154,17 @@ function App() {
         return;
       }
 
-      // JWT cookie is now set by the backend. The socket may already be
-      // connected from BEFORE login (it connects on page load), and
-      // socket.io only authenticates once, at handshake time — so we must
-      // force a fresh connection for the server to see the new cookie.
+      // JWT is stored as a bearer token (not just relying on the cookie —
+      // cross-origin third-party cookies get silently blocked by many
+      // browsers regardless of SameSite/Secure settings). The socket auth
+      // function (see utils/socket.ts) reads this fresh on every connect.
+      if (data.token) {
+        setToken(data.token);
+      }
+
+      // The socket may already be connected from BEFORE login (it connects
+      // on page load), and socket.io only reads its `auth` payload at
+      // handshake time — so force a fresh connection now that the token exists.
       setCurrentUser(cleanName);
       if (socket.connected) {
         socket.disconnect();

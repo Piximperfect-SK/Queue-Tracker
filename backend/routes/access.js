@@ -68,7 +68,7 @@ router.post('/access/login', codeLoginLimiter, async (req, res) => {
       maxAge: 8 * 3600 * 1000,
     });
 
-    return res.json({ fullName: trimmedName, role: matchedRole });
+    return res.json({ fullName: trimmedName, role: matchedRole, token });
   } catch (err) {
     console.error('Access login error:', err);
     return res.status(500).json({ error: 'Login failed' });
