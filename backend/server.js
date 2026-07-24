@@ -157,12 +157,29 @@ if (process.env.NODE_ENV === 'production' && (!process.env.JWT_SECRET || process
 app.use(express.json());
 
 // CSRF protection for /api routes (double-submit via cookie)
-// Exempt the csrf-token endpoint and GET requests from CSRF
+// Exempt the csrf-token endpoint, GET requests, and /api/access/* from CSRF.
+//
+// /api/access/* is exempt because those routes authenticate via a Bearer
+// token (see routes/access.js + frontend utils/authToken.ts), not an
+// automatically-attached cookie. CSRF protection exists specifically to stop
+// forged cross-site requests that ride on ambient browser credentials — a
+// malicious page cannot read another origin's sessionStorage to forge the
+// Authorization header, so there's nothing for CSRF to protect against here.
+// Routing them through csurf anyway means depending on ANOTHER cross-site
+// cookie (csurf's own secret cookie), which hits the exact same third-party
+// cookie blocking that broke the JWT cookie earlier — just on a different
+// cookie, causing intermittent 403s depending on browser cookie policy.
 const isProd = process.env.NODE_ENV === 'production';
 const csrfProtection = csurf({ cookie: { httpOnly: true, sameSite: isProd ? 'none' : 'lax', secure: isProd } });
 app.use('/api', (req, res, next) => {
-  // Skip CSRF for GET/HEAD/OPTIONS and the csrf-token endpoint itself
-  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS' || req.path === '/api/csrf-token') {
+  if (
+    req.method === 'GET' ||
+    req.method === 'HEAD' ||
+    req.method === 'OPTIONS' ||
+    req.path === '/csrf-token' ||
+    req.path === '/logout' ||
+    req.path.startsWith('/access/')
+  ) {
     return next();
   }
   csrfProtection(req, res, next);

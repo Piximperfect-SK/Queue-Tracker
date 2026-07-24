@@ -10,7 +10,7 @@ import { syncData, socket } from './utils/socket';
 import signinBg from './assets/Background.mp4';
 import bgImage from './assets/background.jpg';
 import { addLog } from './utils/logger';
-import { setToken, clearToken } from './utils/authToken';
+import { setToken, clearToken, authHeaders } from './utils/authToken';
 import { RoleProvider, useRole } from './auth/RoleContext';
 import AdminPage from './pages/AdminPage';
 
@@ -35,14 +35,12 @@ function App() {
     clearToken();
     (async () => {
       try {
-        const csrfRes = await fetch(`${BACKEND}/api/csrf-token`, { credentials: 'include' });
-        const { csrfToken } = await csrfRes.json();
         await fetch(`${BACKEND}/api/logout`, {
           method: 'POST',
           credentials: 'include',
-          headers: { 'x-csrf-token': csrfToken },
+          headers: { ...authHeaders() },
         });
-      } catch (_) { /* best-effort — cookie will also just expire naturally */ }
+      } catch (_) { /* best-effort — cookie/token will also just expire naturally */ }
     })();
     setCurrentUser(null);
     setIsAuthenticated(false);
@@ -128,28 +126,18 @@ function App() {
     setAuthError(null);
 
     try {
-      const csrfRes = await fetch(`${BACKEND}/api/csrf-token`, { credentials: 'include' });
-      const csrfData = await csrfRes.json().catch(() => ({}));
-      const csrfToken = csrfData.csrfToken;
-      if (!csrfToken) {
-        setAuthError('Could not reach server. Please try again.');
-        setIsVerifying(false);
-        return;
-      }
-
       const res = await fetch(`${BACKEND}/api/access/login`, {
         method: 'POST',
         credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-csrf-token': csrfToken,
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fullName: cleanName, code: cleanCode }),
       });
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        setAuthError(data.error || 'Login failed. Check your access code.');
+        // Distinguish "server/network problem" from "wrong code" so this
+        // doesn't send people hunting for a typo that isn't there.
+        setAuthError(data.error || `Login failed (server returned ${res.status}). Please try again.`);
         setIsVerifying(false);
         return;
       }
