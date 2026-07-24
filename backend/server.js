@@ -7,6 +7,7 @@ import { rateLimit } from 'express-rate-limit';
 import mongoose from 'mongoose';
 import path from 'path';
 import csurf from 'csurf';
+import jwt from 'jsonwebtoken';
 import 'dotenv/config';
 import { fileURLToPath } from 'url';
 import { randomBytes } from 'crypto';
@@ -332,7 +333,22 @@ app.get('/download-all-logs', async (req, res) => {
   res.send(content);
 });
 
-// Socket-level auth: optionally attach user from JWT cookie or handshake auth token
+// Socket-level auth: attach user from JWT — either the handshake auth
+// payload (Bearer token, set by the frontend right after /api/access/login)
+// or, as a fallback, the cookie.
+//
+// BUG FIX: this previously did `const jwt = await import('jsonwebtoken')`
+// inside the handler and called `jwt.verify(...)` directly on the result.
+// jsonwebtoken is a CommonJS package — a dynamic import() of it in ESM
+// returns a module namespace object, NOT the package's exports directly.
+// The real functions live at `jwt.default.verify`, not `jwt.verify`. So
+// `jwt.verify` was `undefined`, every call threw a TypeError, and the
+// catch block below silently swallowed it — meaning socket.user was NEVER
+// set, for ANY token, valid or not. This is why every join kept failing
+// with "no valid session" even after login succeeded and returned a good
+// token: authentication was never actually being checked, just always
+// silently failing. Using the static top-level `import jwt from
+// 'jsonwebtoken'` (which correctly unwraps the CJS default export) fixes it.
 io.use(async (socket, next) => {
   try {
     const token = (socket.handshake && socket.handshake.auth && socket.handshake.auth.token) ||
@@ -340,11 +356,10 @@ io.use(async (socket, next) => {
 
     if (token) {
       try {
-        const jwt = await import('jsonwebtoken');
         const payload = jwt.verify(token, process.env.JWT_SECRET || 'dev_jwt_secret');
-        socket.user = payload; // minimal payload (userId, username, role)
+        socket.user = payload; // minimal payload (fullName, role)
       } catch (err) {
-        // ignore invalid tokens; allow anonymous for now
+        // token present but invalid/expired — proceed unauthenticated
       }
     }
   } catch (err) {
