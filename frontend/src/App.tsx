@@ -10,33 +10,39 @@ import { syncData, socket } from './utils/socket';
 import signinBg from './assets/Background.mp4';
 import bgImage from './assets/background.jpg';
 import { addLog } from './utils/logger';
-import { AuthProvider } from './auth/AuthContext';
 import { RoleProvider, useRole } from './auth/RoleContext';
-import LoginPanel from './pages/Auth/LoginPanel';
-import RegisterPanel from './pages/Auth/RegisterPanel';
 import AdminPage from './pages/AdminPage';
+
+const BACKEND = (import.meta.env.VITE_BACKEND_URL || '').replace(/\/$/, '');
 
 function App() {
   const [currentUser, setCurrentUser] = useState<string | null>(() => {
     const saved = localStorage.getItem('currentUser');
     return saved === 'Guest' ? null : saved;
   });
-  const [accessKey, setAccessKey] = useState<string>(localStorage.getItem('teamAccessKey') || '');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [tempName, setTempName] = useState('');
-  const [tempKey, setTempKey] = useState('');
+  const [tempCode, setTempCode] = useState('');
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
   const [authError, setAuthError] = useState<string | null>(null);
   const [isBackendDown, setIsBackendDown] = useState(false);
   const [selectedDate, setSelectedDate] = useState(() => new Date().toLocaleDateString('en-CA'));
-  const [useAccountFlow, setUseAccountFlow] = useState<'none'|'login'|'register'>('none');
 
   const handleLogout = () => {
     localStorage.removeItem('currentUser');
-    localStorage.removeItem('teamAccessKey');
+    (async () => {
+      try {
+        const csrfRes = await fetch(`${BACKEND}/api/csrf-token`, { credentials: 'include' });
+        const { csrfToken } = await csrfRes.json();
+        await fetch(`${BACKEND}/api/logout`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'x-csrf-token': csrfToken },
+        });
+      } catch (_) { /* best-effort — cookie will also just expire naturally */ }
+    })();
     setCurrentUser(null);
-    setAccessKey('');
     setIsAuthenticated(false);
   };
 
@@ -48,7 +54,7 @@ function App() {
       console.log('CONNECTED to server');
       setIsBackendDown(false);
       if (currentUser && currentUser !== 'Guest') {
-        syncData.join(currentUser, accessKey);
+        syncData.join(currentUser);
       }
     };
 
@@ -63,9 +69,9 @@ function App() {
     const handleErrorMessage = (msg: string) => {
       setAuthError(msg);
       setIsVerifying(false);
-      if (msg.toLowerCase().includes('denied')) {
-        handleLogout();
-      }
+      // Any rejection from 'join' means the session isn't valid — force
+      // back to the login screen rather than leaving a half-authenticated state.
+      handleLogout();
     };
 
     const handleInit = () => {
@@ -77,7 +83,6 @@ function App() {
       setIsAuthenticated(true);
       setIsVerifying(false);
       localStorage.setItem('currentUser', currentUser);
-      localStorage.setItem('teamAccessKey', accessKey);
     };
 
     socket.on('connect', handleConnect);
@@ -101,18 +106,64 @@ function App() {
       socket.off('init', handleInit);
       socket.off('presence_updated');
     };
-  }, [currentUser, accessKey, isAuthenticated]);
+  }, [currentUser, isAuthenticated]);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanName = tempName.trim();
-    if (cleanName && cleanName !== 'Guest') {
-      setIsVerifying(true);
-      setAuthError(null);
-      setCurrentUser(cleanName);
-      setAccessKey(tempKey.trim());
-    } else if (cleanName === 'Guest') {
+    const cleanCode = tempCode.trim();
+
+    if (cleanName === 'Guest') {
       setAuthError('The name "Guest" is reserved. Please use your professional name.');
+      return;
+    }
+    if (!cleanName || !/^\d{6}$/.test(cleanCode)) {
+      setAuthError('Enter your full name and the 6-digit access code.');
+      return;
+    }
+
+    setIsVerifying(true);
+    setAuthError(null);
+
+    try {
+      const csrfRes = await fetch(`${BACKEND}/api/csrf-token`, { credentials: 'include' });
+      const csrfData = await csrfRes.json().catch(() => ({}));
+      const csrfToken = csrfData.csrfToken;
+      if (!csrfToken) {
+        setAuthError('Could not reach server. Please try again.');
+        setIsVerifying(false);
+        return;
+      }
+
+      const res = await fetch(`${BACKEND}/api/access/login`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-csrf-token': csrfToken,
+        },
+        body: JSON.stringify({ fullName: cleanName, code: cleanCode }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setAuthError(data.error || 'Login failed. Check your access code.');
+        setIsVerifying(false);
+        return;
+      }
+
+      // JWT cookie is now set by the backend. The socket may already be
+      // connected from BEFORE login (it connects on page load), and
+      // socket.io only authenticates once, at handshake time — so we must
+      // force a fresh connection for the server to see the new cookie.
+      setCurrentUser(cleanName);
+      if (socket.connected) {
+        socket.disconnect();
+      }
+      socket.connect();
+    } catch (err) {
+      setAuthError('Unable to reach server. Please try again.');
+      setIsVerifying(false);
     }
   };
 
@@ -154,8 +205,7 @@ function App() {
 
   if (!isAuthenticated) {
     return (
-      <AuthProvider>
-        <div className="h-screen w-screen bg-slate-50 flex items-center justify-center p-6 relative overflow-hidden font-sans">
+      <div className="h-screen w-screen bg-slate-50 flex items-center justify-center p-6 relative overflow-hidden font-sans">
           {/* Background Video for Auth Screen */}
           <video 
             autoPlay 
@@ -178,83 +228,66 @@ function App() {
                 <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Authorized Handlers Only</p>
               </div>
 
-              {useAccountFlow === 'none' ? (
-                <form onSubmit={handleLogin} className="space-y-6">
-                  {authError && (
-                    <div className="p-4 bg-rose-600/10 border border-rose-500/30 rounded-2xl text-rose-700 text-[10px] font-black uppercase tracking-widest text-center animate-pulse">
-                      {authError}
+              <form onSubmit={handleLogin} className="space-y-6">
+                {authError && (
+                  <div className="p-4 bg-rose-600/10 border border-rose-500/30 rounded-2xl text-rose-700 text-[10px] font-black uppercase tracking-widest text-center animate-pulse">
+                    {authError}
+                  </div>
+                )}
+
+                <div className="space-y-4">
+                  <div className="group">
+                    <div className="flex items-center gap-2 mb-2 ml-1">
+                      <User size={12} className="text-slate-500 group-focus-within:text-blue-600 transition-colors" />
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest group-focus-within:text-blue-600 transition-colors">Identification</label>
                     </div>
+                    <input 
+                      autoFocus
+                      type="text" 
+                      value={tempName}
+                      onChange={(e) => setTempName(e.target.value)}
+                      placeholder="Enter your full name"
+                      disabled={isVerifying}
+                      className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:border-blue-600 focus:bg-white outline-none text-slate-950 font-black transition-all placeholder:text-slate-400"
+                      required
+                    />
+                  </div>
+
+                  <div className="group">
+                    <div className="flex items-center gap-2 mb-2 ml-1">
+                      <Lock size={12} className="text-slate-500 group-focus-within:text-blue-600 transition-colors" />
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest group-focus-within:text-blue-600 transition-colors">Access Code</label>
+                    </div>
+                    <input 
+                      type="password"
+                      inputMode="numeric"
+                      pattern="[0-9]{6}"
+                      maxLength={6}
+                      value={tempCode}
+                      onChange={(e) => setTempCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="6-digit code"
+                      disabled={isVerifying}
+                      className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:border-blue-600 focus:bg-white outline-none text-slate-950 font-black tracking-[0.3em] transition-all placeholder:text-slate-400 placeholder:tracking-normal"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <button 
+                  type="submit"
+                  disabled={isVerifying}
+                  className="w-full bg-slate-900 hover:bg-black disabled:bg-slate-300 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all shadow-xl active:scale-[0.98] flex items-center justify-center gap-3"
+                >
+                  {isVerifying ? (
+                    <Loader2 size={18} className="animate-spin" />
+                  ) : (
+                    <>
+                      <LogIn size={18} />
+                      <span>Establish Link</span>
+                    </>
                   )}
-
-                  <div className="space-y-4">
-                    <div className="group">
-                      <div className="flex items-center gap-2 mb-2 ml-1">
-                        <User size={12} className="text-slate-500 group-focus-within:text-blue-600 transition-colors" />
-                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest group-focus-within:text-blue-600 transition-colors">Identification</label>
-                      </div>
-                      <input 
-                        autoFocus
-                        type="text" 
-                        value={tempName}
-                        onChange={(e) => setTempName(e.target.value)}
-                        placeholder="Enter your full name"
-                        disabled={isVerifying}
-                        className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:border-blue-600 focus:bg-white outline-none text-slate-950 font-black transition-all placeholder:text-slate-400"
-                        required
-                      />
-                    </div>
-
-                    <div className="group">
-                      <div className="flex items-center gap-2 mb-2 ml-1">
-                        <Lock size={12} className="text-slate-500 group-focus-within:text-blue-600 transition-colors" />
-                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest group-focus-within:text-blue-600 transition-colors">Security Key</label>
-                      </div>
-                      <input 
-                        type="password" 
-                        value={tempKey}
-                        onChange={(e) => setTempKey(e.target.value)}
-                        placeholder="••••••••••••"
-                        disabled={isVerifying}
-                        className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:border-blue-600 focus:bg-white outline-none text-slate-950 font-black transition-all placeholder:text-slate-400"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <button 
-                    type="submit"
-                    disabled={isVerifying}
-                    className="w-full bg-slate-900 hover:bg-black disabled:bg-slate-300 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all shadow-xl active:scale-[0.98] flex items-center justify-center gap-3"
-                  >
-                    {isVerifying ? (
-                      <Loader2 size={18} className="animate-spin" />
-                    ) : (
-                      <>
-                        <LogIn size={18} />
-                        <span>Establish Link</span>
-                      </>
-                    )}
-                  </button>
-
-                  <div className="mt-4 text-center">
-                    <button type="button" onClick={() => setUseAccountFlow('login')} className="text-[12px] font-black uppercase tracking-widest text-blue-600">Use account login</button>
-                  </div>
-                </form>
-              ) : useAccountFlow === 'login' ? (
-                <div>
-                  <LoginPanel onCancel={() => setUseAccountFlow('none')} />
-                  <div className="mt-4 text-center">
-                    <button className="text-[12px] font-black uppercase tracking-widest text-blue-600" onClick={() => setUseAccountFlow('register')}>Register</button>
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <RegisterPanel onCancel={() => setUseAccountFlow('none')} />
-                  <div className="mt-4 text-center">
-                    <button className="text-[12px] font-black uppercase tracking-widest text-blue-600" onClick={() => setUseAccountFlow('login')}>Already registered? Sign in</button>
-                  </div>
-                </div>
-              )}
+                </button>
+              </form>
 
               <div className="mt-8 text-center">
                 <div className="inline-flex items-center gap-3 px-4 py-2 bg-slate-50 rounded-full border border-slate-200">
@@ -265,7 +298,6 @@ function App() {
             </div>
           </div>
         </div>
-      </AuthProvider>
     );
   }
 
@@ -311,7 +343,6 @@ const AppFrame: React.FC<{
   const isTracker = location.pathname === '/tracker';
 
   return (
-    <AuthProvider>
     <RoleProvider>
     <div className="h-screen w-full relative overflow-hidden font-sans selection:bg-blue-500/30 text-slate-900">
       {/* Background Image */}
@@ -333,6 +364,5 @@ const AppFrame: React.FC<{
       </div>
     </div>
     </RoleProvider>
-    </AuthProvider>
   );
 };
