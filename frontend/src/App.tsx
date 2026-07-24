@@ -31,9 +31,6 @@ function App() {
 
   const handleLogout = () => {
     localStorage.removeItem('currentUser');
-<<<<<<< HEAD
-    fetch(`${BACKEND}/api/logout`, { method: 'POST', credentials: 'include' }).catch(() => {});
-=======
     (async () => {
       try {
         const csrfRes = await fetch(`${BACKEND}/api/csrf-token`, { credentials: 'include' });
@@ -45,7 +42,6 @@ function App() {
         });
       } catch (_) { /* best-effort — cookie will also just expire naturally */ }
     })();
->>>>>>> dev
     setCurrentUser(null);
     setIsAuthenticated(false);
   };
@@ -156,15 +152,6 @@ function App() {
         return;
       }
 
-<<<<<<< HEAD
-      // JWT cookie is now set by the backend. Trigger the socket join.
-      setCurrentUser(cleanName);
-      if (socket.connected) {
-        syncData.join(cleanName);
-      } else {
-        socket.connect();
-      }
-=======
       // JWT cookie is now set by the backend. The socket may already be
       // connected from BEFORE login (it connects on page load), and
       // socket.io only authenticates once, at handshake time — so we must
@@ -174,7 +161,6 @@ function App() {
         socket.disconnect();
       }
       socket.connect();
->>>>>>> dev
     } catch (err) {
       setAuthError('Unable to reach server. Please try again.');
       setIsVerifying(false);
