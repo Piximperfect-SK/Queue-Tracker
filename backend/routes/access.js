@@ -60,10 +60,11 @@ router.post('/access/login', codeLoginLimiter, async (req, res) => {
     }
 
     const token = jwt.sign({ fullName: trimmedName, role: matchedRole }, JWT_SECRET, { expiresIn: '8h' });
+    const isProd = process.env.NODE_ENV === 'production';
     res.cookie('token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: isProd,
+      sameSite: isProd ? 'none' : 'lax',
       maxAge: 8 * 3600 * 1000,
     });
 
