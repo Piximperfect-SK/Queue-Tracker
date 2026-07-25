@@ -1,8 +1,14 @@
 import express from 'express';
 import rateLimit from 'express-rate-limit';
 import jwt from 'jsonwebtoken';
+import { randomUUID } from 'crypto';
 import AccessCode, { encryptCode, decryptCode, generateCode } from '../models/AccessCode.js';
 import RolePermission, { DEFAULT_PERMISSIONS, PAGE_KEYS, ACTION_KEYS } from '../models/RolePermission.js';
+import Session from '../models/Session.js';
+import TwoFactorAuth from '../models/TwoFactorAuth.js';
+import { authenticator } from 'otplib';
+import bcrypt from 'bcrypt';
+import { kickJti, isJtiOnline } from '../realtime.js';
 import { requireAuth } from '../middleware/auth.js';
 import { getPermissionsForRole } from '../middleware/permissions.js';
 
@@ -23,6 +29,21 @@ function requireAdmin(req, res, next) {
     return res.status(403).json({ error: 'Forbidden: admin only' });
   }
   return next();
+}
+
+async function issueSession(res, fullName, role) {
+  const jti = randomUUID();
+  const expiresAt = new Date(Date.now() + 8 * 3600 * 1000);
+  const token = jwt.sign({ fullName, role, jti }, JWT_SECRET, { expiresIn: '8h' });
+  const isProd = process.env.NODE_ENV === 'production';
+  res.cookie('token', token, {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: isProd ? 'none' : 'lax',
+    maxAge: 8 * 3600 * 1000,
+  });
+  await Session.create({ jti, fullName, role, expiresAt });
+  return res.json({ fullName, role, token });
 }
 
 // --- Login with Full Name + Access Code -------------------------------
@@ -59,19 +80,76 @@ router.post('/access/login', codeLoginLimiter, async (req, res) => {
       return res.status(401).json({ error: 'Invalid access code' });
     }
 
-    const token = jwt.sign({ fullName: trimmedName, role: matchedRole }, JWT_SECRET, { expiresIn: '8h' });
-    const isProd = process.env.NODE_ENV === 'production';
-    res.cookie('token', token, {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: isProd ? 'none' : 'lax',
-      maxAge: 8 * 3600 * 1000,
-    });
+    // If this name has 2FA enabled, don't issue a real session yet — issue a
+    // short-lived pending token instead, and require /access/login/verify-2fa
+    // before a real Session record (and cookie/Bearer token) is created.
+    const twoFactor = await TwoFactorAuth.findOne({ fullName: trimmedName, enabled: true });
+    if (twoFactor) {
+      const pendingToken = jwt.sign(
+        { fullName: trimmedName, role: matchedRole, pending2FA: true },
+        JWT_SECRET,
+        { expiresIn: '5m' }
+      );
+      return res.json({ requiresTwoFactor: true, pendingToken, fullName: trimmedName, role: matchedRole });
+    }
 
-    return res.json({ fullName: trimmedName, role: matchedRole, token });
+    return issueSession(res, trimmedName, matchedRole);
   } catch (err) {
     console.error('Access login error:', err);
     return res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+// --- Complete login when 2FA is required --------------------------------
+router.post('/access/login/verify-2fa', codeLoginLimiter, async (req, res) => {
+  try {
+    const { pendingToken, code } = req.body;
+    if (typeof pendingToken !== 'string' || typeof code !== 'string') {
+      return res.status(400).json({ error: 'Missing pending token or code' });
+    }
+
+    let payload;
+    try {
+      payload = jwt.verify(pendingToken, JWT_SECRET);
+    } catch (_) {
+      return res.status(401).json({ error: 'Login session expired. Please log in again.' });
+    }
+    if (!payload.pending2FA) {
+      return res.status(400).json({ error: 'Invalid pending token' });
+    }
+
+    const record = await TwoFactorAuth.findOne({ fullName: payload.fullName, enabled: true });
+    if (!record) {
+      return res.status(400).json({ error: '2FA is no longer enabled for this name' });
+    }
+
+    const trimmedCode = code.trim();
+    const secret = decryptCode(record.encryptedSecret);
+    const validTotp = /^\d{6}$/.test(trimmedCode) && authenticator.verify({ token: trimmedCode, secret });
+
+    let validBackup = false;
+    let usedBackupHash = null;
+    if (!validTotp) {
+      for (const hash of record.backupCodeHashes) {
+        if (await bcrypt.compare(trimmedCode.toUpperCase(), hash)) { validBackup = true; usedBackupHash = hash; break; }
+      }
+    }
+
+    if (!validTotp && !validBackup) {
+      return res.status(401).json({ error: 'Incorrect authenticator code' });
+    }
+
+    if (validBackup && usedBackupHash) {
+      // Backup codes are single-use — burn it now
+      record.backupCodeHashes = record.backupCodeHashes.filter((h) => h !== usedBackupHash);
+    }
+    record.lastUsedAt = new Date();
+    await record.save();
+
+    return issueSession(res, payload.fullName, payload.role);
+  } catch (err) {
+    console.error('2FA login verify error:', err);
+    return res.status(500).json({ error: 'Failed to verify code' });
   }
 });
 
@@ -170,6 +248,53 @@ router.post('/access/codes/:role/set', requireAuth, requireAdmin, async (req, re
   } catch (err) {
     console.error('Set custom code error:', err);
     return res.status(500).json({ error: 'Failed to set code' });
+  }
+});
+
+// --- Admin: list active sessions ----------------------------------------
+router.get('/access/sessions', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const sessions = await Session.find({ revoked: false, expiresAt: { $gt: new Date() } })
+      .sort({ lastSeenAt: -1 })
+      .lean();
+    const enriched = sessions.map((s) => ({
+      jti: s.jti,
+      fullName: s.fullName,
+      role: s.role,
+      issuedAt: s.issuedAt,
+      expiresAt: s.expiresAt,
+      lastSeenAt: s.lastSeenAt,
+      isOnline: isJtiOnline(s.jti),
+      isSelf: req.user.jti === s.jti,
+    }));
+    return res.json({ sessions: enriched });
+  } catch (err) {
+    console.error('List sessions error:', err);
+    return res.status(500).json({ error: 'Failed to load sessions' });
+  }
+});
+
+// --- Admin: kick a session -----------------------------------------------
+router.post('/access/sessions/:jti/kick', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { jti } = req.params;
+    if (req.user.jti === jti) {
+      return res.status(400).json({ error: "Can't kick your own active session — log out normally instead." });
+    }
+    const session = await Session.findOne({ jti });
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found (it may have already expired)' });
+    }
+    session.revoked = true;
+    session.revokedAt = new Date();
+    session.revokedBy = req.user.fullName;
+    await session.save();
+
+    const disconnectedCount = kickJti(jti);
+    return res.json({ success: true, wasOnline: disconnectedCount > 0 });
+  } catch (err) {
+    console.error('Kick session error:', err);
+    return res.status(500).json({ error: 'Failed to kick session' });
   }
 });
 

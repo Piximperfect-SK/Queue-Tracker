@@ -8,6 +8,7 @@ import ConfirmModal from '../components/ConfirmModal';
 import { useRole } from '../auth/RoleContext';
 import { Link } from 'react-router-dom';
 import { ShieldAlert } from 'lucide-react';
+import TwoFactorCard from '../components/TwoFactorCard';
 
 const SettingsPage: React.FC = () => {
   const { role, pages, actions } = useRole();
@@ -323,6 +324,8 @@ const SettingsPage: React.FC = () => {
               </Link>
             )}
           </div>
+
+          <TwoFactorCard />
 
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
             <div className="flex items-center gap-3 mb-3">

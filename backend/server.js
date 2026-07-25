@@ -14,6 +14,8 @@ import { randomBytes } from 'crypto';
 import { seedAdmin } from './scripts/seedAdmin.js';
 import { seedAccessCodes } from './scripts/seedAccessCodes.js';
 import { checkSocketAction } from './middleware/permissions.js';
+import { setIo, registerSocketSession, unregisterSocketSession } from './realtime.js';
+import Session from './models/Session.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -227,10 +229,14 @@ app.use('/api', rolesRouter);
 import accessRouter from './routes/access.js';
 app.use('/api', accessRouter);
 
+import twoFactorRouter from './routes/twoFactor.js';
+app.use('/api', twoFactorRouter);
+
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: corsOptions
 });
+setIo(io);
 
 // Security: Simple sanitizer to prevent HTML/Script injection
 const sanitize = (text) => {
@@ -357,7 +363,21 @@ io.use(async (socket, next) => {
     if (token) {
       try {
         const payload = jwt.verify(token, process.env.JWT_SECRET || 'dev_jwt_secret');
-        socket.user = payload; // minimal payload (fullName, role)
+
+        // Access-code-issued tokens carry a jti — check it hasn't been
+        // revoked (Admin "kick" support). Legacy account tokens have no
+        // jti and skip this check.
+        if (payload.jti) {
+          const session = await Session.findOne({ jti: payload.jti });
+          if (!session || session.revoked) {
+            return next(); // proceed unauthenticated — same as an invalid token
+          }
+          session.lastSeenAt = new Date();
+          session.save().catch(() => {});
+          registerSocketSession(payload.jti, socket.id);
+        }
+
+        socket.user = payload; // minimal payload (fullName, role, jti)
       } catch (err) {
         // token present but invalid/expired — proceed unauthenticated
       }
@@ -469,6 +489,9 @@ io.on('connection', async (socket) => {
   socket.on('disconnect', () => {
     const username = onlineUsers.get(socket.id);
     eventCounts.delete(socket.id); // Clean up rate limit tracking
+    if (socket.user && socket.user.jti) {
+      unregisterSocketSession(socket.user.jti, socket.id);
+    }
     if (username) {
       onlineUsers.delete(socket.id);
       io.emit('presence_updated', Array.from(onlineUsers.values()));
