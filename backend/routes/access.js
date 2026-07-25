@@ -109,7 +109,19 @@ router.post('/access/codes/:role/regenerate', requireAuth, requireAdmin, async (
     if (!['admin', 'queue_handler', 'associate'].includes(role)) {
       return res.status(400).json({ error: 'Invalid role' });
     }
-    const newCode = generateCode();
+
+    const others = await AccessCode.find({ role: { $ne: role } });
+    const otherCodes = others.map((entry) => {
+      try { return decryptCode(entry.encryptedCode); } catch (_) { return null; }
+    });
+
+    let newCode;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const candidate = generateCode();
+      if (!otherCodes.includes(candidate)) { newCode = candidate; break; }
+    }
+    if (!newCode) newCode = generateCode(); // effectively unreachable, but never leave newCode unset
+
     const encryptedCode = encryptCode(newCode);
     await AccessCode.findOneAndUpdate(
       { role },
@@ -120,6 +132,44 @@ router.post('/access/codes/:role/regenerate', requireAuth, requireAdmin, async (
   } catch (err) {
     console.error('Regenerate code error:', err);
     return res.status(500).json({ error: 'Failed to regenerate code' });
+  }
+});
+
+// --- Admin: set a custom access code for a role -------------------------
+router.post('/access/codes/:role/set', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { role } = req.params;
+    if (!['admin', 'queue_handler', 'associate'].includes(role)) {
+      return res.status(400).json({ error: 'Invalid role' });
+    }
+    const { code } = req.body;
+    if (typeof code !== 'string' || !/^\d{6}$/.test(code.trim())) {
+      return res.status(400).json({ error: 'Code must be exactly 6 digits' });
+    }
+    const newCode = code.trim();
+
+    // Prevent two roles from silently sharing the same code — login can
+    // only ever resolve to one role per code, so a collision would leave
+    // one of them unusable (or worse, granting the wrong role).
+    const others = await AccessCode.find({ role: { $ne: role } });
+    for (const entry of others) {
+      try {
+        if (decryptCode(entry.encryptedCode) === newCode) {
+          return res.status(409).json({ error: `That code is already in use by ${entry.role}. Choose a different one.` });
+        }
+      } catch (_) { /* corrupt entry — ignore rather than block */ }
+    }
+
+    const encryptedCode = encryptCode(newCode);
+    await AccessCode.findOneAndUpdate(
+      { role },
+      { encryptedCode, updatedAt: new Date(), updatedBy: req.user.fullName },
+      { upsert: true }
+    );
+    return res.json({ role, code: newCode });
+  } catch (err) {
+    console.error('Set custom code error:', err);
+    return res.status(500).json({ error: 'Failed to set code' });
   }
 });
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   ShieldCheck, RefreshCw, AlertCircle, Eye, EyeOff, Copy, Check,
-  KeyRound, SlidersHorizontal, Shield, Users, ClipboardList,
+  KeyRound, SlidersHorizontal, Shield, Users, ClipboardList, Pencil, X,
 } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
 import { authHeaders } from '../utils/authToken';
@@ -62,6 +62,10 @@ const AdminPage: React.FC = () => {
   const [copied, setCopied] = useState<Role | null>(null);
   const [regenTarget, setRegenTarget] = useState<Role | null>(null);
   const [justRegenerated, setJustRegenerated] = useState<{ role: Role; code: string } | null>(null);
+  const [editingCode, setEditingCode] = useState<Role | null>(null);
+  const [customCodeValue, setCustomCodeValue] = useState('');
+  const [settingCode, setSettingCode] = useState<Role | null>(null);
+  const [codeFieldError, setCodeFieldError] = useState<string | null>(null);
 
   // ---- Permissions state ----
   const [perms, setPerms] = useState<PermsMap>({ queue_handler: null, associate: null });
@@ -87,7 +91,12 @@ const AdminPage: React.FC = () => {
       });
       setDirty({});
     } catch (err: any) {
-      setError(err.message || 'Failed to load admin data. Admin privileges required.');
+      const isNetworkError = err instanceof TypeError || err?.message === 'Failed to fetch';
+      setError(
+        isNetworkError
+          ? 'Could not reach the server. If the backend was recently idle, it can take up to a minute to wake up — try Refresh in a moment.'
+          : (err.message || 'Failed to load admin data. Admin privileges required.')
+      );
     } finally {
       setLoading(false);
     }
@@ -116,6 +125,42 @@ const AdminPage: React.FC = () => {
       setJustRegenerated({ role, code: data.code });
     } catch (err: any) {
       setError(err.message || 'Failed to regenerate code');
+    }
+  };
+
+  const startEditingCode = (role: Role) => {
+    setEditingCode(role);
+    setCustomCodeValue('');
+    setCodeFieldError(null);
+  };
+
+  const cancelEditingCode = () => {
+    setEditingCode(null);
+    setCustomCodeValue('');
+    setCodeFieldError(null);
+  };
+
+  const submitCustomCode = async (role: Role) => {
+    const value = customCodeValue.trim();
+    if (!/^\d{6}$/.test(value)) {
+      setCodeFieldError('Must be exactly 6 digits');
+      return;
+    }
+    setSettingCode(role);
+    setCodeFieldError(null);
+    try {
+      const data = await api(`/api/access/codes/${role}/set`, {
+        method: 'POST',
+        body: JSON.stringify({ code: value }),
+      });
+      setCodes((c) => ({ ...c, [role]: data.code }));
+      setRevealed((r) => ({ ...r, [role]: true }));
+      setEditingCode(null);
+      setCustomCodeValue('');
+    } catch (err: any) {
+      setCodeFieldError(err.message || 'Failed to set code');
+    } finally {
+      setSettingCode(null);
     }
   };
 
@@ -159,6 +204,7 @@ const AdminPage: React.FC = () => {
 
   return (
     <div className="h-full flex flex-col overflow-hidden p-6">
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col flex-1 min-h-0 overflow-hidden p-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-6 shrink-0">
         <div className="flex items-center gap-4">
@@ -221,39 +267,77 @@ const AdminPage: React.FC = () => {
               <p>Each role signs in with its own 6-digit access code plus their name. Regenerating a code immediately invalidates the old one — share the new code with everyone using that role before they next log in.</p>
             </div>
             {(['admin', 'queue_handler', 'associate'] as Role[]).map((role) => (
-              <div key={role} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="w-11 h-11 bg-slate-50 rounded-xl flex items-center justify-center text-slate-500 border border-slate-100">
-                    <Users size={20} />
-                  </div>
-                  <div>
-                    <span className={`inline-block text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md border mb-1.5 ${ROLE_COLORS[role]}`}>
-                      {ROLE_LABELS[role]}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-lg font-bold text-slate-900 tracking-[0.2em]">
-                        {codes[role] ? (revealed[role] ? codes[role] : '••••••') : '—'}
+              <div key={role} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-11 h-11 bg-slate-50 rounded-xl flex items-center justify-center text-slate-500 border border-slate-100">
+                      <Users size={20} />
+                    </div>
+                    <div>
+                      <span className={`inline-block text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md border mb-1.5 ${ROLE_COLORS[role]}`}>
+                        {ROLE_LABELS[role]}
                       </span>
-                      {codes[role] && (
-                        <>
-                          <button onClick={() => toggleReveal(role)} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all" title={revealed[role] ? 'Hide' : 'Reveal'}>
-                            {revealed[role] ? <EyeOff size={15} /> : <Eye size={15} />}
-                          </button>
-                          <button onClick={() => copyCode(role, codes[role]!)} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all" title="Copy">
-                            {copied === role ? <Check size={15} className="text-emerald-600" /> : <Copy size={15} />}
-                          </button>
-                        </>
-                      )}
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-lg font-bold text-slate-900 tracking-[0.2em]">
+                          {codes[role] ? (revealed[role] ? codes[role] : '••••••') : '—'}
+                        </span>
+                        {codes[role] && (
+                          <>
+                            <button onClick={() => toggleReveal(role)} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all" title={revealed[role] ? 'Hide' : 'Reveal'}>
+                              {revealed[role] ? <EyeOff size={15} /> : <Eye size={15} />}
+                            </button>
+                            <button onClick={() => copyCode(role, codes[role]!)} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all" title="Copy">
+                              {copied === role ? <Check size={15} className="text-emerald-600" /> : <Copy size={15} />}
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => (editingCode === role ? cancelEditingCode() : startEditingCode(role))}
+                      className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm active:scale-95"
+                    >
+                      {editingCode === role ? <X size={14} /> : <Pencil size={14} />}
+                      {editingCode === role ? 'Cancel' : 'Set Custom'}
+                    </button>
+                    <button
+                      onClick={() => setRegenTarget(role)}
+                      className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm active:scale-95"
+                    >
+                      <RefreshCw size={14} />
+                      Regenerate
+                    </button>
+                  </div>
                 </div>
-                <button
-                  onClick={() => setRegenTarget(role)}
-                  className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm active:scale-95"
-                >
-                  <RefreshCw size={14} />
-                  Regenerate
-                </button>
+
+                {editingCode === role && (
+                  <div className="mt-4 pt-4 border-t border-slate-100 flex items-start gap-3">
+                    <div className="flex-1">
+                      <input
+                        autoFocus
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={6}
+                        value={customCodeValue}
+                        onChange={(e) => { setCustomCodeValue(e.target.value.replace(/\D/g, '').slice(0, 6)); setCodeFieldError(null); }}
+                        onKeyDown={(e) => { if (e.key === 'Enter') submitCustomCode(role); if (e.key === 'Escape') cancelEditingCode(); }}
+                        placeholder="Enter new 6-digit code"
+                        className="w-full max-w-xs px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono text-sm tracking-[0.2em] focus:border-slate-400 focus:bg-white outline-none transition-all"
+                      />
+                      {codeFieldError && <p className="text-xs font-semibold text-red-600 mt-1.5">{codeFieldError}</p>}
+                    </div>
+                    <button
+                      onClick={() => submitCustomCode(role)}
+                      disabled={settingCode === role}
+                      className="flex items-center gap-2 px-4 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                    >
+                      {settingCode === role ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
+                      Save Code
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -331,6 +415,7 @@ const AdminPage: React.FC = () => {
         confirmLabel="Regenerate"
         cancelLabel="Cancel"
         variant="danger"
+        requireTypedConfirmation="REGENERATE"
         onConfirm={executeRegenerate}
         onCancel={() => setRegenTarget(null)}
       />
@@ -346,6 +431,7 @@ const AdminPage: React.FC = () => {
           <p className="text-xs text-white/60">Share this with everyone using this role — it's already visible above too, revealed and ready to copy.</p>
         </div>
       )}
+      </div>
     </div>
   );
 };

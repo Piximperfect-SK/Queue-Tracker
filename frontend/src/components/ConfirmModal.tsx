@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { AlertTriangle, X } from 'lucide-react';
 
 interface ConfirmModalProps {
@@ -10,6 +10,10 @@ interface ConfirmModalProps {
   variant?: 'danger' | 'default';
   onConfirm: () => void;
   onCancel: () => void;
+  /** When set, the Confirm button stays disabled until the user types this
+   * exact text — an extra deliberate step for actions that shouldn't happen
+   * from a quick/accidental click (e.g. regenerating an access code). */
+  requireTypedConfirmation?: string;
 }
 
 const ConfirmModal: React.FC<ConfirmModalProps> = ({
@@ -21,8 +25,17 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
   variant = 'default',
   onConfirm,
   onCancel,
+  requireTypedConfirmation,
 }) => {
+  const [typedValue, setTypedValue] = useState('');
+
+  useEffect(() => {
+    if (isOpen) setTypedValue('');
+  }, [isOpen]);
+
   if (!isOpen) return null;
+
+  const canConfirm = !requireTypedConfirmation || typedValue.trim() === requireTypedConfirmation;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -50,6 +63,23 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
           </div>
           <h3 className="text-lg font-bold text-slate-900 mb-2">{title}</h3>
           <p className="text-sm text-slate-600 mb-6 leading-relaxed">{message}</p>
+
+          {requireTypedConfirmation && (
+            <div className="w-full mb-6 text-left">
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
+                Type "{requireTypedConfirmation}" to confirm
+              </label>
+              <input
+                autoFocus
+                type="text"
+                value={typedValue}
+                onChange={(e) => setTypedValue(e.target.value)}
+                placeholder={requireTypedConfirmation}
+                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono focus:border-slate-400 focus:bg-white outline-none transition-all"
+              />
+            </div>
+          )}
+
           <div className="flex gap-3 w-full">
             <button
               onClick={onCancel}
@@ -59,7 +89,8 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
             </button>
             <button
               onClick={onConfirm}
-              className={`flex-1 px-4 py-2.5 font-semibold rounded-xl text-sm transition-all active:scale-95 text-white ${
+              disabled={!canConfirm}
+              className={`flex-1 px-4 py-2.5 font-semibold rounded-xl text-sm transition-all active:scale-95 text-white disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100 ${
                 variant === 'danger'
                   ? 'bg-red-600 hover:bg-red-700 shadow-lg shadow-red-600/20'
                   : 'bg-slate-900 hover:bg-slate-800 shadow-lg shadow-slate-900/20'

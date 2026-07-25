@@ -6,9 +6,11 @@ import { addLog, downloadLogsForDate, downloadAllLogs, saveLogsFromServer, saveS
 import { socket, syncData } from '../utils/socket';
 import ConfirmModal from '../components/ConfirmModal';
 import { useRole } from '../auth/RoleContext';
+import { Link } from 'react-router-dom';
+import { ShieldAlert } from 'lucide-react';
 
 const SettingsPage: React.FC = () => {
-  const { actions } = useRole();
+  const { role, pages, actions } = useRole();
   const isPrivileged = actions.editHandlers;
   const canDownloadLogs = actions.downloadLogs;
   const [handlers, setHandlers] = useState<Handler[]>([]);
@@ -106,8 +108,9 @@ const SettingsPage: React.FC = () => {
 
   return (
     <div className="h-full flex flex-col overflow-hidden p-6">
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col flex-1 min-h-0 overflow-hidden p-6">
       {/* ── Header ── */}
-      <div className="flex items-center justify-between mb-8 shrink-0">
+      <div className="flex items-center justify-between mb-6 shrink-0">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 bg-gradient-to-br from-slate-900 to-slate-700 rounded-2xl flex items-center justify-center shadow-lg shadow-slate-900/20">
             <SettingsIcon size={24} className="text-white" />
@@ -155,32 +158,32 @@ const SettingsPage: React.FC = () => {
       </div>
 
       {/* ── Stats Cards ── */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 shrink-0">
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm flex items-center gap-4">
-          <div className="w-11 h-11 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 shrink-0">
-            <Users size={22} />
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 shrink-0">
+        <div className="bg-slate-50 rounded-xl border border-slate-200 p-4 flex items-center gap-3">
+          <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600 shrink-0">
+            <Users size={20} />
           </div>
           <div>
-            <p className="text-2xl font-bold text-slate-900">{handlers.length}</p>
-            <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Total Handlers</p>
+            <p className="text-xl font-bold text-slate-900">{handlers.length}</p>
+            <p className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">Total Handlers</p>
           </div>
         </div>
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm flex items-center gap-4">
-          <div className="w-11 h-11 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 shrink-0">
-            <Activity size={22} />
+        <div className="bg-slate-50 rounded-xl border border-slate-200 p-4 flex items-center gap-3">
+          <div className="w-10 h-10 bg-emerald-50 rounded-lg flex items-center justify-center text-emerald-600 shrink-0">
+            <Activity size={20} />
           </div>
           <div>
-            <p className="text-2xl font-bold text-slate-900">{qhCount}</p>
-            <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Queue Handlers (QH)</p>
+            <p className="text-xl font-bold text-slate-900">{qhCount}</p>
+            <p className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">Queue Handlers (QH)</p>
           </div>
         </div>
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm flex items-center gap-4">
-          <div className="w-11 h-11 bg-amber-50 rounded-xl flex items-center justify-center text-amber-600 shrink-0">
-            <Server size={22} />
+        <div className="bg-slate-50 rounded-xl border border-slate-200 p-4 flex items-center gap-3">
+          <div className="w-10 h-10 bg-amber-50 rounded-lg flex items-center justify-center text-amber-600 shrink-0">
+            <Server size={20} />
           </div>
           <div>
-            <p className="text-2xl font-bold text-slate-900">{standardCount}</p>
-            <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Standard Handlers</p>
+            <p className="text-xl font-bold text-slate-900">{standardCount}</p>
+            <p className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">Standard Handlers</p>
           </div>
         </div>
       </div>
@@ -291,46 +294,55 @@ const SettingsPage: React.FC = () => {
 
         {/* Sidebar */}
         <div className="flex flex-col gap-4 overflow-y-auto scrollbar-hide">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-            <div className="flex items-center gap-3 mb-5">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+            <div className="flex items-center gap-3 mb-4">
               <div className="w-9 h-9 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 border border-indigo-100">
+                <ShieldAlert size={18} />
+              </div>
+              <div>
+                <h2 className="text-sm font-bold text-slate-800">Your Access</h2>
+                <p className="text-[11px] text-slate-400 capitalize">{role ? role.replace('_', ' ') : 'Unknown role'}</p>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              {(Object.keys(pages) as (keyof typeof pages)[]).map((key) => (
+                <div key={key} className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-100">
+                  <span className="text-xs font-semibold text-slate-600 capitalize">{key === 'logMonitor' ? 'Log Monitor' : key}</span>
+                  <span className={`text-[10px] font-bold uppercase tracking-wide ${pages[key] ? 'text-emerald-600' : 'text-slate-300'}`}>
+                    {pages[key] ? 'Granted' : 'Restricted'}
+                  </span>
+                </div>
+              ))}
+            </div>
+            {role === 'admin' && (
+              <Link
+                to="/admin"
+                className="mt-4 flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-all shadow-sm active:scale-95"
+              >
+                Manage Access Control
+              </Link>
+            )}
+          </div>
+
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-9 h-9 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600 border border-emerald-100">
                 <AlertCircle size={18} />
               </div>
-              <h2 className="text-sm font-bold text-slate-800">System Info</h2>
+              <h2 className="text-sm font-bold text-slate-800">System Status</h2>
             </div>
-            <div className="space-y-4">
-              <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-                <p className="text-xs font-bold text-slate-800 mb-1 uppercase tracking-wide">Sync Status</p>
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-                  <span className="text-xs font-medium text-emerald-700">Connected</span>
-                </div>
-              </div>
-              <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-                <p className="text-xs font-bold text-slate-800 mb-1 uppercase tracking-wide">Auto-Sync</p>
-                <p className="text-xs text-slate-600 leading-relaxed">Changes broadcast instantly to all connected terminals via encrypted fleet link.</p>
-              </div>
-              <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-                <p className="text-xs font-bold text-slate-800 mb-1 uppercase tracking-wide">Persistence</p>
-                <p className="text-xs text-slate-600 leading-relaxed">Log records stored centrally. Use archive tools for compliance audits.</p>
-              </div>
-              <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-                <p className="text-xs font-bold text-slate-800 mb-1 uppercase tracking-wide">QH Priority</p>
-                <p className="text-xs text-slate-600 leading-relaxed">Queue Handlers (QH) enable priority identifiers across tracking matrices.</p>
-              </div>
+            <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-lg border border-slate-100">
+              <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+              <span className="text-xs font-medium text-emerald-700">Live sync connected — changes broadcast instantly</span>
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 text-center">
-            <div className="w-14 h-14 bg-slate-900 rounded-2xl flex items-center justify-center text-white font-bold text-2xl mx-auto mb-3 shadow-lg shadow-slate-900/20">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 text-center">
+            <div className="w-11 h-11 bg-slate-900 rounded-xl flex items-center justify-center text-white font-bold text-lg mx-auto mb-2 shadow-lg shadow-slate-900/20">
               Q
             </div>
-            <p className="text-base font-bold text-slate-900 mb-0.5">Queue Tracker</p>
-            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-4">v4.0.0</p>
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-50 border border-emerald-200 rounded-full">
-              <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-              <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">All Systems Nominal</span>
-            </div>
+            <p className="text-sm font-bold text-slate-900">Queue Tracker</p>
+            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">v4.0.0</p>
           </div>
         </div>
       </div>
@@ -346,6 +358,7 @@ const SettingsPage: React.FC = () => {
         onConfirm={confirmDelete}
         onCancel={() => setDeleteConfirmId(null)}
       />
+      </div>
     </div>
   );
 };

@@ -47,13 +47,21 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [pages, setPages] = useState<PagePermissions>(NO_PAGES);
   const [actions, setActions] = useState<ActionPermissions>(NO_ACTIONS);
   const [loadingRole, setLoadingRole] = useState(true);
+  const hasLoadedOnce = React.useRef(false);
 
-  // Permissions are always fetched fresh from the server on every refresh —
-  // deliberately NOT cached in localStorage, so a role/permission change made
-  // by Admin (or a revoked session) takes effect on next check rather than
-  // trusting stale client-side state.
+  // Permissions are always fetched fresh from the server — deliberately NOT
+  // cached in localStorage, so a role/permission change made by Admin (or a
+  // revoked session) takes effect on next check rather than trusting stale
+  // client-side state. BUT: only the very first fetch shows a loading state.
+  // Every socket reconnect re-triggers this as a background revalidation —
+  // flipping loadingRole back to true on every one of those caused every
+  // PageGuard-wrapped page to unmount and remount repeatedly (visible as
+  // flicker), which also re-fired each page's own data fetches, turning
+  // ordinary transient network blips into a constant "Failed to fetch".
   const refreshRole = useCallback(async () => {
-    setLoadingRole(true);
+    if (!hasLoadedOnce.current) {
+      setLoadingRole(true);
+    }
     try {
       const res = await fetch(`${BACKEND}/api/access/permissions`, {
         credentials: 'include',
@@ -64,15 +72,21 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setRole(data.role ?? null);
         setPages(data.pages ?? NO_PAGES);
         setActions(data.actions ?? NO_ACTIONS);
+        hasLoadedOnce.current = true;
         setLoadingRole(false);
         return;
       }
-    } catch (_) { /* backend unreachable */ }
+    } catch (_) { /* backend unreachable — keep last known-good state, don't flicker */ }
 
-    // Not logged in, session expired, or backend unreachable — no access.
-    setRole(null);
-    setPages(NO_PAGES);
-    setActions(NO_ACTIONS);
+    // Only clear permissions on failure if we've never successfully loaded
+    // before (genuinely logged out / no session). A transient blip on a
+    // background revalidation shouldn't wipe out an already-working page.
+    if (!hasLoadedOnce.current) {
+      setRole(null);
+      setPages(NO_PAGES);
+      setActions(NO_ACTIONS);
+    }
+    hasLoadedOnce.current = true;
     setLoadingRole(false);
   }, []);
 
