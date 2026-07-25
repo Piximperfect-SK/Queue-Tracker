@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
+import Session from '../models/Session.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_jwt_secret';
 
@@ -24,11 +25,24 @@ export async function optionalAuth(socketOrReq, next) {
   return next();
 }
 
-export function requireAuth(req, res, next) {
+// Access-code-issued tokens carry a jti (see routes/access.js). Legacy
+// account tokens (routes/auth.js) don't, and skip the session check —
+// they're a separate, unrelated system with no revocation concept.
+export async function requireAuth(req, res, next) {
   const token = req.cookies?.token || (req.header('Authorization') || '').replace(/^Bearer\s+/i, '');
   if (!token) return res.status(401).json({ error: 'Unauthorized' });
   try {
     const payload = jwt.verify(token, JWT_SECRET);
+
+    if (payload.jti) {
+      const session = await Session.findOne({ jti: payload.jti });
+      if (!session || session.revoked) {
+        return res.status(401).json({ error: 'Session has been revoked. Please log in again.' });
+      }
+      session.lastSeenAt = new Date();
+      session.save().catch(() => {}); // best-effort, don't block the request on it
+    }
+
     req.user = payload;
     return next();
   } catch (err) {
