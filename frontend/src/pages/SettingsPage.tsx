@@ -8,8 +8,9 @@ import ConfirmModal from '../components/ConfirmModal';
 import { useRole } from '../auth/RoleContext';
 
 const SettingsPage: React.FC = () => {
-  const { role } = useRole();
-  const isPrivileged = role === 'admin' || role === 'queue_handler';
+  const { actions } = useRole();
+  const isPrivileged = actions.editHandlers;
+  const canDownloadLogs = actions.downloadLogs;
   const [handlers, setHandlers] = useState<Handler[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
@@ -117,7 +118,7 @@ const SettingsPage: React.FC = () => {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          {isPrivileged && (
+          {canDownloadLogs && (
             <>
               <button
                 onClick={() => downloadLogsForDate(new Date().toISOString().split('T')[0])}
@@ -133,16 +134,18 @@ const SettingsPage: React.FC = () => {
                 <Database size={16} className="text-indigo-600" />
                 Archive
               </button>
-              <button
-                onClick={addHandler}
-                className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-lg shadow-slate-900/20 active:scale-95"
-              >
-                <Plus size={16} />
-                Add Handler
-              </button>
             </>
           )}
-          {!isPrivileged && (
+          {isPrivileged && (
+            <button
+              onClick={addHandler}
+              className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-lg shadow-slate-900/20 active:scale-95"
+            >
+              <Plus size={16} />
+              Add Handler
+            </button>
+          )}
+          {!isPrivileged && !canDownloadLogs && (
             <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm font-semibold text-slate-400">
               <ShieldCheck size={16} />
               View Only
@@ -207,13 +210,14 @@ const SettingsPage: React.FC = () => {
               >
                 <div className="flex items-center gap-4 flex-1 min-w-0">
                   <button
-                    onClick={() => toggleQH(handler.id)}
+                    onClick={() => isPrivileged && toggleQH(handler.id)}
+                    disabled={!isPrivileged}
                     className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all shrink-0 border ${
                       handler.isQH
                         ? 'bg-emerald-500 border-emerald-500 text-white shadow-sm shadow-emerald-500/20'
                         : 'bg-white border-slate-200 text-slate-400 hover:border-emerald-400 hover:text-emerald-500'
-                    }`}
-                    title={handler.isQH ? 'Queue Handler (QH)' : 'Assign as QH'}
+                    } ${!isPrivileged ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    title={isPrivileged ? (handler.isQH ? 'Queue Handler (QH)' : 'Assign as QH') : 'View only'}
                   >
                     <ShieldCheck size={18} strokeWidth={handler.isQH ? 2.5 : 2} />
                   </button>
@@ -248,12 +252,14 @@ const SettingsPage: React.FC = () => {
                     ) : (
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-bold text-slate-900 truncate">{handler.name}</span>
-                        <button
-                          onClick={() => startEditing(handler.id, handler.name)}
-                          className="p-1 text-slate-300 hover:text-slate-500 hover:bg-slate-200 rounded-md transition-all opacity-0 group-hover:opacity-100"
-                        >
-                          <Edit3 size={13} />
-                        </button>
+                        {isPrivileged && (
+                          <button
+                            onClick={() => startEditing(handler.id, handler.name)}
+                            className="p-1 text-slate-300 hover:text-slate-500 hover:bg-slate-200 rounded-md transition-all opacity-0 group-hover:opacity-100"
+                          >
+                            <Edit3 size={13} />
+                          </button>
+                        )}
                       </div>
                     )}
                     <div className="flex items-center gap-2 mt-1">
@@ -269,13 +275,15 @@ const SettingsPage: React.FC = () => {
                   </div>
                 </div>
 
-                <button
-                  onClick={() => deleteHandler(handler.id)}
-                  className="p-2.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all ml-2 opacity-0 group-hover:opacity-100"
-                  title="Decommission"
-                >
-                  <Trash2 size={16} />
-                </button>
+                {isPrivileged && (
+                  <button
+                    onClick={() => deleteHandler(handler.id)}
+                    className="p-2.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all ml-2 opacity-0 group-hover:opacity-100"
+                    title="Decommission"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                )}
               </div>
             ))}
           </div>

@@ -12,7 +12,7 @@ interface NavbarProps {
 
 const Navbar: React.FC<NavbarProps> = ({ currentUser, onLogout, onlineUsers }) => {
   const [isConnected, setIsConnected] = useState(socket.connected);
-  const { role } = useRole();
+  const { role, pages } = useRole();
 
   useEffect(() => {
     const onConnect = () => setIsConnected(true);
@@ -74,25 +74,31 @@ const Navbar: React.FC<NavbarProps> = ({ currentUser, onLogout, onlineUsers }) =
             </div>
 
             <div className="flex space-x-0.5">
-              <Link to="/" className="px-3 py-1.5 rounded-xl text-[10.5px] font-black uppercase tracking-widest text-white/80 hover:text-white hover:bg-[#393E46] transition-all flex items-center space-x-2">
-                <Calendar size={14} />
-                <span>Roster</span>
-              </Link>
-              <Link to="/tracker" className="px-3 py-1.5 rounded-xl text-[10.5px] font-black uppercase tracking-widest text-white/80 hover:text-white hover:bg-[#393E46] transition-all flex items-center space-x-2">
-                <BarChart2 size={14} />
-                <span>Tracker</span>
-              </Link>
-              {role !== 'associate' && (
+              {pages.roster && (
+                <Link to="/" className="px-3 py-1.5 rounded-xl text-[10.5px] font-black uppercase tracking-widest text-white/80 hover:text-white hover:bg-[#393E46] transition-all flex items-center space-x-2">
+                  <Calendar size={14} />
+                  <span>Roster</span>
+                </Link>
+              )}
+              {pages.stats && (
+                <Link to="/tracker" className="px-3 py-1.5 rounded-xl text-[10.5px] font-black uppercase tracking-widest text-white/80 hover:text-white hover:bg-[#393E46] transition-all flex items-center space-x-2">
+                  <BarChart2 size={14} />
+                  <span>Tracker</span>
+                </Link>
+              )}
+              {pages.settings && (
                 <Link to="/settings" className="px-3 py-1.5 rounded-xl text-[10.5px] font-black uppercase tracking-widest text-white/80 hover:text-white hover:bg-[#393E46] transition-all flex items-center space-x-2">
                   <Settings size={14} />
                   <span>Settings</span>
                 </Link>
               )}
-              <Link to="/logs" className="px-3 py-1.5 rounded-xl text-[10.5px] font-black uppercase tracking-widest text-white/80 hover:text-white hover:bg-[#393E46] transition-all flex items-center space-x-2">
-                <Activity size={14} />
-                <span>Monitor</span>
-              </Link>
-              {role === 'admin' && (
+              {pages.logMonitor && (
+                <Link to="/logs" className="px-3 py-1.5 rounded-xl text-[10.5px] font-black uppercase tracking-widest text-white/80 hover:text-white hover:bg-[#393E46] transition-all flex items-center space-x-2">
+                  <Activity size={14} />
+                  <span>Monitor</span>
+                </Link>
+              )}
+              {pages.admin && (
                 <Link to="/admin" className="px-3 py-1.5 rounded-xl text-[10.5px] font-black uppercase tracking-widest text-white/80 hover:text-white hover:bg-[#393E46] transition-all flex items-center space-x-2">
                   <Shield size={14} />
                   <span>Admin</span>
