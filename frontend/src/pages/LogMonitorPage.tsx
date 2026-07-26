@@ -1,511 +1,550 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Terminal, Shield, Zap, Wifi, CheckCircle2, XCircle, AlertCircle, Activity } from 'lucide-react';
-import { AreaChart, Area, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import {
+  Terminal, Shield, Zap, Wifi, CheckCircle2, XCircle, AlertCircle,
+  Activity, Radio, RefreshCw, Clock, Database, Server, Filter
+} from 'lucide-react';
+import { AreaChart, Area, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from 'recharts';
 import { socket } from '../utils/socket';
 import type { LogEntry } from '../types';
 import { getLogsForDate, saveSingleLogFromServer } from '../utils/logger';
 
-const LogMonitorPage: React.FC = () => {
-  const [monitoredDate, setMonitoredDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
-  const [logs, setLogs] = useState<LogEntry[]>(() => getLogsForDate(new Date().toISOString().split('T')[0]));
-  const [topOffset, setTopOffset] = useState<number>(0);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [pingSamples, setPingSamples] = useState<number[]>([]);
-  const [lastPing, setLastPing] = useState<number | null>(null);
-  const lastSuccessRef = useRef<number | null>(null);
-  const defaultApiUrl = import.meta.env.VITE_BACKEND_URL ? `${import.meta.env.VITE_BACKEND_URL.replace(/\/$/, '')}/health` : `${window.location.origin}/api/health`;
-  const [apiUrl, setApiUrl] = useState<string>(defaultApiUrl);
-  const [apiSamples, setApiSamples] = useState<number[]>([]);
-  const [showNavLogs, setShowNavLogs] = useState<boolean>(true);
-  const [lastApiStatus, setLastApiStatus] = useState<number | null>(null);
-  const [lastApiSize, setLastApiSize] = useState<number | null>(null);
-  const apiLimit = 20;
-  const runApiRef = useRef<() => void>(() => {});
-  const recentApiRef = useRef<Array<{ts:number; status:number|null; time:number|null; size:number|null}>>([]);
-  const pingLimit = 30;
-  const runPingRef = useRef<() => void>(() => {});
+// ── types ──────────────────────────────────────────────────────────────────
+interface ApiCheck { ts: number; status: number | null; time: number | null; size: number | null; }
 
-  // Update top offset based on navbar height
+// ── constants ──────────────────────────────────────────────────────────────
+const PING_LIMIT   = 40;
+const API_LIMIT    = 30;
+const LOG_LIMIT    = 200;
+const PING_INTERVAL = 3000;
+const API_INTERVAL  = 5000;
+
+// ── helpers ────────────────────────────────────────────────────────────────
+const avg   = (arr: number[]) => arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : null;
+const safeN = (arr: number[]) => arr.filter(v => v >= 0);
+
+function useTopOffset() {
+  const [top, setTop] = useState(0);
   useEffect(() => {
-    const updateTop = () => {
-      const nav = document.querySelector('nav');
-      const header = document.querySelector('header');
-      const el = nav || header;
-      if (el) {
-        setTopOffset(Math.ceil((el as HTMLElement).getBoundingClientRect().bottom));
-      } else {
-        setTopOffset(0);
-      }
+    const update = () => {
+      const el = document.querySelector('nav') || document.querySelector('header');
+      setTop(el ? Math.ceil((el as HTMLElement).getBoundingClientRect().bottom) : 0);
     };
-    updateTop();
-    window.addEventListener('resize', updateTop);
-    const obs = new MutationObserver(updateTop);
+    update();
+    window.addEventListener('resize', update);
+    const obs = new MutationObserver(update);
     obs.observe(document.body, { attributes: true, childList: true, subtree: true });
-    return () => {
-      window.removeEventListener('resize', updateTop);
-      obs.disconnect();
-    };
+    return () => { window.removeEventListener('resize', update); obs.disconnect(); };
   }, []);
+  return top;
+}
 
-  // Socket logs
+// ── tiny chart tooltip ─────────────────────────────────────────────────────
+const ChartTip = ({ active, payload }: any) => {
+  if (!active || !payload?.length || payload[0].value == null) return null;
+  return (
+    <div className="bg-[#0c1220] border border-white/10 rounded px-2 py-1 text-[9px] font-bold text-white/80">
+      {payload[0].value}ms
+    </div>
+  );
+};
+
+// ── Status pill ────────────────────────────────────────────────────────────
+const Pill: React.FC<{ ok: boolean | null; labelOk: string; labelFail: string; labelWait?: string }> =
+  ({ ok, labelOk, labelFail, labelWait = 'WAITING' }) => {
+    if (ok === null) return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-[9px] font-bold text-white/30">
+        <span className="w-1.5 h-1.5 rounded-full bg-white/20" />{labelWait}
+      </span>
+    );
+    return ok ? (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-[9px] font-bold text-emerald-400">
+        <CheckCircle2 size={9} />{labelOk}
+      </span>
+    ) : (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-500/15 border border-red-500/30 text-[9px] font-bold text-red-400">
+        <XCircle size={9} />{labelFail}
+      </span>
+    );
+  };
+
+// ── StatCard ───────────────────────────────────────────────────────────────
+const StatCard: React.FC<{ label: string; value: string; accent?: string }> = ({ label, value, accent = 'text-white' }) => (
+  <div className="flex flex-col items-center justify-center bg-white/[0.03] rounded-lg border border-white/[0.07] py-2 px-1 gap-0.5">
+    <span className="text-[8px] text-white/30 uppercase tracking-[0.18em] leading-none">{label}</span>
+    <span className={`text-[13px] font-black tabular-nums leading-tight ${accent}`}>{value}</span>
+  </div>
+);
+
+// ── MiniChart ──────────────────────────────────────────────────────────────
+const MiniChart: React.FC<{
+  samples: number[];
+  color: string;
+  gradId: string;
+  empty?: React.ReactNode;
+}> = ({ samples, color, gradId, empty }) => (
+  <div className="flex-1 min-h-0 relative bg-black/25 rounded-xl border border-white/[0.06] overflow-hidden">
+    {(!samples.length || samples.every(v => v < 0)) && empty && (
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">{empty}</div>
+    )}
+    <ResponsiveContainer width="100%" height="100%">
+      <AreaChart data={samples.map(v => ({ v: v < 0 ? null : v }))} margin={{ top: 6, right: 6, bottom: 2, left: 6 }}>
+        <defs>
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"   stopColor={color} stopOpacity="0.45" />
+            <stop offset="100%" stopColor={color} stopOpacity="0.02" />
+          </linearGradient>
+        </defs>
+        <CartesianGrid strokeDasharray="3 6" vertical={false} stroke="rgba(255,255,255,0.04)" />
+        <YAxis hide domain={[0, 'auto']} />
+        <Tooltip content={<ChartTip />} cursor={{ stroke: 'rgba(255,255,255,0.1)', strokeWidth: 1 }} />
+        <Area type="monotone" dataKey="v" stroke={color} strokeWidth={1.5} fill={`url(#${gradId})`} dot={false} connectNulls={false} />
+      </AreaChart>
+    </ResponsiveContainer>
+  </div>
+);
+
+// ══════════════════════════════════════════════════════════════════════════
+const LogMonitorPage: React.FC = () => {
+  const topOffset   = useTopOffset();
+  const scrollRef   = useRef<HTMLDivElement>(null);
+  const runPingRef  = useRef<() => void>(() => {});
+  const runApiRef   = useRef<() => void>(() => {});
+
+  const today = () => new Date().toISOString().split('T')[0];
+
+  const [monitoredDate,   setMonitoredDate]   = useState(today);
+  const [logs,            setLogs]            = useState<LogEntry[]>(() => getLogsForDate(today()));
+  const [showNavLogs,     setShowNavLogs]     = useState(true);
+  const [filterType,      setFilterType]      = useState<'all' | 'positive' | 'negative' | 'neutral'>('all');
+
+  // Ping state
+  const [pingSamples,  setPingSamples]  = useState<number[]>([]);
+  const [lastPing,     setLastPing]     = useState<number | null>(null);
+
+  // API state — using VITE_BACKEND_URL correctly (plain-text /health endpoint)
+  const backendBase = import.meta.env.VITE_BACKEND_URL
+    ? import.meta.env.VITE_BACKEND_URL.replace(/\/$/, '')
+    : `${window.location.origin}`;
+  const [apiUrl,         setApiUrl]         = useState(`${backendBase}/health`);
+  const [apiSamples,     setApiSamples]     = useState<number[]>([]);
+  const [lastApiStatus,  setLastApiStatus]  = useState<number | null>(null);
+  const [lastApiSize,    setLastApiSize]    = useState<number | null>(null);
+  const [recentChecks,   setRecentChecks]   = useState<ApiCheck[]>([]);
+  const [apiChecking,    setApiChecking]    = useState(false);
+  const [pingChecking,   setPingChecking]   = useState(false);
+
+  // ── socket / logs ──────────────────────────────────────────────────────
   useEffect(() => {
-    const handleNewLog = ({ dateStr, logEntry }: { dateStr: string; logEntry: LogEntry }) => {
-      // Save into localstore for that date
-      try {
-        saveSingleLogFromServer(dateStr, logEntry);
-      } catch (_e) {}
-
-      // If we're currently viewing that date, append
-      if (dateStr === monitoredDate) {
-        setLogs(prev => [...prev, logEntry].slice(-100));
-      }
+    const handle = ({ dateStr, logEntry }: { dateStr: string; logEntry: LogEntry }) => {
+      try { saveSingleLogFromServer(dateStr, logEntry); } catch {}
+      if (dateStr === monitoredDate) setLogs(prev => [...prev, logEntry].slice(-LOG_LIMIT));
     };
-    socket.on('log_added', handleNewLog);
-    return () => void socket.off('log_added', handleNewLog);
-  }, []);
+    socket.on('log_added', handle);
+    return () => void socket.off('log_added', handle);
+  }, [monitoredDate]);
 
-  // Auto-scroll to bottom on new logs
+  useEffect(() => { setLogs(getLogsForDate(monitoredDate)); }, [monitoredDate]);
+
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [logs]);
 
-  // Reload logs when monitoredDate changes
+  // ── Ping ──────────────────────────────────────────────────────────────
   useEffect(() => {
-    setLogs(getLogsForDate(monitoredDate));
-  }, [monitoredDate]);
-
-  // Ping sampler
-  useEffect(() => {
-    let mounted = true;
-    const runPing = async () => {
-      const url = `${window.location.origin}/?__ping=${Date.now()}`;
+    let alive = true;
+    const run = async () => {
+      setPingChecking(true);
       const start = performance.now();
       try {
-        await fetch(url, { cache: 'no-store' });
+        await fetch(`${window.location.origin}/?__ping=${Date.now()}`, { cache: 'no-store' });
         const rtt = Math.max(0, Math.round(performance.now() - start));
-        if (!mounted) return;
+        if (!alive) return;
         setLastPing(rtt);
-        lastSuccessRef.current = Date.now();
-        setPingSamples(prev => [...prev, rtt].slice(-pingLimit));
-      } catch (_err) {
-        if (!mounted) return;
+        setPingSamples(p => [...p, rtt].slice(-PING_LIMIT));
+      } catch {
+        if (!alive) return;
         setLastPing(null);
-        setPingSamples(prev => [...prev, -1].slice(-pingLimit));
-      }
+        setPingSamples(p => [...p, -1].slice(-PING_LIMIT));
+      } finally { if (alive) setPingChecking(false); }
     };
-    runPingRef.current = runPing;
-    runPing();
-    const id = setInterval(runPing, 3000);
-    return () => {
-      mounted = false;
-      clearInterval(id);
-    };
+    runPingRef.current = run;
+    run();
+    const id = setInterval(run, PING_INTERVAL);
+    return () => { alive = false; clearInterval(id); };
   }, []);
 
-  // API checks
-  useEffect(() => {
-    let mounted = true;
-    const runApi = async () => {
-      if (!apiUrl) return;
-      const start = performance.now();
-      try {
-        const res = await fetch(apiUrl, { cache: 'no-store' });
-        const time = Math.max(0, Math.round(performance.now() - start));
-        let size = null;
-        let bodyText = '';
-        try {
-          bodyText = await res.text();
-          size = new Blob([bodyText]).size;
-        } catch (_e) {
-          size = null;
-        }
+  // ── API Health check — correctly handles plain-text "Backend is running" ──
+  const runApi = useCallback(async () => {
+    if (!apiUrl) return;
+    setApiChecking(true);
+    const start = performance.now();
+    try {
+      const res = await fetch(apiUrl, { cache: 'no-store' });
+      const time = Math.max(0, Math.round(performance.now() - start));
+      let size: number | null = null;
+      let body = '';
+      try { body = await res.text(); size = new Blob([body]).size; } catch {}
 
-        // If server returns HTML (likely index.html from frontend) treat as failure
-        const contentType = res.headers.get('content-type') || '';
-        const looksLikeHtml = contentType.includes('text/html') || /<html/i.test(bodyText);
+      // Health endpoint returns plain text "Backend is running" — that's a success
+      // Only flag as failure if non-2xx
+      const isHtml = (res.headers.get('content-type') || '').includes('text/html') && /<html/i.test(body);
+      const success = res.ok && !isHtml;
 
-        if (!mounted) return;
-
-        if (!res.ok || looksLikeHtml) {
-          // failure (non-2xx or HTML payload)
-          setLastApiStatus(res.status);
-          setLastApiSize(size);
-          setApiSamples(prev => [...prev, -1].slice(-apiLimit));
-          recentApiRef.current = [{ ts: Date.now(), status: res.status, time: null, size }, ...recentApiRef.current].slice(0, 12);
-        } else {
-          // success
-          setLastApiStatus(res.status);
-          setLastApiSize(size);
-          setApiSamples(prev => [...prev, time].slice(-apiLimit));
-          recentApiRef.current = [{ ts: Date.now(), status: res.status, time, size }, ...recentApiRef.current].slice(0, 12);
-        }
-      } catch (_err) {
-        if (!mounted) return;
-        setLastApiStatus(null);
-        setLastApiSize(null);
-        setApiSamples(prev => [...prev, -1].slice(-apiLimit));
-        recentApiRef.current = [{ ts: Date.now(), status: null, time: null, size: null }, ...recentApiRef.current].slice(0, 12);
+      setLastApiStatus(res.status);
+      setLastApiSize(size);
+      if (success) {
+        setApiSamples(p => [...p, time].slice(-API_LIMIT));
+        setRecentChecks(p => [{ ts: Date.now(), status: res.status, time, size }, ...p].slice(0, 15));
+      } else {
+        setApiSamples(p => [...p, -1].slice(-API_LIMIT));
+        setRecentChecks(p => [{ ts: Date.now(), status: res.status, time: null, size }, ...p].slice(0, 15));
       }
-    };
-    runApiRef.current = runApi;
-    runApi();
-    const id = setInterval(runApi, 5000);
-    return () => {
-      mounted = false;
-      clearInterval(id);
-    };
+    } catch {
+      setLastApiStatus(null); setLastApiSize(null);
+      setApiSamples(p => [...p, -1].slice(-API_LIMIT));
+      setRecentChecks(p => [{ ts: Date.now(), status: null, time: null, size: null }, ...p].slice(0, 15));
+    } finally { setApiChecking(false); }
   }, [apiUrl]);
 
-  // Derived API status helpers
-  const lastApiSample = apiSamples.length ? apiSamples[apiSamples.length - 1] : null;
-  const apiIsOnline = lastApiSample !== null && lastApiSample >= 0;
-  const apiHasData = apiSamples.length > 0;
-  const pingLoss = pingSamples.length
-    ? Math.round((pingSamples.filter(n => n < 0).length / pingSamples.length) * 100)
-    : null;
+  useEffect(() => {
+    runApiRef.current = runApi;
+    runApi();
+    const id = setInterval(runApi, API_INTERVAL);
+    return () => clearInterval(id);
+  }, [runApi]);
+
+  // ── Derived ───────────────────────────────────────────────────────────
+  const lastApiSample = apiSamples.at(-1) ?? null;
+  const apiOnline     = lastApiSample !== null && lastApiSample >= 0;
+  const apiHasData    = apiSamples.length > 0;
+  const goodN         = safeN(pingSamples);
+  const pingLoss      = pingSamples.length ? Math.round((pingSamples.filter(v => v < 0).length / pingSamples.length) * 100) : null;
+  const jitterVal     = goodN.length < 2 ? null : Math.round(safeN(goodN.slice(1).map((v, i) => Math.abs(v - goodN[i]))).reduce((a, b) => a + b, 0) / (goodN.length - 1));
+
+  const visibleLogs = logs
+    .filter(l => showNavLogs || (!/navigate/i.test(l.action) && !/visited/i.test(l.details)))
+    .filter(l => filterType === 'all' || l.type === filterType);
+
+  const connectedAt = socket.connected ? new Date().toLocaleTimeString() : '—';
 
   return (
     <div
-      className="fixed left-0 right-0 bottom-0 bg-[#0a0e27] text-white font-mono flex flex-col overflow-hidden select-none"
-      style={{ top: `${topOffset}px` }}
+      className="fixed left-0 right-0 bottom-0 flex flex-col overflow-hidden select-none"
+      style={{
+        top: `${topOffset}px`,
+        background: 'linear-gradient(160deg, #0b0f1e 0%, #0d1228 60%, #0a0e1a 100%)',
+        fontFamily: "'JetBrains Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace",
+      }}
     >
-      {/* ── Top Status Bar ── */}
-      <div className="bg-white text-[#0a0e27] px-5 py-2.5 flex justify-between items-center shrink-0 border-b border-slate-200">
-        <div className="flex items-center gap-3">
-          <Terminal size={15} className="animate-pulse text-[#0a0e27]" />
-          <h1 className="text-[10px] font-black uppercase tracking-[0.3em]">System Event Monitor v4.0</h1>
-        </div>
-        <div className="flex items-center gap-3 text-[9px] font-black uppercase tracking-widest">
-          {/* Socket status */}
-          <div className={`flex items-center gap-1.5 px-2 py-1 rounded ${socket.connected ? 'bg-emerald-50' : 'bg-red-50'}`}>
-            <div className={`w-1.5 h-1.5 rounded-full ${socket.connected ? 'bg-emerald-500 animate-pulse' : 'bg-red-400'}`} />
-            <span className={socket.connected ? 'text-emerald-700' : 'text-red-600'}>
-              Link: {socket.connected ? 'OK' : 'LOST'}
-            </span>
+      {/* ═══ TOPBAR ═══════════════════════════════════════════════════════ */}
+      <div className="shrink-0 h-11 border-b border-white/[0.08] flex items-center justify-between px-5 bg-white/[0.02]">
+        {/* Left */}
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-lg bg-[#00ADB5]/20 border border-[#00ADB5]/40 flex items-center justify-center shadow-[0_0_12px_rgba(0,173,181,0.2)]">
+              <Terminal size={13} className="text-[#00ADB5]" />
+            </div>
+            <div className="leading-none">
+              <p className="text-[9px] text-white/30 tracking-[0.25em] uppercase">Queue Tracker</p>
+              <p className="text-[11px] font-black text-white tracking-widest uppercase">System Monitor</p>
+            </div>
           </div>
-          {/* Live badge */}
-          <span className="px-2.5 py-1 border border-slate-300 rounded bg-white text-[#0a0e27] tracking-[0.2em] text-[8px]">LIVE</span>
+
+          <div className="w-px h-6 bg-white/10" />
+
+          {/* Live pulse */}
+          <div className="flex items-center gap-1.5">
+            <div className="relative w-2 h-2">
+              <div className="absolute inset-0 rounded-full bg-emerald-400 animate-ping opacity-40" />
+              <div className="w-2 h-2 rounded-full bg-emerald-400" />
+            </div>
+            <span className="text-[9px] font-bold text-emerald-400 tracking-[0.2em] uppercase">Live</span>
+          </div>
+
+          {/* Socket */}
+          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[9px] font-bold tracking-wider ${
+            socket.connected
+              ? 'bg-[#00ADB5]/10 border-[#00ADB5]/25 text-[#00ADB5]'
+              : 'bg-red-500/10 border-red-500/25 text-red-400'
+          }`}>
+            <Radio size={9} className={socket.connected ? '' : 'animate-pulse'} />
+            {socket.connected ? `SOCKET · ${socket.id?.slice(0, 6).toUpperCase()}` : 'SOCKET LOST'}
+          </div>
+        </div>
+
+        {/* Right */}
+        <div className="flex items-center gap-2.5">
           {/* Date picker */}
-          <div className="flex items-center gap-2">
-            <label className="text-[9px] text-slate-400 uppercase tracking-widest">Logs Date</label>
+          <div className="flex items-center gap-2 bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 h-7">
+            <Clock size={10} className="text-white/30" />
             <input
-              type="date"
-              value={monitoredDate}
-              onChange={(e) => setMonitoredDate(e.target.value)}
-              className="bg-slate-50 px-2 py-1 text-[10px] rounded border border-slate-300 text-[#0a0e27]"
-              style={{ WebkitTextFillColor: '#0a0e27', color: '#0a0e27' }}
+              type="date" value={monitoredDate}
+              onChange={e => setMonitoredDate(e.target.value)}
+              className="bg-transparent text-[10px] text-white/70 outline-none cursor-pointer w-28"
+              style={{ colorScheme: 'dark' }}
             />
           </div>
-          {/* Nav logs toggle — clean pill */}
-          <button
-            onClick={() => setShowNavLogs(s => !s)}
-            title="Toggle navigation log entries"
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[9px] font-black uppercase tracking-wider transition-colors ${
-              showNavLogs
-                ? 'bg-slate-100 border-slate-300 text-slate-600'
-                : 'bg-[#0a0e27] border-[#0a0e27] text-white'
-            }`}
-          >
-            {showNavLogs ? 'Hide Nav Logs' : 'Nav Logs Hidden'}
+
+          {/* Filter */}
+          <div className="flex items-center gap-1 bg-white/[0.04] border border-white/[0.08] rounded-lg px-1 h-7">
+            <Filter size={9} className="text-white/30 ml-1" />
+            {(['all', 'positive', 'negative', 'neutral'] as const).map(t => (
+              <button key={t} onClick={() => setFilterType(t)}
+                className={`px-2 h-5 rounded text-[8px] font-bold uppercase tracking-wider transition-all ${
+                  filterType === t
+                    ? t === 'positive' ? 'bg-emerald-500/20 text-emerald-400'
+                    : t === 'negative' ? 'bg-red-500/20 text-red-400'
+                    : t === 'neutral'  ? 'bg-white/10 text-white/60'
+                    : 'bg-white/10 text-white/70'
+                    : 'text-white/25 hover:text-white/50'
+                }`}>
+                {t === 'all' ? 'All' : t === 'positive' ? '✓' : t === 'negative' ? '✗' : '○'}
+              </button>
+            ))}
+          </div>
+
+          {/* Nav toggle */}
+          <button onClick={() => setShowNavLogs(s => !s)}
+            className={`px-3 h-7 rounded-lg border text-[9px] font-bold tracking-wider transition-all ${
+              showNavLogs ? 'bg-white/[0.04] border-white/[0.08] text-white/40 hover:text-white/70'
+                         : 'bg-[#00ADB5]/10 border-[#00ADB5]/25 text-[#00ADB5]'
+            }`}>
+            {showNavLogs ? 'Hide Nav' : 'Nav Hidden'}
           </button>
         </div>
       </div>
 
-      {/* ── Main: logs left, diagnostics right ── */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left: Logs */}
-        <div
-          ref={scrollRef}
-          className="w-1/2 overflow-y-auto p-5 space-y-1 custom-scrollbar-dark text-[11px] bg-[#0a0e27]"
-        >
-          {logs.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center opacity-20 gap-4">
-              <Shield size={48} strokeWidth={1} />
-              <p className="text-xs font-black uppercase tracking-[0.5em] animate-pulse">Awaiting Data...</p>
+      {/* ═══ BODY ═════════════════════════════════════════════════════════ */}
+      <div className="flex-1 min-h-0 flex overflow-hidden">
+
+        {/* ── LEFT: Event Log (58%) ──────────────────────────────────────── */}
+        <div className="flex flex-col border-r border-white/[0.07]" style={{ width: '58%' }}>
+
+          {/* Sub-header */}
+          <div className="shrink-0 h-8 border-b border-white/[0.06] flex items-center justify-between px-4 bg-white/[0.015]">
+            <div className="flex items-center gap-2">
+              <Database size={10} className="text-white/30" />
+              <span className="text-[9px] font-bold text-white/35 tracking-[0.2em] uppercase">Event Stream</span>
             </div>
-          ) : (
-            (() => {
-              const visibleLogs = showNavLogs
-                ? logs
-                : logs.filter(l => !/navigate/i.test(l.action) && !/visited/i.test(l.details));
-              return visibleLogs.map((log, i) => (
-                <div key={i} className="flex gap-3 px-1 py-0.5 group hover:bg-white/[0.03] rounded">
-                  <span className="text-slate-500 shrink-0 select-none">[{log.timestamp}]</span>
-                  <span className="text-slate-300 shrink-0 font-bold">[{log.user}]</span>
-                  <span className={`shrink-0 font-black uppercase tracking-wider ${
-                    log.type === 'positive' ? 'text-emerald-400' :
-                    log.type === 'negative' ? 'text-red-400' :
-                    'text-slate-300'
-                  }`}>{log.action}:</span>
-                  <span className={`break-all font-medium ${
-                    log.type === 'positive' ? 'text-emerald-300' :
-                    log.type === 'negative' ? 'text-red-300' :
-                    'text-white/80'
+            <div className="flex items-center gap-3">
+              <span className="text-[8px] text-white/20 tabular-nums">{visibleLogs.length} events</span>
+              <div className="flex gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400/60" title="Positive" />
+                <span className="w-1.5 h-1.5 rounded-full bg-red-400/60" title="Negative" />
+                <span className="w-1.5 h-1.5 rounded-full bg-white/20" title="Neutral" />
+              </div>
+            </div>
+          </div>
+
+          {/* Entries */}
+          <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto py-1 custom-scrollbar-dark">
+            {visibleLogs.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center gap-3">
+                <Shield size={36} strokeWidth={1} className="text-white/10" />
+                <p className="text-[9px] font-bold uppercase tracking-[0.4em] text-white/15 animate-pulse">No Events</p>
+              </div>
+            ) : visibleLogs.map((log, i) => {
+              const pos = log.type === 'positive';
+              const neg = log.type === 'negative';
+              return (
+                <div key={i} className={`
+                  flex items-center gap-0 text-[10px] mx-2 my-[1px] rounded-md px-2 py-[3px]
+                  hover:bg-white/[0.03] transition-colors cursor-default
+                  border-l-2 ${pos ? 'border-emerald-400/50' : neg ? 'border-red-400/50' : 'border-white/[0.08]'}
+                `}>
+                  <span className="text-white/20 shrink-0 w-[76px] tabular-nums text-[8.5px]">{log.timestamp}</span>
+                  <span className="text-[#00ADB5]/60 shrink-0 font-bold w-[88px] truncate text-[8.5px]">{log.user}</span>
+                  <span className={`shrink-0 font-black uppercase text-[8.5px] w-[108px] truncate ${
+                    pos ? 'text-emerald-400' : neg ? 'text-red-400' : 'text-white/40'
+                  }`}>{log.action}</span>
+                  <span className={`flex-1 truncate text-[9.5px] ${
+                    pos ? 'text-emerald-300/70' : neg ? 'text-red-300/70' : 'text-white/50'
                   }`}>{log.details}</span>
                 </div>
-              ));
-            })()
-          )}
+              );
+            })}
+          </div>
         </div>
 
-        {/* Right: Ping + API */}
-        <div className="w-1/2 flex flex-col border-l border-slate-700/60 bg-[#0d1230]">
+        {/* ── RIGHT: Diagnostics (42%) ───────────────────────────────────── */}
+        <div className="flex flex-col" style={{ width: '42%' }}>
 
-          {/* ── PING PANEL ── */}
-          <div className="flex flex-col gap-3 p-4 border-b border-slate-700/60" style={{ flex: '1 1 0' }}>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <Wifi size={15} className="text-[#00ADB5]" />
-                <div className="leading-tight">
-                  <h3 className="text-[13px] font-semibold text-white">Ping</h3>
-                  <p className="text-[10px] text-slate-500">Realtime network round-trip time</p>
+          {/* ┌─ PING PANEL ─────────────────────────────────────────────── */}
+          <div className="flex-1 min-h-0 flex flex-col border-b border-white/[0.07] p-3 gap-2">
+            {/* Header */}
+            <div className="shrink-0 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-md bg-[#00ADB5]/15 border border-[#00ADB5]/25 flex items-center justify-center">
+                  <Wifi size={11} className="text-[#00ADB5]" />
+                </div>
+                <div className="leading-none">
+                  <p className="text-[11px] font-black text-white/90">Network Latency</p>
+                  <p className="text-[8px] text-white/25 tracking-widest">Frontend round-trip ping</p>
                 </div>
                 {pingLoss !== null && pingLoss > 10 && (
-                  <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-[9px] text-amber-400 font-bold">
-                    <AlertCircle size={9} /> {pingLoss}% LOSS
+                  <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-[8px] text-amber-400 font-bold">
+                    <AlertCircle size={8} />{pingLoss}% LOSS
                   </span>
                 )}
               </div>
-              <button
-                onClick={() => runPingRef.current()}
-                className="px-2.5 py-1 bg-white/5 hover:bg-white/10 border border-white/10 rounded text-[10px] text-slate-300 transition-colors"
-              >
-                Ping Now
+              <button onClick={() => runPingRef.current()}
+                disabled={pingChecking}
+                className="flex items-center gap-1.5 px-2.5 py-1 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] rounded-lg text-[9px] text-white/50 hover:text-white/80 transition-all disabled:opacity-40">
+                <RefreshCw size={9} className={pingChecking ? 'animate-spin' : ''} />Ping
               </button>
             </div>
 
             {/* Stats grid */}
-            <div className="grid grid-cols-3 grid-rows-2 gap-x-4 gap-y-1.5">
-              {[
-                { label: 'Last', value: lastPing !== null ? `${lastPing} ms` : '—' },
-                { label: 'Avg', value: (() => { const n = pingSamples.filter(v => v >= 0); return n.length ? `${Math.round(n.reduce((a,b) => a+b,0)/n.length)} ms` : '—'; })() },
-                { label: 'Min', value: (() => { const n = pingSamples.filter(v => v >= 0); return n.length ? `${Math.min(...n)} ms` : '—'; })() },
-                { label: 'Max', value: (() => { const n = pingSamples.filter(v => v >= 0); return n.length ? `${Math.max(...n)} ms` : '—'; })() },
-                { label: 'Loss', value: pingLoss !== null ? `${pingLoss}%` : '—' },
-                { label: 'Jitter', value: (() => { const n = pingSamples.filter(v => v >= 0); if (n.length < 2) return '—'; const d = n.slice(1).map((v,i) => Math.abs(v - n[i])); return `${Math.round(d.reduce((a,b) => a+b,0)/d.length)} ms`; })() },
-              ].map(({ label, value }) => (
-                <div key={label} className="flex items-center justify-between py-0.5">
-                  <span className="text-[10px] text-slate-500 uppercase">{label}</span>
-                  <span className="text-[12px] font-semibold text-white tabular-nums">{value}</span>
-                </div>
-              ))}
+            <div className="shrink-0 grid grid-cols-6 gap-1.5">
+              <StatCard label="Last"   value={lastPing !== null ? `${lastPing}ms` : '—'} accent={lastPing !== null && lastPing > 200 ? 'text-amber-400' : 'text-white'} />
+              <StatCard label="Avg"    value={avg(goodN) !== null ? `${avg(goodN)}ms` : '—'} />
+              <StatCard label="Min"    value={goodN.length ? `${Math.min(...goodN)}ms` : '—'} accent="text-emerald-400" />
+              <StatCard label="Max"    value={goodN.length ? `${Math.max(...goodN)}ms` : '—'} accent="text-red-400" />
+              <StatCard label="Loss"   value={pingLoss !== null ? `${pingLoss}%` : '—'} accent={pingLoss !== null && pingLoss > 5 ? 'text-amber-400' : 'text-white'} />
+              <StatCard label="Jitter" value={jitterVal !== null ? `${jitterVal}ms` : '—'} />
             </div>
 
-            {/* Ping chart — dark background */}
-            <div className="flex-1 min-h-0 bg-[#0a0e27] rounded border border-slate-700/50 flex relative p-2">
-              <div className="w-10 flex flex-col justify-between text-right py-1 pr-1 shrink-0">
-                {[...Array(4)].map((_, i) => {
-                  const maxVal = Math.max(1, ...pingSamples.filter(n => n >= 0), 100);
-                  const label = i === 0 ? maxVal : i === 1 ? Math.round(maxVal * 0.66) : i === 2 ? Math.round(maxVal * 0.33) : 0;
-                  return (
-                    <span key={i} className="text-[9px] text-slate-600 font-semibold h-0 flex items-end justify-end leading-none">
-                      {label}
-                    </span>
-                  );
-                })}
-              </div>
-              <div className="flex-1">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={pingSamples.map(val => ({ value: val < 0 ? null : val }))} margin={{ top: 4, right: 4, bottom: 4, left: 0 }}>
-                    <defs>
-                      <linearGradient id="pingGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#00ADB5" stopOpacity="0.35" />
-                        <stop offset="100%" stopColor="#00ADB5" stopOpacity="0.03" />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="0" vertical={false} stroke="#1e2a4a" />
-                    <YAxis hide={true} />
-                    <Area type="monotone" dataKey="value" stroke="#00ADB5" strokeWidth={1.5} fill="url(#pingGrad)" dot={false} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
+            {/* Chart */}
+            <MiniChart
+              samples={pingSamples} color="#00ADB5" gradId="pingG"
+              empty={<span className="text-[9px] text-white/15 uppercase tracking-widest">Sampling…</span>}
+            />
 
-            <div className="flex justify-between text-[10px] text-slate-600">
-              <span>Failures: {pingSamples.filter(n => n < 0).length}</span>
-              <span>Samples: {pingSamples.length}</span>
+            <div className="shrink-0 flex justify-between text-[8px] text-white/15">
+              <span>Failures: {pingSamples.filter(v => v < 0).length}</span>
+              <span>Samples: {pingSamples.length} / {PING_LIMIT}</span>
             </div>
           </div>
 
-          {/* ── API PANEL ── */}
-          <div className="flex flex-col gap-3 p-4" style={{ flex: '1 1 0' }}>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <Activity size={15} className={apiIsOnline ? 'text-emerald-400' : apiHasData ? 'text-red-400' : 'text-slate-500'} />
-                <div className="leading-tight">
+          {/* ┌─ API HEALTH PANEL ───────────────────────────────────────── */}
+          <div className="flex-1 min-h-0 flex flex-col p-3 gap-2">
+            {/* Header */}
+            <div className="shrink-0 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className={`w-6 h-6 rounded-md border flex items-center justify-center ${
+                  !apiHasData ? 'bg-white/5 border-white/10'
+                  : apiOnline  ? 'bg-emerald-500/15 border-emerald-500/30'
+                               : 'bg-red-500/15 border-red-500/30'
+                }`}>
+                  <Server size={11} className={!apiHasData ? 'text-white/30' : apiOnline ? 'text-emerald-400' : 'text-red-400'} />
+                </div>
+                <div className="leading-none">
                   <div className="flex items-center gap-2">
-                    <h3 className="text-[13px] font-semibold text-white">API Checks</h3>
-                    {/* Status badge — the key visual improvement */}
-                    {!apiHasData ? null : apiIsOnline ? (
-                      <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-[9px] text-emerald-400 font-bold">
-                        <CheckCircle2 size={9} /> ONLINE
-                      </span>
-                    ) : (
-                      <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-500/15 border border-red-500/30 text-[9px] text-red-400 font-bold">
-                        <XCircle size={9} /> OFFLINE
-                      </span>
-                    )}
+                    <p className="text-[11px] font-black text-white/90">API Health</p>
+                    <Pill ok={!apiHasData ? null : apiOnline} labelOk="ONLINE" labelFail="OFFLINE" />
                   </div>
-                  <p className="text-[10px] text-slate-500">Health endpoint monitoring</p>
+                  <p className="text-[8px] text-white/25 tracking-widest">Backend /health endpoint</p>
                 </div>
               </div>
-              <div className="flex gap-1.5 items-center">
-                <input
-                  value={apiUrl}
-                  onChange={e => setApiUrl(e.target.value)}
-                  className="bg-white/5 px-2 py-1 text-[10px] rounded w-44 border border-slate-700/60 text-slate-300 placeholder-slate-600 focus:outline-none focus:border-slate-500"
-                  placeholder="Health URL"
-                />
-                <button
-                  onClick={() => runApiRef.current()}
-                  className="px-2.5 py-1 bg-white/5 hover:bg-white/10 border border-white/10 rounded text-[10px] text-slate-300 transition-colors"
-                >
-                  Check
-                </button>
+              <button onClick={runApi} disabled={apiChecking}
+                className="flex items-center gap-1.5 px-2.5 py-1 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] rounded-lg text-[9px] text-white/50 hover:text-white/80 transition-all disabled:opacity-40">
+                <RefreshCw size={9} className={apiChecking ? 'animate-spin' : ''} />Check
+              </button>
+            </div>
+
+            {/* URL input */}
+            <div className="shrink-0 flex items-center gap-1.5 bg-black/20 border border-white/[0.07] rounded-lg px-2 h-7">
+              <Activity size={9} className="text-white/20 shrink-0" />
+              <input
+                value={apiUrl} onChange={e => setApiUrl(e.target.value)}
+                className="flex-1 bg-transparent text-[9px] text-white/60 outline-none placeholder-white/15"
+                placeholder="https://your-backend/health"
+              />
+            </div>
+
+            {/* Stats grid */}
+            <div className="shrink-0 grid grid-cols-3 gap-1.5">
+              <StatCard
+                label="HTTP Status"
+                value={!apiHasData ? '—' : lastApiStatus === null ? 'No resp' : String(lastApiStatus)}
+                accent={apiHasData && lastApiStatus !== null && lastApiStatus >= 200 && lastApiStatus < 300 ? 'text-emerald-400' : apiHasData ? 'text-red-400' : 'text-white'}
+              />
+              <StatCard
+                label="Last RTT"
+                value={!apiHasData ? '—' : lastApiSample !== null && lastApiSample >= 0 ? `${lastApiSample}ms` : 'Timeout'}
+              />
+              <StatCard
+                label="Payload"
+                value={lastApiSize !== null ? `${lastApiSize}B` : '—'}
+              />
+            </div>
+
+            {/* Chart */}
+            <MiniChart
+              samples={apiSamples} color={apiOnline ? '#10b981' : '#ef4444'} gradId="apiG"
+              empty={<span className="text-[9px] text-white/15 uppercase tracking-widest">Awaiting first check…</span>}
+            />
+
+            {/* Recent checks table */}
+            <div className="shrink-0">
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-[8px] text-white/20 uppercase tracking-[0.2em]">Recent Checks</p>
+                <p className="text-[8px] text-white/15 tabular-nums">{recentChecks.length} logged</p>
               </div>
-            </div>
-
-            {/* Stats: show clean values, never raw ERR */}
-            <div className="grid grid-cols-3 gap-x-4 gap-y-1.5">
-              {[
-                {
-                  label: 'Status',
-                  value: !apiHasData ? '—'
-                    : lastApiStatus === null ? 'No response'
-                    : String(lastApiStatus),
-                  highlight: apiHasData && lastApiStatus !== null && lastApiStatus >= 200 && lastApiStatus < 300
-                    ? 'ok' : apiHasData ? 'err' : 'none',
-                },
-                {
-                  label: 'Last RTT',
-                  value: !apiHasData ? '—'
-                    : lastApiSample !== null && lastApiSample >= 0 ? `${lastApiSample} ms`
-                    : 'Timed out',
-                  highlight: 'none',
-                },
-                {
-                  label: 'Size',
-                  value: lastApiSize !== null ? `${lastApiSize} B` : '—',
-                  highlight: 'none',
-                },
-              ].map(({ label, value, highlight }) => (
-                <div key={label} className="flex items-center justify-between py-0.5">
-                  <span className="text-[10px] text-slate-500 uppercase">{label}</span>
-                  <span className={`text-[12px] font-semibold tabular-nums ${
-                    highlight === 'ok' ? 'text-emerald-400' :
-                    highlight === 'err' ? 'text-red-400' :
-                    'text-white'
-                  }`}>{value}</span>
-                </div>
-              ))}
-            </div>
-
-            {/* API chart — dark background, red stroke when failing */}
-            <div className="flex-1 min-h-0 bg-[#0a0e27] rounded border border-slate-700/50 flex relative p-2">
-              {!apiHasData && (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-[10px] text-slate-600 uppercase tracking-widest">Awaiting first check…</span>
-                </div>
-              )}
-              {apiHasData && !apiIsOnline && (
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <span className="flex items-center gap-1.5 text-[10px] text-red-400/60 uppercase tracking-widest">
-                    <XCircle size={12} /> Backend unreachable
-                  </span>
-                </div>
-              )}
-              <div className="w-10 flex flex-col justify-between text-right py-1 pr-1 shrink-0">
-                {[...Array(3)].map((_, i) => {
-                  const maxVal = Math.max(1, ...apiSamples.filter(n => n >= 0), 200);
-                  const label = i === 0 ? maxVal : i === 1 ? Math.round(maxVal * 0.5) : 0;
+              <div className="space-y-[2px]">
+                {recentChecks.length === 0 ? (
+                  <p className="text-[8px] text-white/15 italic">No checks yet…</p>
+                ) : recentChecks.slice(0, 6).map((r, i) => {
+                  const ok = r.status !== null && r.status >= 200 && r.status < 300;
                   return (
-                    <span key={i} className="text-[9px] text-slate-600 font-semibold h-0 flex items-end justify-end leading-none">
-                      {label}
-                    </span>
+                    <div key={i} className={`flex items-center gap-2 px-2 py-[2px] rounded text-[8.5px] ${
+                      ok ? 'bg-emerald-500/5' : 'bg-red-500/5'
+                    }`}>
+                      {ok
+                        ? <CheckCircle2 size={9} className="text-emerald-400 shrink-0" />
+                        : r.status ? <AlertCircle size={9} className="text-amber-400 shrink-0" />
+                        : <XCircle size={9} className="text-red-400 shrink-0" />
+                      }
+                      <span className="text-white/20 tabular-nums w-[72px] shrink-0">{new Date(r.ts).toLocaleTimeString()}</span>
+                      <span className={`font-black tabular-nums w-8 shrink-0 ${ok ? 'text-emerald-400' : r.status ? 'text-amber-400' : 'text-red-400'}`}>
+                        {r.status ?? 'ERR'}
+                      </span>
+                      {r.time !== null && <span className="text-white/30 tabular-nums">{r.time}ms</span>}
+                      {r.size !== null && <span className="text-white/15 tabular-nums ml-auto">{r.size}B</span>}
+                    </div>
                   );
                 })}
-              </div>
-              <div className="flex-1">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={apiSamples.map(val => ({ value: val < 0 ? null : val }))} margin={{ top: 4, right: 4, bottom: 4, left: 0 }}>
-                    <defs>
-                      <linearGradient id="apiGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor={apiIsOnline ? '#10b981' : '#ef4444'} stopOpacity="0.28" />
-                        <stop offset="100%" stopColor={apiIsOnline ? '#10b981' : '#ef4444'} stopOpacity="0.03" />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="0" vertical={false} stroke="#1e2a4a" />
-                    <YAxis hide={true} />
-                    <Area
-                      type="monotone"
-                      dataKey="value"
-                      stroke={apiIsOnline ? '#10b981' : '#ef4444'}
-                      strokeWidth={1.5}
-                      fill="url(#apiGrad)"
-                      dot={false}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* Recent checks — pill-style, no raw ERR text */}
-            <div className="shrink-0">
-              <p className="text-[9px] text-slate-500 uppercase tracking-widest mb-1.5">Recent Checks</p>
-              <div className="space-y-1">
-                {recentApiRef.current.length === 0 ? (
-                  <p className="text-[10px] text-slate-600">No checks yet</p>
-                ) : (
-                  recentApiRef.current.slice(0, 4).map((r, idx) => {
-                    const isOk = r.status !== null && r.status >= 200 && r.status < 300;
-                    const isWarn = r.status !== null && !isOk;
-                    return (
-                      <div key={idx} className="flex items-center gap-2">
-                        {isOk
-                          ? <CheckCircle2 size={10} className="text-emerald-400 shrink-0" />
-                          : isWarn
-                          ? <AlertCircle size={10} className="text-amber-400 shrink-0" />
-                          : <XCircle size={10} className="text-red-400 shrink-0" />
-                        }
-                        <span className="text-[10px] text-slate-500 tabular-nums">{new Date(r.ts).toLocaleTimeString()}</span>
-                        <span className={`text-[10px] font-semibold tabular-nums ${isOk ? 'text-emerald-400' : isWarn ? 'text-amber-400' : 'text-red-400'}`}>
-                          {r.status !== null ? r.status : 'No response'}
-                        </span>
-                        {r.time !== null && <span className="text-[10px] text-slate-600">{r.time}ms</span>}
-                        {r.size ? <span className="text-[10px] text-slate-600">{r.size}B</span> : null}
-                      </div>
-                    );
-                  })
-                )}
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* ── Footer ── */}
-      <div className="bg-white text-[#0a0e27] border-t border-slate-200 px-5 py-2 flex justify-between items-center shrink-0">
-        <div className="flex gap-5">
-          <div className="space-y-0.5">
-            <p className="text-[7px] text-slate-400 font-black uppercase tracking-widest">Uplink ID</p>
-            <p className="text-[9px] font-black">{socket.id?.slice(0, 12).toUpperCase() || 'OFFLINE'}</p>
+      {/* ═══ FOOTER ═══════════════════════════════════════════════════════ */}
+      <div className="shrink-0 h-8 border-t border-white/[0.06] bg-black/20 flex items-center justify-between px-5">
+        <div className="flex items-center gap-5 text-[8.5px]">
+          <div className="flex items-center gap-1.5">
+            <div className="w-1 h-1 rounded-full bg-white/20" />
+            <span className="text-white/20 uppercase tracking-widest">Uplink</span>
+            <span className="text-white/50 font-bold tabular-nums">{socket.id?.slice(0, 14).toUpperCase() || 'OFFLINE'}</span>
           </div>
-          <div className="space-y-0.5">
-            <p className="text-[7px] text-slate-400 font-black uppercase tracking-widest">Buffer</p>
-            <p className="text-[9px] font-black">{logs.length}/100</p>
+          <div className="flex items-center gap-1.5">
+            <div className="w-1 h-1 rounded-full bg-white/20" />
+            <span className="text-white/20 uppercase tracking-widest">Buffer</span>
+            <span className="text-white/50 font-bold tabular-nums">{logs.length}/{LOG_LIMIT}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-1 h-1 rounded-full bg-white/20" />
+            <span className="text-white/20 uppercase tracking-widest">Ping every</span>
+            <span className="text-white/50 font-bold">{PING_INTERVAL / 1000}s</span>
           </div>
         </div>
-        <div className="flex items-center gap-2 opacity-50">
-          <Zap size={9} className="text-[#00ADB5]" />
-          <p className="text-[8px] font-black uppercase tracking-widest text-slate-500">Classified Access Only</p>
+
+        {/* Credit */}
+        <div className="flex items-center gap-2">
+          <Zap size={8} className="text-[#00ADB5]/50" />
+          <span className="text-[8.5px] text-white/25 tracking-widest">
+            Designed &amp; developed with{' '}
+            <span className="text-[#00ADB5]/70 font-bold">Shubham Kumar</span>
+          </span>
         </div>
       </div>
 
       <style>{`
-        .custom-scrollbar-dark::-webkit-scrollbar { width: 5px; }
+        .custom-scrollbar-dark::-webkit-scrollbar { width: 3px; }
         .custom-scrollbar-dark::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar-dark::-webkit-scrollbar-thumb { background: #2d3a5e; border-radius: 0; }
-        .custom-scrollbar-dark::-webkit-scrollbar-thumb:hover { background: #3d4e78; }
+        .custom-scrollbar-dark::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.07); border-radius: 2px; }
+        .custom-scrollbar-dark::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.14); }
       `}</style>
     </div>
   );
