@@ -7,7 +7,6 @@ import { addLog, saveLogsFromServer, saveSingleLogFromServer } from '../utils/lo
 import { socket, syncData } from '../utils/socket';
 import { addLogForDate } from '../utils/logger';
 import { useRole } from '../auth/RoleContext';
-import PermissionDeniedModal from '../components/PermissionDeniedModal';
 import {
   DndContext, closestCenter, KeyboardSensor, PointerSensor,
   useSensor, useSensors, DragOverlay, useDroppable,
@@ -212,7 +211,6 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
   const [importStatus, setImportStatus] = useState<ImportFeedback | null>(null);
   const [isImportingRoster, setIsImportingRoster] = useState(false);
   const [times, setTimes] = useState({ ist: '', uk: '' });
-  const [permissionDenied, setPermissionDenied] = useState<{ isOpen: boolean; action: string }>({ isOpen: false, action: '' });
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Screenshot import state
@@ -794,14 +792,10 @@ Rules:
 
               {/* Import button - restricted */}
               {!actions.editRoster ? (
-                <button
-                  onClick={() => setPermissionDenied({ isOpen: true, action: 'Import Roster' })}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg bg-rose-50 border border-rose-200 text-rose-500 hover:bg-rose-100 text-[10px] font-black uppercase tracking-widest shadow-sm cursor-not-allowed transition-all"
-                  title="Access Restricted"
-                >
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-rose-50 border border-rose-200 text-rose-500 text-[10px] font-black uppercase tracking-widest shadow-sm opacity-60 cursor-not-allowed" title="Access Restricted">
                   <Lock size={13} />
                   <span className="hidden sm:inline">Import</span>
-                </button>
+                </div>
               ) : (
                 <button
                   onClick={() => fileInputRef.current?.click()}
@@ -816,14 +810,10 @@ Rules:
 
               {/* AI Scan button - restricted */}
               {!actions.editRoster ? (
-                <button
-                  onClick={() => setPermissionDenied({ isOpen: true, action: 'AI Roster Scan' })}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg bg-rose-50 border border-rose-200 text-rose-500 hover:bg-rose-100 text-[10px] font-black uppercase tracking-widest shadow-sm cursor-not-allowed transition-all"
-                  title="Access Restricted"
-                >
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-rose-50 border border-rose-200 text-rose-500 text-[10px] font-black uppercase tracking-widest shadow-sm opacity-60 cursor-not-allowed" title="Access Restricted">
                   <Lock size={13} />
                   <span className="hidden sm:inline">AI Scan</span>
-                </button>
+                </div>
               ) : (
                 <button
                   onClick={() => screenshotInputRef.current?.click()}
@@ -838,14 +828,10 @@ Rules:
 
               {/* Register button - restricted */}
               {!actions.editHandlers ? (
-                <button
-                  onClick={() => setPermissionDenied({ isOpen: true, action: 'Register Agent' })}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-rose-50 border border-rose-200 text-rose-500 hover:bg-rose-100 text-[10px] font-black uppercase tracking-widest shadow-sm cursor-not-allowed transition-all"
-                  title="Access Restricted"
-                >
+                <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-rose-50 border border-rose-200 text-rose-500 text-[10px] font-black uppercase tracking-widest shadow-sm opacity-60 cursor-not-allowed" title="Access Restricted">
                   <Lock size={13} />
                   <span className="hidden sm:inline">Register</span>
-                </button>
+                </div>
               ) : (
                 <button
                   onClick={() => setIsModalOpen(true)}
@@ -1020,12 +1006,6 @@ Rules:
         </div>
       )}
 
-      {/* Permission Denied Modal */}
-      <PermissionDeniedModal
-        isOpen={permissionDenied.isOpen}
-        onClose={() => setPermissionDenied({ isOpen: false, action: '' })}
-        action={permissionDenied.action}
-      />
 
       {/* Register Agent Modal */}
       {isModalOpen && (
