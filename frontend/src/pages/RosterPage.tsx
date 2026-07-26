@@ -813,10 +813,18 @@ Rules:
   const totalOnShift = shiftOnlyShifts.reduce((acc, s) => acc + getHandlersForShift(s).length, 0);
   const totalOffDuty = getOffDutyHandlers().length;
   
-  // Get assigned QH (Queue Handlers) for the selected date
-  const assignedQH = handlers
-    .filter(h => h.isQH && roster.some(r => r.handlerId === h.id && r.date === selectedDate))
-    .map(h => h.name);
+  // Get dynamic QH based on actual handlers working in shifts (not static isQH flag)
+  // For the first available shift, show who is actually QH for that shift
+  const getShiftQH = (shift: string): string[] => {
+    return getHandlersForShift(shift)
+      .filter(h => isHandlerQH(h.id, selectedDate, shift))
+      .map(h => h.name);
+  };
+  
+  // Get assigned QH for first working shift (most relevant for topbar display)
+  const assignedQH = shiftOnlyShifts.length > 0 
+    ? getShiftQH(shiftOnlyShifts[0])
+    : [];
 
   const navDate = (dir: number) => {
     const [y,m,d] = selectedDate.split('-').map(Number);
@@ -974,10 +982,10 @@ Rules:
           <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
             <div className="flex-1 overflow-auto">
               <div className="flex h-full min-w-[700px]" style={{ minHeight: '300px' }}>
-                {availableShifts.map((shift, idx) => {
+                {shiftOnlyShifts.map((shift, idx) => {
                   const cfg = getShiftConfig(shift);
                   const shiftHandlers = getHandlersForShift(shift);
-                  const isLast = idx === availableShifts.length - 1;
+                  const isLast = idx === shiftOnlyShifts.length - 1;
 
                   return (
                     <div key={shift} className={`flex flex-col flex-1 min-w-0 ${!isLast ? 'border-r border-slate-200' : ''}`}>
