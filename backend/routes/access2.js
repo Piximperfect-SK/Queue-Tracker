@@ -2,13 +2,18 @@ import express from 'express';
 import { authenticator } from 'otplib';
 import qrcode from 'qrcode';
 import crypto from 'crypto';
+import { randomUUID } from 'crypto';
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcrypt';
 import TwoFactorAuth from '../models/TwoFactorAuth.js';
 import PendingUser from '../models/PendingUser.js';
 import User from '../models/User.js';
 import Session from '../models/Session.js';
 import { requireRole } from '../middleware/requireRole.js';
+import { encryptCode, decryptCode } from '../models/AccessCode.js';
 
 const router = express.Router();
+const JWT_SECRET = process.env.JWT_SECRET || 'dev_jwt_secret';
 
 // Encryption key for pending user secrets (use environment variable in production)
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || crypto.randomBytes(32).toString('hex').slice(0, 32);
@@ -30,6 +35,22 @@ function decrypt(text) {
   let decrypted = decipher.update(encryptedText);
   decrypted = Buffer.concat([decrypted, decipher.final()]);
   return decrypted.toString();
+}
+
+// Helper function to issue session (same pattern as access.js)
+async function issueSession(res, fullName, role) {
+  const jti = randomUUID();
+  const expiresAt = new Date(Date.now() + 8 * 3600 * 1000);
+  const token = jwt.sign({ fullName, role, jti }, JWT_SECRET, { expiresIn: '8h' });
+  const isProd = process.env.NODE_ENV === 'production';
+  res.cookie('token', token, {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: isProd ? 'none' : 'lax',
+    maxAge: 8 * 3600 * 1000,
+  });
+  await Session.create({ jti, fullName, role, expiresAt });
+  return { token, fullName, role };
 }
 
 // 1. Check if user exists
@@ -78,44 +99,57 @@ router.post('/login/totp', async (req, res) => {
       return res.status(401).json({ error: 'User not found or 2FA not enabled' });
     }
 
+    // Decrypt the secret
+    const secret = decryptCode(auth2FA.encryptedSecret);
+
     // Try TOTP code
-    const verified = authenticator.verify({
+    const validTotp = /^\d{6}$/.test(cleanCode) && authenticator.verify({
       token: cleanCode,
-      secret: auth2FA.secret
+      secret: secret
     });
 
-    // If TOTP fails, try backup codes
+    // If TOTP fails, try backup codes (they're bcrypt hashed)
     let usedBackup = false;
-    if (!verified) {
-      const backupIndex = auth2FA.backupCodes.indexOf(cleanCode);
-      if (backupIndex === -1) {
-        return res.status(401).json({ error: 'Invalid code' });
+    let usedBackupHash = null;
+    if (!validTotp) {
+      for (const hash of auth2FA.backupCodeHashes) {
+        if (await bcrypt.compare(cleanCode.toUpperCase(), hash)) {
+          usedBackup = true;
+          usedBackupHash = hash;
+          break;
+        }
       }
-      // Remove used backup code
-      auth2FA.backupCodes.splice(backupIndex, 1);
-      await auth2FA.save();
-      usedBackup = true;
     }
 
-    // Create session
-    const sessionDoc = new Session({
-      fullName: cleanName,
-      role: auth2FA.role || 'Associate'
-    });
-    await sessionDoc.save();
+    if (!validTotp && !usedBackup) {
+      return res.status(401).json({ error: 'Invalid code' });
+    }
 
-    const token = sessionDoc.generateToken();
-    res.cookie('sessionToken', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 7 * 24 * 60 * 60 * 1000
-    });
+    // Remove used backup code if applicable
+    if (usedBackup && usedBackupHash) {
+      auth2FA.backupCodeHashes = auth2FA.backupCodeHashes.filter(h => h !== usedBackupHash);
+      auth2FA.lastUsedAt = new Date();
+      await auth2FA.save();
+    }
 
+    // Determine role: check if admin user, otherwise check approved pending user, default to associate
+    let role = 'associate';
+    const adminUser = await User.findOne({ fullName: cleanName });
+    if (adminUser && adminUser.role === 'Admin') {
+      role = 'admin';
+    } else {
+      const approvedUser = await PendingUser.findOne({ fullName: cleanName, status: 'approved' });
+      if (approvedUser && approvedUser.assignedRole) {
+        role = approvedUser.assignedRole;
+      }
+    }
+
+    // Create session and issue token
+    const sessionData = await issueSession(res, cleanName, role);
+    
     res.json({
       success: true,
-      token,
-      fullName: cleanName,
-      role: auth2FA.role || 'Associate',
+      ...sessionData,
       usedBackup
     });
   } catch (err) {
@@ -149,7 +183,7 @@ router.post('/register/setup', async (req, res) => {
     const secret = authenticator.generateSecret();
     const otpauthUrl = authenticator.keyuri(cleanName, 'Queue Tracker', secret);
 
-    // Generate backup codes
+    // Generate backup codes (will be bcrypt hashed before storage)
     const backupCodes = Array.from({ length: 8 }, () =>
       crypto.randomBytes(4).toString('hex').toUpperCase()
     );
@@ -209,28 +243,23 @@ router.post('/register/confirm', async (req, res) => {
 
     if (isAdmin) {
       // Auto-approve admin users
+      // Encrypt secret and hash backup codes to match existing TwoFactorAuth schema
+      const encryptedSecret = encryptCode(setupData.secret);
+      const backupCodeHashes = await Promise.all(
+        setupData.backupCodes.map(code => bcrypt.hash(code, 10))
+      );
+
       const auth2FA = new TwoFactorAuth({
         fullName: cleanName,
-        secret: setupData.secret,
-        backupCodes: setupData.backupCodes,
+        encryptedSecret: encryptedSecret,
+        backupCodeHashes: backupCodeHashes,
         enabled: true,
-        role: 'Admin'
+        enabledAt: new Date()
       });
       await auth2FA.save();
 
-      // Create session
-      const sessionDoc = new Session({
-        fullName: cleanName,
-        role: 'Admin'
-      });
-      await sessionDoc.save();
-
-      const token = sessionDoc.generateToken();
-      res.cookie('sessionToken', token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        maxAge: 7 * 24 * 60 * 60 * 1000
-      });
+      // Create session and issue token
+      const sessionData = await issueSession(res, cleanName, 'admin');
 
       // Clear setup session
       delete req.session.pendingSetup;
@@ -238,9 +267,7 @@ router.post('/register/confirm', async (req, res) => {
       return res.json({
         success: true,
         autoApproved: true,
-        token,
-        fullName: cleanName,
-        role: 'Admin'
+        ...sessionData
       });
     }
 
@@ -289,13 +316,21 @@ router.post('/pending/:fullName/approve', requireRole('Admin'), async (req, res)
       return res.status(404).json({ error: 'Pending user not found' });
     }
 
-    // Decrypt and create TwoFactorAuth
+    // Decrypt pending data and create TwoFactorAuth with proper encryption
+    const secret = decrypt(pending.secret);
+    const backupCodes = pending.backupCodes.map(decrypt);
+    
+    const encryptedSecret = encryptCode(secret);
+    const backupCodeHashes = await Promise.all(
+      backupCodes.map(code => bcrypt.hash(code, 10))
+    );
+
     const auth2FA = new TwoFactorAuth({
       fullName: pending.fullName,
-      secret: decrypt(pending.secret),
-      backupCodes: pending.backupCodes.map(decrypt),
+      encryptedSecret: encryptedSecret,
+      backupCodeHashes: backupCodeHashes,
       enabled: true,
-      role: role || 'Associate'
+      enabledAt: new Date()
     });
     await auth2FA.save();
 
