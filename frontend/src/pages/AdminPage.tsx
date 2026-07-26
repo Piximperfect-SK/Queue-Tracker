@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   ShieldCheck, RefreshCw, AlertCircle, Eye, EyeOff, Copy, Check,
   KeyRound, SlidersHorizontal, Shield, Users, ClipboardList, Pencil, X,
-  Radio, LogOut, Clock, ShieldOff, RotateCcw,
+  Radio, LogOut, Clock, ShieldOff, RotateCcw, UserCog,
 } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
 import { authHeaders } from '../utils/authToken';
@@ -81,7 +81,19 @@ async function api(path: string, opts: RequestInit = {}) {
 }
 
 const AdminPage: React.FC = () => {
-  const [tab, setTab] = useState<'pending' | 'codes' | 'permissions' | 'sessions' | 'twofactor'>('pending');
+  const [tab, setTab] = useState<'pending' | 'codes' | 'permissions' | 'sessions' | 'twofactor' | 'users'>('pending');
+
+  // ---- Users state (for role management) ----
+  interface UserRecord {
+    _id: string;
+    fullName: string;
+    username: string;
+    role: Role;
+    isActive: boolean;
+  }
+  const [users, setUsers] = useState<UserRecord[]>([]);
+  const [updatingRole, setUpdatingRole] = useState<string | null>(null);
+  const [userRoleChanges, setUserRoleChanges] = useState<Record<string, Role>>({});
 
   // ---- Access codes state ----
   const [codes, setCodes] = useState<CodesState>({ admin: null, queue_handler: null, associate: null });
@@ -122,13 +134,14 @@ const AdminPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const [codesRes, qhRes, assocRes, sessionsRes, twoFactorRes, pendingRes] = await Promise.all([
+      const [codesRes, qhRes, assocRes, sessionsRes, twoFactorRes, pendingRes, usersRes] = await Promise.all([
         api('/api/access/codes'),
         api('/api/access/permissions/queue_handler'),
         api('/api/access/permissions/associate'),
         api('/api/access/sessions'),
         api('/api/access/2fa/list'),
         api('/api/access/pending'),
+        api('/api/roles'),
       ]);
       setCodes(codesRes.codes);
       setPerms({
@@ -138,6 +151,8 @@ const AdminPage: React.FC = () => {
       setSessions(sessionsRes.sessions || []);
       setTwoFactorRecords(twoFactorRes.records || []);
       setPendingUsers(pendingRes || []);
+      setUsers(usersRes.users || []);
+      setUserRoleChanges({});
       setDirty({});
     } catch (err: any) {
       const isNetworkError = err instanceof TypeError || err?.message === 'Failed to fetch';
@@ -333,6 +348,23 @@ const AdminPage: React.FC = () => {
     }
   };
 
+  const handleUpdateUserRole = async (userId: string, newRole: Role) => {
+    setUpdatingRole(userId);
+    setError(null);
+    try {
+      const data = await api('/api/roles', {
+        method: 'PUT',
+        body: JSON.stringify({ userId, role: newRole }),
+      });
+      setUsers((u) => u.map((usr) => usr._id === userId ? { ...usr, role: data.user.role } : usr));
+      setUserRoleChanges((c) => { const updated = { ...c }; delete updated[userId]; return updated; });
+    } catch (err: any) {
+      setError(err.message || 'Failed to update user role');
+    } finally {
+      setUpdatingRole(null);
+    }
+  };
+
   return (
     <div className="h-full flex flex-col overflow-hidden p-6">
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col flex-1 min-h-0 overflow-hidden p-6">
@@ -420,6 +452,15 @@ const AdminPage: React.FC = () => {
         >
           <ShieldCheck size={16} />
           Two-Factor
+        </button>
+        <button
+          onClick={() => setTab('users')}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
+            tab === 'users' ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          <UserCog size={16} />
+          Manage Users
         </button>
       </div>
 
@@ -708,6 +749,56 @@ const AdminPage: React.FC = () => {
                     {resetting === rec.fullName ? <RefreshCw size={14} className="animate-spin" /> : <RotateCcw size={14} />}
                     Reset
                   </button>
+                </div>
+              ))
+            )}
+          </div>
+        ) : tab === 'users' ? (
+          <div className="space-y-4 max-w-3xl">
+            <div className="px-5 py-4 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-800 flex items-start gap-3">
+              <UserCog size={18} className="shrink-0 mt-0.5" />
+              <p>Change role assignments for registered members. Updates take effect on their next page load or when they perform a restricted action.</p>
+            </div>
+            {users.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+                <Users size={40} className="mb-3 opacity-30" />
+                <p className="text-sm font-semibold">No registered users yet</p>
+              </div>
+            ) : (
+              users.map((user) => (
+                <div key={user._id} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex items-center justify-between">
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-bold text-slate-900">{user.fullName}</h3>
+                    <p className="text-xs text-slate-500 mt-0.5">@{user.username}</p>
+                    <span className={`inline-block text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md border mt-2 ${ROLE_COLORS[user.role]}`}>
+                      {ROLE_LABELS[user.role]}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <select
+                      value={userRoleChanges[user._id] ?? user.role}
+                      onChange={(e) => setUserRoleChanges({ ...userRoleChanges, [user._id]: e.target.value as Role })}
+                      className="px-3 py-2 border border-slate-200 rounded-lg text-sm font-semibold focus:outline-none focus:border-slate-400"
+                      disabled={updatingRole === user._id}
+                    >
+                      <option value="associate">Associate</option>
+                      <option value="queue_handler">Queue Handler</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                    <button
+                      onClick={() => {
+                        const newRole = userRoleChanges[user._id] ?? user.role;
+                        if (newRole !== user.role) {
+                          handleUpdateUserRole(user._id, newRole);
+                        }
+                      }}
+                      disabled={updatingRole === user._id || (userRoleChanges[user._id] === undefined || userRoleChanges[user._id] === user.role)}
+                      className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-semibold hover:bg-slate-800 transition-all shadow-sm active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {updatingRole === user._id ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
+                      Save
+                    </button>
+                  </div>
                 </div>
               ))
             )}
