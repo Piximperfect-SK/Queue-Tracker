@@ -92,7 +92,6 @@ Queue Tracker is a production-ready web application designed for teams managing 
 - Admin configures permissions through the web interface
 
 **Smart Role Assignment**
-- Hardcoded admin: "Shubham Kumar" always has admin privileges
 - New users assigned roles during approval process
 - Role changes take effect immediately across all sessions
 
@@ -112,15 +111,15 @@ Queue Tracker is a production-ready web application designed for teams managing 
 - Support for multiple date formats in Excel (ISO dates, written format like "25th July 2026")
 - **Queue Handler (QH) Assignment** - Designate team members as Queue Handlers per shift/day
 - Auto-assign QH for specific shifts:
-  - **Morning (6AM-3PM)**: All assigned handlers become QH
-  - **Night (10PM-7AM)**: All assigned handlers become QH
+  - **Morning**: All assigned handlers become QH
+  - **Night**: All assigned handlers become QH
   - **Weekend shifts**: All working handlers become QH
   - **Weekday normal shifts**: Default QH (configurable team members) + manual override
 - Manual QH override with star icon - click to toggle QH status per handler/shift
-- **Custom Shift Creation** - Admins can add new shifts beyond defaults (e.g., "3PM-12AM", "4AM-1PM")
+- **Custom Shift Creation** - Admins can add new shifts beyond defaults
 - Custom shifts persist in localStorage and appear in all roster views
 - Visual calendar view of who's working when
-- QH display in topbar: "Shift QH: Kanchan & Akanksha & Jyoti"
+- QH display in topbar: 
 - Gold highlight for QH handlers in shift columns
 - Export roster data for reporting
 
