@@ -194,7 +194,7 @@ const SortableHandler: React.FC<SortableHandlerProps> = ({ handler, shift, onShi
       ref={setNodeRef}
       style={style}
       className={`group relative flex items-center gap-1.5 rounded border transition-all cursor-default
-        ${compact ? 'px-2 py-1.5' : 'px-2.5 py-2'}
+        ${compact ? 'px-2 py-1' : 'px-2 py-1.5'}
         ${bg} ${border} border hover:shadow-sm active:scale-[0.98]`}
     >
       {canEdit && (
@@ -1009,9 +1009,9 @@ Rules:
                       </div>
 
                       {/* Column body */}
-                      <DroppableContainer id={shift} className={`flex-1 ${cfg.colBg} px-2 py-3`}>
+                      <DroppableContainer id={shift} className={`flex-1 ${cfg.colBg} px-2 py-2`}>
                         <SortableContext id={shift} items={shiftHandlers.map(h => h.id)} strategy={verticalListSortingStrategy}>
-                          <ul className="flex flex-col gap-1">
+                          <ul className="flex flex-col gap-0.5">
                             {shiftHandlers.map(handler => (
                               <SortableHandler
                                 key={handler.id}
@@ -1025,7 +1025,7 @@ Rules:
                               />
                             ))}
                             {shiftHandlers.length === 0 && (
-                              <li className="flex items-center justify-center h-16 rounded-xl border-2 border-dashed border-slate-200/50 mt-1">
+                              <li className="flex items-center justify-center h-12 rounded-xl border-2 border-dashed border-slate-200/50 mt-1">
                                 <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">No Agents</span>
                               </li>
                             )}
