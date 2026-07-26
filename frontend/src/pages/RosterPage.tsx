@@ -42,11 +42,14 @@ const getCurrentShiftFromIST = (): string => {
   const istTime = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false }).format(now);
   const [hours] = istTime.split(':').map(Number);
   
-  if (hours >= 6 && hours < 15) return '6AM-3PM';
-  if (hours >= 12 && hours < 21) return '12PM-9PM';
-  if (hours >= 13 && hours < 22) return '1PM-10PM';
-  if (hours >= 14 && hours < 23) return '2PM-11PM';
+  // Check night shift first (10PM-7AM wraps midnight)
   if (hours >= 22 || hours < 7) return '10PM-7AM';
+  // Then check morning shift
+  if (hours >= 6 && hours < 12) return '6AM-3PM';
+  // Then afternoon shifts in priority order
+  if (hours >= 14 && hours < 23) return '2PM-11PM';
+  if (hours >= 13 && hours < 22) return '1PM-10PM';
+  if (hours >= 12 && hours < 21) return '12PM-9PM';
   return '6AM-3PM';
 };
 
@@ -172,9 +175,10 @@ interface SortableHandlerProps {
   isQH?: boolean;
   shiftOptions: ShiftType[];
   compact?: boolean;
+  canEdit?: boolean;
 }
 
-const SortableHandler: React.FC<SortableHandlerProps> = ({ handler, shift, onShiftChange, onDelete, isQH, shiftOptions, compact }) => {
+const SortableHandler: React.FC<SortableHandlerProps> = ({ handler, shift, onShiftChange, onDelete, isQH, shiftOptions, compact, canEdit = false }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: handler.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.2 : 1, zIndex: isDragging ? 50 : 1 };
   const cfg = getShiftConfig(shift);
@@ -193,32 +197,38 @@ const SortableHandler: React.FC<SortableHandlerProps> = ({ handler, shift, onShi
         ${compact ? 'px-2.5 py-1.5' : 'px-3 py-2'}
         ${bg} ${border} border hover:shadow-sm active:scale-[0.98]`}
     >
-      <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-600 shrink-0 transition-colors">
-        <GripVertical size={12} />
-      </div>
+      {canEdit && (
+        <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-600 shrink-0 transition-colors">
+          <GripVertical size={12} />
+        </div>
+      )}
       {handler.isQH && <Shield size={10} className="text-amber-500 shrink-0" />}
       <span className={`flex-1 font-semibold ${text} ${compact ? 'text-[11px]' : 'text-[12px]'} leading-none`}>
         {handler.name}
       </span>
       <div className="flex items-center gap-1 shrink-0">
-        {!isLeave && isQH && (
-          <span className="px-1.5 py-0.5 rounded-md bg-yellow-400 text-yellow-900 text-[8px] font-black uppercase tracking-widest">
+        {isQH && (
+          <span className="px-1.5 py-0.5 rounded-md bg-yellow-400 text-yellow-900 text-[8px] font-black uppercase tracking-widest shadow-sm">
             QH
           </span>
         )}
-        <select
-          value={shift}
-          onChange={e => onShiftChange(handler.id, e.target.value as ShiftType)}
-          className="text-[8px] font-black bg-white/80 text-slate-600 px-1 py-0.5 rounded border border-slate-200 focus:ring-0 outline-none cursor-pointer uppercase tracking-wider max-w-[60px]"
-        >
-          {shiftOptions.map(s => <option key={s} value={s}>{s}</option>)}
-        </select>
-        <button
-          onClick={e => { e.stopPropagation(); onDelete(handler.id); }}
-          className="p-1 rounded text-red-400 hover:bg-red-50 transition-colors"
-        >
-          <Trash2 size={10} />
-        </button>
+        {canEdit && (
+          <>
+            <select
+              value={shift}
+              onChange={e => onShiftChange(handler.id, e.target.value as ShiftType)}
+              className="text-[8px] font-black bg-white/80 text-slate-600 px-1 py-0.5 rounded border border-slate-200 focus:ring-0 outline-none cursor-pointer uppercase tracking-wider max-w-[60px]"
+            >
+              {shiftOptions.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <button
+              onClick={e => { e.stopPropagation(); onDelete(handler.id); }}
+              className="p-1 rounded text-red-400 hover:bg-red-50 transition-colors"
+            >
+              <Trash2 size={10} />
+            </button>
+          </>
+        )}
       </div>
     </li>
   );
@@ -1023,6 +1033,7 @@ Rules:
                                 onDelete={deleteHandlerGlobally}
                                 isQH={isHandlerQH(handler.id, selectedDate, shift)}
                                 shiftOptions={shiftPickerOptions}
+                                canEdit={actions.editRoster}
                               />
                             ))}
                             {shiftHandlers.length === 0 && (
@@ -1058,6 +1069,7 @@ Rules:
                         onShiftChange={updateShift}
                         onDelete={deleteHandlerGlobally}
                         shiftOptions={shiftPickerOptions}
+                        canEdit={actions.editRoster}
                         compact
                       />
                     ))}

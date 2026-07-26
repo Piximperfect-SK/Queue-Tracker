@@ -16,6 +16,12 @@ export async function getPermissionsForRole(role) {
         exportData: true,
         manageUsers: true,
         downloadLogs: true,
+        shiftManagement: true,
+        importRoster: true,
+        manageRoles: true,
+        manage2FA: true,
+        manageAccessCodes: true,
+        manageSessions: true,
       },
     };
   }
