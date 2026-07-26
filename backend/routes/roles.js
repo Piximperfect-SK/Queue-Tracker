@@ -2,27 +2,14 @@ import express from 'express';
 import User from '../models/User.js';
 import jwt from 'jsonwebtoken';
 
-const router = express.Router();
-const JWT_SECRET = process.env.JWT_SECRET || 'dev_jwt_secret';
+import { requireAuth } from '../middleware/auth.js';
 
-// Helper to extract user from JWT cookie or Authorization header
-function extractUser(req) {
-  const token = req.cookies?.token || (req.header('Authorization') || '').replace(/^Bearer\s+/i, '');
-  if (!token) return null;
-  try {
-    return jwt.verify(token, JWT_SECRET);
-  } catch (err) {
-    return null;
-  }
-}
+const router = express.Router();
 
 // GET /api/roles — return all users with roles (admin only)
-router.get('/roles', async (req, res) => {
-  const user = extractUser(req);
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  
+router.get('/roles', requireAuth, async (req, res) => {
   // Only admins can view all roles
-  if (user.role !== 'admin') {
+  if (req.user.role !== 'admin') {
     return res.status(403).json({ error: 'Forbidden' });
   }
 
@@ -36,10 +23,8 @@ router.get('/roles', async (req, res) => {
 });
 
 // PUT /api/roles — update a user's role (admin only)
-router.put('/roles', async (req, res) => {
-  const user = extractUser(req);
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  if (user.role !== 'admin') {
+router.put('/roles', requireAuth, async (req, res) => {
+  if (req.user.role !== 'admin') {
     return res.status(403).json({ error: 'Forbidden' });
   }
 
@@ -78,10 +63,8 @@ router.put('/roles', async (req, res) => {
 });
 
 // DELETE /api/roles/:userId — delete a user (admin only)
-router.delete('/roles/:userId', async (req, res) => {
-  const user = extractUser(req);
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
-  if (user.role !== 'admin') {
+router.delete('/roles/:userId', requireAuth, async (req, res) => {
+  if (req.user.role !== 'admin') {
     return res.status(403).json({ error: 'Forbidden' });
   }
 
@@ -105,7 +88,13 @@ router.delete('/roles/:userId', async (req, res) => {
     }
 
     // Don't allow deleting yourself
-    if (user.fullName === targetUser.fullName) {
+    const requestingUserId = (req.user._id || req.user.userId)?.toString();
+    if (requestingUserId === targetUser._id.toString()) {
+      return res.status(400).json({ error: 'Cannot delete your own account' });
+    }
+
+    // Also check fullName if it's a session-based pseudo-user from access codes
+    if (!requestingUserId && req.user.fullName === targetUser.fullName) {
       return res.status(400).json({ error: 'Cannot delete your own account' });
     }
 
