@@ -36,6 +36,20 @@ const isWeekend = (date: string): boolean => {
   return day === 0 || day === 6;
 };
 
+// Get current shift based on IST time
+const getCurrentShiftFromIST = (): string => {
+  const now = new Date();
+  const istTime = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false }).format(now);
+  const [hours] = istTime.split(':').map(Number);
+  
+  if (hours >= 6 && hours < 15) return '6AM-3PM';
+  if (hours >= 12 && hours < 21) return '12PM-9PM';
+  if (hours >= 13 && hours < 22) return '1PM-10PM';
+  if (hours >= 14 && hours < 23) return '2PM-11PM';
+  if (hours >= 22 || hours < 7) return '10PM-7AM';
+  return '6AM-3PM';
+};
+
 type ImportFeedback = { message: string; tone: 'success' | 'warning' | 'error' };
 
 // Type for shift-specific QH assignment
@@ -184,10 +198,10 @@ const SortableHandler: React.FC<SortableHandlerProps> = ({ handler, shift, onShi
         <GripVertical size={12} />
       </div>
       {handler.isQH && <Shield size={10} className="text-amber-500 shrink-0" />}
-      <span className={`flex-1 font-semibold truncate ${text} ${compact ? 'text-[11px]' : 'text-[12px]'} leading-none`}>
+      <span className={`flex-1 font-semibold ${text} ${compact ? 'text-[11px]' : 'text-[12px]'} leading-none`}>
         {handler.name}
       </span>
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+      <div className="flex items-center gap-1 shrink-0">
         {!isLeave && onToggleQH && (
           <button
             onClick={e => { e.stopPropagation(); onToggleQH(handler.id, shift); }}
@@ -246,6 +260,7 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
   const [importStatus, setImportStatus] = useState<ImportFeedback | null>(null);
   const [isImportingRoster, setIsImportingRoster] = useState(false);
   const [times, setTimes] = useState({ ist: '', uk: '' });
+  const [currentShift, setCurrentShift] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Screenshot import state
@@ -324,6 +339,7 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
     const update = () => {
       const fmt = (tz: string) => new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: true }).format(new Date());
       setTimes({ ist: fmt('Asia/Kolkata'), uk: fmt('Europe/London') });
+      setCurrentShift(getCurrentShiftFromIST());
     };
     update(); const id = setInterval(update, 10000); return () => clearInterval(id);
   }, []);
@@ -821,10 +837,10 @@ Rules:
       .map(h => h.name);
   };
   
-  // Get assigned QH for first working shift (most relevant for topbar display)
-  const assignedQH = shiftOnlyShifts.length > 0 
-    ? getShiftQH(shiftOnlyShifts[0])
-    : [];
+  // Get assigned QH for currently active shift (or first shift if none active)
+  const assignedQH = currentShift && shiftOnlyShifts.includes(currentShift)
+    ? getShiftQH(currentShift)
+    : (shiftOnlyShifts.length > 0 ? getShiftQH(shiftOnlyShifts[0]) : []);
 
   const navDate = (dir: number) => {
     const [y,m,d] = selectedDate.split('-').map(Number);
