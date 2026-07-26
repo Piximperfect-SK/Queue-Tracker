@@ -716,7 +716,7 @@ const AdminPage: React.FC = () => {
               ))
             )}
           </div>
-        ) : (
+        ) : tab === 'twofactor' ? (
           <div className="space-y-4 max-w-3xl">
             <div className="px-5 py-4 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-800 flex items-start gap-3">
               <ShieldCheck size={18} className="shrink-0 mt-0.5" />
@@ -803,7 +803,7 @@ const AdminPage: React.FC = () => {
               ))
             )}
           </div>
-        )}
+        ) : null}
       </div>
 
       {/* Reset 2FA confirm */}
