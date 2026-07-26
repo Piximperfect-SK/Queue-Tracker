@@ -22,7 +22,6 @@ const ALL_SHIFT_TYPES: ShiftType[] = [
   '6AM-3PM','12PM-9PM','1PM-10PM','2PM-11PM','10PM-7AM',
   'WeekOff','Medical Leave','Planned Leave','Earned Leave','Unplanned Leave','Complimentary Off','MID-LEAVE'
 ];
-const MAX_SHIFT_VISIBLE = 8;
 type ImportFeedback = { message: string; tone: 'success' | 'warning' | 'error' };
 
 const normalizeCellValue = (value: unknown) => {
@@ -240,6 +239,11 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
 
   const availableShifts = useMemo(() => {
     const s = new Set(SHIFTS);
+    // Add custom shifts from localStorage
+    const custom = localStorage.getItem('customShifts');
+    if (custom) {
+      JSON.parse(custom).forEach((shift: string) => s.add(shift));
+    }
     roster.filter(e => e.date === selectedDate).forEach(e => s.add(e.shift));
     return Array.from(s);
   }, [roster, selectedDate]);
@@ -709,8 +713,14 @@ Rules:
   };
 
   const activeHandler = activeId ? handlers.find(a => a.id === activeId) : null;
-  const totalOnShift = SHIFTS.reduce((acc, s) => acc + getHandlersForShift(s).length, 0);
+  const shiftOnlyShifts = availableShifts.filter(s => !['WeekOff','Medical Leave','Planned Leave','Earned Leave','Unplanned Leave','Complimentary Off','MID-LEAVE'].includes(s));
+  const totalOnShift = shiftOnlyShifts.reduce((acc, s) => acc + getHandlersForShift(s).length, 0);
   const totalOffDuty = getOffDutyHandlers().length;
+  
+  // Get assigned QH (Queue Handlers) for the selected date
+  const assignedQH = handlers
+    .filter(h => h.isQH && roster.some(r => r.handlerId === h.id && r.date === selectedDate))
+    .map(h => h.name);
 
   const navDate = (dir: number) => {
     const [y,m,d] = selectedDate.split('-').map(Number);
@@ -760,6 +770,14 @@ Rules:
                 <button onClick={() => navDate(1)} className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-900 flex items-center justify-center transition-colors">
                   <ChevronRight size={14} />
                 </button>
+              </div>
+
+              {/* Shift QH */}
+              <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg text-blue-700">
+                <span className="text-[9px] font-black uppercase tracking-widest">QH:</span>
+                <span className="text-[11px] font-semibold">
+                  {assignedQH.length > 0 ? assignedQH.join(' & ') : 'None'}
+                </span>
               </div>
 
               {/* Clocks */}
@@ -860,10 +878,10 @@ Rules:
           <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
             <div className="flex-1 overflow-auto">
               <div className="flex h-full min-w-[700px]" style={{ minHeight: '300px' }}>
-                {SHIFTS.map((shift, idx) => {
+                {availableShifts.map((shift, idx) => {
                   const cfg = getShiftConfig(shift);
                   const shiftHandlers = getHandlersForShift(shift);
-                  const isLast = idx === SHIFTS.length - 1;
+                  const isLast = idx === availableShifts.length - 1;
 
                   return (
                     <div key={shift} className={`flex flex-col flex-1 min-w-0 ${!isLast ? 'border-r border-slate-200' : ''}`}>
@@ -883,8 +901,8 @@ Rules:
                       {/* Column body */}
                       <DroppableContainer id={shift} className={`flex-1 ${cfg.colBg} px-2 py-2`}>
                         <SortableContext id={shift} items={shiftHandlers.map(h => h.id)} strategy={verticalListSortingStrategy}>
-                          <ul className="flex flex-col gap-1.5">
-                            {shiftHandlers.slice(0, MAX_SHIFT_VISIBLE).map(handler => (
+                          <ul className="flex flex-col gap-1">
+                            {shiftHandlers.map(handler => (
                               <SortableHandler
                                 key={handler.id}
                                 handler={handler}
@@ -900,11 +918,6 @@ Rules:
                               </li>
                             )}
                           </ul>
-                          {shiftHandlers.length > MAX_SHIFT_VISIBLE && (
-                            <div className="mt-1.5 py-1.5 text-center text-[9px] font-black text-slate-500 bg-white/60 rounded-lg border border-slate-200">
-                              +{shiftHandlers.length - MAX_SHIFT_VISIBLE} more
-                            </div>
-                          )}
                         </SortableContext>
                       </DroppableContainer>
                     </div>

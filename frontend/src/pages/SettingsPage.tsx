@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { MOCK_HANDLERS } from '../data/mockData';
-import { Trash2, ShieldCheck, FileText, Database, Settings as SettingsIcon, AlertCircle, Users, Activity, Server, Plus, X, Check, Edit3 } from 'lucide-react';
+import { Trash2, ShieldCheck, FileText, Database, Settings as SettingsIcon, AlertCircle, Users, Activity, Server, Plus, X, Check, Edit3, Clock } from 'lucide-react';
 import type { Handler } from '../types';
 import { addLog, downloadLogsForDate, downloadAllLogs, saveLogsFromServer, saveSingleLogFromServer } from '../utils/logger';
 import { socket, syncData } from '../utils/socket';
@@ -18,12 +18,18 @@ const SettingsPage: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [customShifts, setCustomShifts] = useState<string[]>([]);
+  const [newShiftInput, setNewShiftInput] = useState('');
 
   useEffect(() => {
     const handleHandlers = (data: any) => {
       setHandlers(data);
       localStorage.setItem('handlers', JSON.stringify(data));
     };
+
+    // Load custom shifts from localStorage
+    const saved = localStorage.getItem('customShifts');
+    if (saved) setCustomShifts(JSON.parse(saved));
 
     socket.on('handlers_updated', handleHandlers);
     socket.on('log_added', ({ dateStr, logEntry }) => {
@@ -102,6 +108,22 @@ const SettingsPage: React.FC = () => {
 
   const deleteHandler = (id: string) => {
     setDeleteConfirmId(id);
+  };
+
+  const addCustomShift = () => {
+    if (!newShiftInput.trim()) return;
+    const updated = [...customShifts, newShiftInput.trim()];
+    setCustomShifts(updated);
+    localStorage.setItem('customShifts', JSON.stringify(updated));
+    setNewShiftInput('');
+    addLog('Shift Management', `Added new shift: ${newShiftInput.trim()}`, 'positive');
+  };
+
+  const removeCustomShift = (shift: string) => {
+    const updated = customShifts.filter(s => s !== shift);
+    setCustomShifts(updated);
+    localStorage.setItem('customShifts', JSON.stringify(updated));
+    addLog('Shift Management', `Removed shift: ${shift}`, 'negative');
   };
 
   const qhCount = handlers.filter(h => h.isQH).length;
@@ -326,6 +348,54 @@ const SettingsPage: React.FC = () => {
           </div>
 
           <TwoFactorCard />
+
+          {isPrivileged && (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-9 h-9 bg-purple-50 rounded-xl flex items-center justify-center text-purple-600 border border-purple-100">
+                  <Clock size={18} />
+                </div>
+                <h2 className="text-sm font-bold text-slate-800">Shift Management</h2>
+              </div>
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newShiftInput}
+                    onChange={(e) => setNewShiftInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') addCustomShift();
+                    }}
+                    placeholder="e.g., 3PM-12AM"
+                    className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300"
+                  />
+                  <button
+                    onClick={addCustomShift}
+                    disabled={!newShiftInput.trim()}
+                    className="px-3 py-1.5 bg-purple-600 text-white rounded-lg text-xs font-bold hover:bg-purple-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                  >
+                    <Plus size={13} />
+                  </button>
+                </div>
+                {customShifts.length > 0 && (
+                  <div className="space-y-1 pt-2 border-t border-slate-100">
+                    {customShifts.map((shift) => (
+                      <div key={shift} className="flex items-center justify-between px-2.5 py-1.5 bg-purple-50 border border-purple-100 rounded-lg">
+                        <span className="text-xs font-semibold text-purple-700">{shift}</span>
+                        <button
+                          onClick={() => removeCustomShift(shift)}
+                          className="p-1 text-purple-400 hover:text-red-600 hover:bg-red-50 rounded transition-all"
+                        >
+                          <X size={13} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="text-[10px] text-slate-400 mt-2">Custom shifts appear in all roster views</p>
+              </div>
+            </div>
+          )}
 
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
             <div className="flex items-center gap-3 mb-3">
