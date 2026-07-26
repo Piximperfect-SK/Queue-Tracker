@@ -300,12 +300,19 @@ router.post('/pending/:fullName/approve', requireRole('admin'), async (req, res)
 
     try {
       // Decrypt pending data and create TwoFactorAuth with proper encryption
+      console.log(`[APPROVE] Attempting to decrypt secret for ${fullName}`);
       const secret = decrypt(pending.secret);
+      console.log(`[APPROVE] Secret decrypted successfully`);
+      
+      console.log(`[APPROVE] Encrypting secret with encryptCode`);
       const encryptedSecret = encryptCode(secret);
+      console.log(`[APPROVE] Secret encrypted successfully`);
 
       // Delete any existing TwoFactorAuth for this user (in case of retry)
+      console.log(`[APPROVE] Deleting existing TwoFactorAuth record`);
       await TwoFactorAuth.deleteOne({ fullName: pending.fullName });
 
+      console.log(`[APPROVE] Creating new TwoFactorAuth record`);
       const auth2FA = new TwoFactorAuth({
         fullName: pending.fullName,
         encryptedSecret: encryptedSecret,
@@ -316,7 +323,7 @@ router.post('/pending/:fullName/approve', requireRole('admin'), async (req, res)
       await auth2FA.save();
       console.log(`[APPROVE] Created TwoFactorAuth for ${fullName}`);
     } catch (authErr) {
-      console.error(`[APPROVE] Error creating TwoFactorAuth:`, authErr.message);
+      console.error(`[APPROVE] Error creating TwoFactorAuth:`, authErr.message, authErr.stack);
       throw authErr;
     }
 
