@@ -308,6 +308,45 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
     importRosterFromFile(file); e.target.value = '';
   };
 
+  // Parse date strings like "25th July 2026", "25 July 2026", "07/25/2026", etc.
+  const parseFlexibleDate = (dateStr: string): string | null => {
+    if (!dateStr) return null;
+    // Try YYYY-MM-DD first
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr.trim())) return dateStr.trim();
+    
+    // Try "25th July 2026", "25 July 2026"
+    const ordinalMatch = dateStr.match(/(\d{1,2})(?:st|nd|rd|th)?\s+(\w+)\s+(\d{4})/i);
+    if (ordinalMatch) {
+      const day = parseInt(ordinalMatch[1], 10);
+      const monthStr = ordinalMatch[2];
+      const year = parseInt(ordinalMatch[3], 10);
+      const months: Record<string, number> = {
+        jan: 1, january: 1, feb: 2, february: 2, mar: 3, march: 3, apr: 4, april: 4, may: 5,
+        jun: 6, june: 6, jul: 7, july: 7, aug: 8, august: 8, sep: 9, september: 9, oct: 10,
+        october: 10, nov: 11, november: 11, dec: 12, december: 12
+      };
+      const month = months[monthStr.toLowerCase()];
+      if (month && day >= 1 && day <= 31) {
+        return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      }
+    }
+    
+    // Try Excel date number
+    const dateNum = parseExcelDate(dateStr);
+    if (dateNum) return dateNum;
+    
+    // Try MM/DD/YYYY or DD/MM/YYYY
+    const slashMatch = dateStr.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (slashMatch) {
+      const [, m, d, y] = slashMatch;
+      const month = parseInt(m, 10), day = parseInt(d, 10), year = parseInt(y, 10);
+      if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+        return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      }
+    }
+    return null;
+  };
+
   const importRosterFromFile = async (file: File) => {
     setImportStatus(null); setIsImportingRoster(true);
     try {
@@ -315,8 +354,22 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
       const wb = XLSX.read(ab, { type: 'array' });
       const ws = wb.Sheets[wb.SheetNames[0]];
       if (!ws) { setImportStatus({ message: 'No sheets found.', tone: 'error' }); return; }
-      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '', raw: false });
-      if (!rows.length) { setImportStatus({ message: 'No rows found.', tone: 'error' }); return; }
+      
+      // Get raw data to detect format
+      const rawData: unknown[][] = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' });
+      if (!rawData.length || rawData.length < 2) { setImportStatus({ message: 'Empty or invalid file.', tone: 'error' }); return; }
+
+      // Detect format: wide (dates as columns) vs long (one row per person per day)
+      const headerRow = rawData[0] as unknown[];
+      const dateColumnIndices: number[] = [];
+      
+      // Look for date headers in the first row
+      for (let i = 1; i < headerRow.length; i++) {
+        const headerCell = normalizeCellValue(headerRow[i]);
+        if (parseFlexibleDate(headerCell) || /^\d{1,2}(?:st|nd|rd|th)?\s+\w+\s+\d{4}/.test(headerCell)) {
+          dateColumnIndices.push(i);
+        }
+      }
 
       const newHandlers: Handler[] = [];
       const parsedEntries: RosterEntry[] = [];
@@ -324,45 +377,67 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
       const lookup = new Map<string, string>();
       handlers.forEach(h => lookup.set(h.name.trim().toLowerCase(), h.id));
 
-      const matchKey = (key: string, req: string[], forb: string[] = []) => {
-        const k = key.trim().toLowerCase();
-        return req.every(t => k.includes(t)) && !forb.some(t => k.includes(t));
-      };
+      if (dateColumnIndices.length > 0) {
+        // WIDE FORMAT: dates are in columns, names in first column
+        for (let i = 1; i < rawData.length; i++) {
+          const row = rawData[i] as unknown[];
+          const nameCell = normalizeCellValue(row[0]);
+          if (!nameCell) continue;
 
-      rows.forEach((row, ri) => {
-        const entries = Object.entries(row);
-        if (entries.every(([, v]) => normalizeCellValue(v) === '')) return;
-        const hCell = entries.find(([k]) => matchKey(k,['agent'])) ?? entries.find(([k]) => matchKey(k,['handler'])) ?? entries.find(([k]) => matchKey(k,['name'],['shift']));
-        const sCell = entries.find(([k]) => matchKey(k,['shift'])) ?? entries.find(([k]) => matchKey(k,['status']));
-        const dCell = entries.find(([k]) => matchKey(k,['date'])) ?? entries.find(([k]) => matchKey(k,['day']));
+          const key = nameCell.toLowerCase();
+          let hid = lookup.get(key);
+          if (!hid) {
+            hid = createAgentId();
+            lookup.set(key, hid);
+            newHandlers.push({ id: hid, name: nameCell, isQH: false });
+          }
 
-        const name = normalizeCellValue(hCell?.[1]);
-        const rawShift = normalizeCellValue(sCell?.[1]);
-        const date = parseExcelDate(dCell?.[1]);
-        const label = `Row ${ri+2}`;
+          for (const colIdx of dateColumnIndices) {
+            const dateStr = normalizeCellValue(headerRow[colIdx]);
+            const shiftStr = normalizeCellValue(row[colIdx]);
+            const date = parseFlexibleDate(dateStr);
 
-        if (!name)    { rowErrors.push(`${label}: name missing`);  return; }
-        if (!date)    { rowErrors.push(`${label}: invalid date`);   return; }
-        if (!rawShift){ rowErrors.push(`${label}: shift missing`);  return; }
+            if (!date) { rowErrors.push(`Row ${i+1}: Invalid date "${dateStr}"`); continue; }
+            if (!shiftStr) { rowErrors.push(`Row ${i+1} (${nameCell}): Empty shift on ${dateStr}`); continue; }
 
-        let sv = rawShift.toUpperCase().replace(/\s+/g,'');
-        // Map old short codes to new long-form names
-        if (sv === 'WO' || sv === 'OFF' || sv === 'WEEKOFF') sv = 'WEEKOFF';
-        else if (sv === 'ML' || sv === 'MEDICALLEAVE') sv = 'MEDICALLEAVE';
-        else if (sv === 'PL' || sv === 'PRIVILEGELEAVE') sv = 'PLANNEDLEAVE';
-        else if (sv === 'EL' || sv === 'EMERGENCYLEAVE') sv = 'EARNEDLEAVE';
-        else if (sv === 'UL' || sv === 'UNPAIDLEAVE') sv = 'UNPLANNEDLEAVE';
-        else if (sv === 'CO' || sv === 'COMPOFF' || sv === 'COMPENSATORY') sv = 'COMPLIMENTARYOFF';
-        const matched = ALL_SHIFT_TYPES.find(s => s.toUpperCase().replace(/\s+/g,'') === sv);
-        if (matched) sv = matched;
+            const shift = parseShiftFromText(shiftStr);
+            parsedEntries.push({ handlerId: hid, date, shift });
+          }
+        }
+      } else {
+        // LONG FORMAT: standard one-row-per-day format
+        const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '', raw: false });
+        
+        const matchKey = (key: string, req: string[], forb: string[] = []) => {
+          const k = key.trim().toLowerCase();
+          return req.every(t => k.includes(t)) && !forb.some(t => k.includes(t));
+        };
 
-        const key = name.toLowerCase();
-        let hid = lookup.get(key);
-        if (!hid) { hid = createAgentId(); lookup.set(key, hid); newHandlers.push({ id: hid, name, isQH: false }); }
-        parsedEntries.push({ handlerId: hid, date, shift: sv });
-      });
+        rows.forEach((row, ri) => {
+          const entries = Object.entries(row);
+          if (entries.every(([, v]) => normalizeCellValue(v) === '')) return;
+          const hCell = entries.find(([k]) => matchKey(k,['agent'])) ?? entries.find(([k]) => matchKey(k,['handler'])) ?? entries.find(([k]) => matchKey(k,['name'],['shift']));
+          const sCell = entries.find(([k]) => matchKey(k,['shift'])) ?? entries.find(([k]) => matchKey(k,['status']));
+          const dCell = entries.find(([k]) => matchKey(k,['date'])) ?? entries.find(([k]) => matchKey(k,['day']));
 
-      if (!parsedEntries.length) { setImportStatus({ message: 'No valid rows.', tone: 'error' }); return; }
+          const name = normalizeCellValue(hCell?.[1]);
+          const rawShift = normalizeCellValue(sCell?.[1]);
+          const date = parseExcelDate(dCell?.[1]);
+          const label = `Row ${ri+2}`;
+
+          if (!name)    { rowErrors.push(`${label}: name missing`);  return; }
+          if (!date)    { rowErrors.push(`${label}: invalid date`);   return; }
+          if (!rawShift){ rowErrors.push(`${label}: shift missing`);  return; }
+
+          const shift = parseShiftFromText(rawShift);
+          const key = name.toLowerCase();
+          let hid = lookup.get(key);
+          if (!hid) { hid = createAgentId(); lookup.set(key, hid); newHandlers.push({ id: hid, name, isQH: false }); }
+          parsedEntries.push({ handlerId: hid, date, shift });
+        });
+      }
+
+      if (!parsedEntries.length) { setImportStatus({ message: 'No valid entries found.', tone: 'error' }); return; }
 
       const merged = mergeRosterEntries(roster, parsedEntries);
       setRoster(merged); localStorage.setItem('roster', JSON.stringify(merged)); syncData.updateRoster(merged);
@@ -373,8 +448,8 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
       const dates = parsedEntries.map(e => e.date).sort();
       if (dates.length) setSelectedDate(dates[0]);
       const tone: ImportFeedback['tone'] = rowErrors.length ? 'warning' : 'success';
-      setImportStatus({ message: `Imported ${parsedEntries.length} row(s).${newHandlers.length?` +${newHandlers.length} new.`:''}${rowErrors.length?` (${rowErrors.length} skipped)`:''}`, tone });
-      addLog('Import Roster', `Imported ${parsedEntries.length} rows from ${file.name}`, 'positive');
+      setImportStatus({ message: `Imported ${parsedEntries.length} entries.${newHandlers.length?` +${newHandlers.length} new.`:''}${rowErrors.length?` (${rowErrors.length} skipped)`:''}`, tone });
+      addLog('Import Roster', `Imported ${parsedEntries.length} from ${file.name}`, 'positive');
     } catch (err) {
       setImportStatus({ message: `Import failed: ${err instanceof Error ? err.message : 'Unknown'}`, tone: 'error' });
     } finally { setIsImportingRoster(false); }
