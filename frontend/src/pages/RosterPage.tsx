@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { MOCK_HANDLERS, SHIFTS, MOCK_ROSTER } from '../data/mockData';
-import { GripVertical, Plus, X, Trash2, AlertCircle, Upload, ChevronLeft, ChevronRight, Shield } from 'lucide-react';
+import { GripVertical, Plus, X, Trash2, AlertCircle, Upload, ChevronLeft, ChevronRight, Shield, Lock } from 'lucide-react';
 import type { Handler, RosterEntry, ShiftType } from '../types';
 import { addLog, saveLogsFromServer, saveSingleLogFromServer } from '../utils/logger';
 import { socket, syncData } from '../utils/socket';
 import { addLogForDate } from '../utils/logger';
+import { useRole } from '../auth/RoleContext';
+import PermissionDeniedModal from '../components/PermissionDeniedModal';
 import {
   DndContext, closestCenter, KeyboardSensor, PointerSensor,
   useSensor, useSensors, DragOverlay, useDroppable,
@@ -190,6 +192,7 @@ interface RosterPageProps {
 }
 
 const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }) => {
+  const { actions } = useRole();
   const [handlers, setHandlers] = useState<Handler[]>(() => {
     const s = localStorage.getItem('handlers'); return s ? JSON.parse(s) : MOCK_HANDLERS;
   });
@@ -199,6 +202,7 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
   });
   const [activeId, setActiveId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [restrictedAction, setRestrictedAction] = useState<string | null>(null);
   const [newAgentName, setNewAgentName] = useState('');
   const [newAgentShift, setNewAgentShift] = useState<ShiftType | ''>('');
   const [newAgentShiftOpen, setNewAgentShiftOpen] = useState(false);
@@ -208,6 +212,7 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
   const [importStatus, setImportStatus] = useState<ImportFeedback | null>(null);
   const [isImportingRoster, setIsImportingRoster] = useState(false);
   const [times, setTimes] = useState({ ist: '', uk: '' });
+  const [permissionDenied, setPermissionDenied] = useState<{ isOpen: boolean; action: string }>({ isOpen: false, action: '' });
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Screenshot import state
@@ -304,6 +309,10 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
   }
 
   const handleRosterFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!actions.editRoster) {
+      setRestrictedAction('import');
+      return;
+    }
     const file = e.target.files?.[0]; if (!file) return;
     importRosterFromFile(file); e.target.value = '';
   };
@@ -458,6 +467,10 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
 
   // ── Screenshot Import ────────────────────────────────────────────────────
   const handleScreenshotFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!actions.editRoster) {
+      setRestrictedAction('screenshot');
+      return;
+    }
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = '';
@@ -779,34 +792,69 @@ Rules:
                 </div>
               </div>
 
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isImportingRoster}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 hover:text-slate-900 text-[10px] font-black uppercase tracking-widest transition-all shadow-sm disabled:opacity-40"
-              >
-                <Upload size={13} />
-                <span className="hidden sm:inline">{isImportingRoster ? 'Importing…' : 'Import'}</span>
-              </button>
+              {/* Import button - restricted */}
+              {!actions.editRoster ? (
+                <button
+                  onClick={() => setPermissionDenied({ isOpen: true, action: 'Import Roster' })}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg bg-rose-50 border border-rose-200 text-rose-500 hover:bg-rose-100 text-[10px] font-black uppercase tracking-widest shadow-sm cursor-not-allowed transition-all"
+                  title="Access Restricted"
+                >
+                  <Lock size={13} />
+                  <span className="hidden sm:inline">Import</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isImportingRoster}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 hover:text-slate-900 text-[10px] font-black uppercase tracking-widest transition-all shadow-sm disabled:opacity-40"
+                >
+                  <Upload size={13} />
+                  <span className="hidden sm:inline">{isImportingRoster ? 'Importing…' : 'Import'}</span>
+                </button>
+              )}
               <input type="file" ref={fileInputRef} onChange={handleRosterFileChange} accept=".xlsx,.xls,.csv" className="hidden" />
 
-              {/* Screenshot import button */}
-              <button
-                onClick={() => screenshotInputRef.current?.click()}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-600 hover:text-indigo-800 text-[10px] font-black uppercase tracking-widest transition-all shadow-sm"
-                title="Import from screenshot"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                <span className="hidden sm:inline">AI Scan</span>
-              </button>
+              {/* AI Scan button - restricted */}
+              {!actions.editRoster ? (
+                <button
+                  onClick={() => setPermissionDenied({ isOpen: true, action: 'AI Roster Scan' })}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg bg-rose-50 border border-rose-200 text-rose-500 hover:bg-rose-100 text-[10px] font-black uppercase tracking-widest shadow-sm cursor-not-allowed transition-all"
+                  title="Access Restricted"
+                >
+                  <Lock size={13} />
+                  <span className="hidden sm:inline">AI Scan</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => screenshotInputRef.current?.click()}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-600 hover:text-indigo-800 text-[10px] font-black uppercase tracking-widest transition-all shadow-sm"
+                  title="Import from screenshot"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                  <span className="hidden sm:inline">AI Scan</span>
+                </button>
+              )}
               <input type="file" ref={screenshotInputRef} onChange={handleScreenshotFileChange} accept="image/*" className="hidden" />
 
-              <button
-                onClick={() => setIsModalOpen(true)}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-900 hover:bg-black text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-md"
-              >
-                <Plus size={13} />
-                <span className="hidden sm:inline">Register</span>
-              </button>
+              {/* Register button - restricted */}
+              {!actions.editHandlers ? (
+                <button
+                  onClick={() => setPermissionDenied({ isOpen: true, action: 'Register Agent' })}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-rose-50 border border-rose-200 text-rose-500 hover:bg-rose-100 text-[10px] font-black uppercase tracking-widest shadow-sm cursor-not-allowed transition-all"
+                  title="Access Restricted"
+                >
+                  <Lock size={13} />
+                  <span className="hidden sm:inline">Register</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => setIsModalOpen(true)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-900 hover:bg-black text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-md"
+                >
+                  <Plus size={13} />
+                  <span className="hidden sm:inline">Register</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -971,6 +1019,13 @@ Rules:
           </div>
         </div>
       )}
+
+      {/* Permission Denied Modal */}
+      <PermissionDeniedModal
+        isOpen={permissionDenied.isOpen}
+        onClose={() => setPermissionDenied({ isOpen: false, action: '' })}
+        action={permissionDenied.action}
+      />
 
       {/* Register Agent Modal */}
       {isModalOpen && (
