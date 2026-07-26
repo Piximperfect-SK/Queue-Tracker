@@ -77,4 +77,45 @@ router.put('/roles', async (req, res) => {
   }
 });
 
+// DELETE /api/roles/:userId — delete a user (admin only)
+router.delete('/roles/:userId', async (req, res) => {
+  const user = extractUser(req);
+  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+  if (user.role !== 'admin') {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+
+  const { userId } = req.params;
+  if (!userId) {
+    return res.status(400).json({ error: 'Missing userId' });
+  }
+
+  try {
+    const targetUser = await User.findById(userId);
+    if (!targetUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Prevent deleting the last admin
+    if (targetUser.role === 'admin') {
+      const adminCount = await User.countDocuments({ role: 'admin' });
+      if (adminCount <= 1) {
+        return res.status(400).json({ error: 'Cannot delete the last admin' });
+      }
+    }
+
+    // Don't allow deleting yourself
+    if (user.fullName === targetUser.fullName) {
+      return res.status(400).json({ error: 'Cannot delete your own account' });
+    }
+
+    await User.findByIdAndDelete(userId);
+
+    return res.json({ message: 'User deleted successfully', userId });
+  } catch (err) {
+    console.error('Error deleting user:', err);
+    return res.status(500).json({ error: 'Failed to delete user' });
+  }
+});
+
 export default router;

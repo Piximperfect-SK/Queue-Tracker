@@ -94,6 +94,8 @@ const AdminPage: React.FC = () => {
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [updatingRole, setUpdatingRole] = useState<string | null>(null);
   const [userRoleChanges, setUserRoleChanges] = useState<Record<string, Role>>({});
+  const [deletingUser, setDeletingUser] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<UserRecord | null>(null);
 
   // ---- Access codes state ----
   const [codes, setCodes] = useState<CodesState>({ admin: null, queue_handler: null, associate: null });
@@ -365,42 +367,58 @@ const AdminPage: React.FC = () => {
     }
   };
 
+  const handleDeleteUser = async () => {
+    if (!deleteTarget) return;
+    const { _id, fullName } = deleteTarget;
+    setDeleteTarget(null);
+    setDeletingUser(_id);
+    setError(null);
+    try {
+      await api(`/api/roles/${_id}`, { method: 'DELETE' });
+      setUsers((u) => u.filter((usr) => usr._id !== _id));
+    } catch (err: any) {
+      setError(err.message || 'Failed to delete user');
+    } finally {
+      setDeletingUser(null);
+    }
+  };
+
   return (
-    <div className="h-full flex flex-col overflow-hidden p-6">
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col flex-1 min-h-0 overflow-hidden p-6">
+    <div className="h-full flex flex-col overflow-hidden p-4">
+      <div className="bg-white border border-slate-200 rounded-lg shadow-sm flex flex-col flex-1 min-h-0 overflow-hidden p-4">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6 shrink-0">
+      <div className="flex items-center justify-between mb-3 shrink-0">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-gradient-to-br from-purple-900 to-purple-700 rounded-2xl flex items-center justify-center shadow-lg shadow-purple-900/20">
-            <ShieldCheck size={24} className="text-white" />
+          <div className="w-10 h-10 bg-gradient-to-br from-purple-900 to-purple-700 rounded-lg flex items-center justify-center shadow-lg shadow-purple-900/20">
+            <ShieldCheck size={20} className="text-white" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Access Control</h1>
-            <p className="text-sm text-slate-500">Manage role access codes and page/action permissions</p>
+            <h1 className="text-xl font-bold text-slate-900">Access Control</h1>
+            <p className="text-xs text-slate-500">Manage roles and permissions</p>
           </div>
         </div>
         <button
           onClick={loadAll}
           disabled={loading}
-          className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-all shadow-sm active:scale-95 disabled:opacity-50"
+          className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-all shadow-sm active:scale-95 disabled:opacity-50"
         >
-          <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
           Refresh
         </button>
       </div>
 
       {error && (
-        <div className="flex items-center gap-3 mb-6 px-5 py-4 bg-red-50 border border-red-200 rounded-xl text-sm font-semibold text-red-700 shrink-0">
+        <div className="flex items-center gap-3 mb-3 px-4 py-3 bg-red-50 border border-red-200 rounded text-xs font-semibold text-red-700 shrink-0">
           <AlertCircle size={18} />
           {error}
         </div>
       )}
 
       {/* Tabs */}
-      <div className="flex gap-2 mb-6 shrink-0">
+      <div className="flex gap-1 mb-3 shrink-0 overflow-x-auto">
         <button
           onClick={() => setTab('pending')}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
+          className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs font-bold transition-all whitespace-nowrap ${
             tab === 'pending' ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
           }`}
         >
@@ -414,25 +432,25 @@ const AdminPage: React.FC = () => {
         </button>
         <button
           onClick={() => setTab('codes')}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
+          className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs font-bold transition-all whitespace-nowrap ${
             tab === 'codes' ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
           }`}
         >
-          <KeyRound size={16} />
-          Access Codes
+          <KeyRound size={14} />
+          Codes
         </button>
         <button
           onClick={() => setTab('permissions')}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
+          className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs font-bold transition-all whitespace-nowrap ${
             tab === 'permissions' ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
           }`}
         >
-          <SlidersHorizontal size={16} />
-          Role Permissions
+          <SlidersHorizontal size={14} />
+          Perms
         </button>
         <button
           onClick={() => setTab('sessions')}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
+          className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs font-bold transition-all whitespace-nowrap ${
             tab === 'sessions' ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
           }`}
         >
@@ -446,21 +464,21 @@ const AdminPage: React.FC = () => {
         </button>
         <button
           onClick={() => setTab('twofactor')}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
+          className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs font-bold transition-all whitespace-nowrap ${
             tab === 'twofactor' ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
           }`}
         >
-          <ShieldCheck size={16} />
-          Two-Factor
+          <ShieldCheck size={14} />
+          2FA
         </button>
         <button
           onClick={() => setTab('users')}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
+          className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs font-bold transition-all whitespace-nowrap ${
             tab === 'users' ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
           }`}
         >
-          <UserCog size={16} />
-          Manage Users
+          <UserCog size={14} />
+          Users
         </button>
       </div>
 
@@ -754,53 +772,66 @@ const AdminPage: React.FC = () => {
             )}
           </div>
         ) : tab === 'users' ? (
-          <div className="space-y-4 max-w-3xl">
+          <div className="space-y-3">
             <div className="px-5 py-4 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-800 flex items-start gap-3">
               <UserCog size={18} className="shrink-0 mt-0.5" />
-              <p>Change role assignments for registered members. Updates take effect on their next page load or when they perform a restricted action.</p>
+              <p>Change role assignments or delete users. Updates take effect on their next page load.</p>
             </div>
             {users.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+              <div className="flex flex-col items-center justify-center py-12 text-slate-400">
                 <Users size={40} className="mb-3 opacity-30" />
                 <p className="text-sm font-semibold">No registered users yet</p>
               </div>
             ) : (
-              users.map((user) => (
-                <div key={user._id} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex items-center justify-between">
-                  <div className="min-w-0">
-                    <h3 className="text-sm font-bold text-slate-900">{user.fullName}</h3>
-                    <p className="text-xs text-slate-500 mt-0.5">@{user.username}</p>
-                    <span className={`inline-block text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md border mt-2 ${ROLE_COLORS[user.role]}`}>
-                      {ROLE_LABELS[user.role]}
-                    </span>
+              <div className="grid grid-cols-1 gap-2">
+                {users.map((user) => (
+                  <div key={user._id} className="bg-white rounded-lg border border-slate-200 shadow-sm p-3.5 flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-sm font-bold text-slate-900">{user.fullName}</h3>
+                        <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${ROLE_COLORS[user.role]}`}>
+                          {ROLE_LABELS[user.role]}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500">@{user.username}</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <select
+                        value={userRoleChanges[user._id] ?? user.role}
+                        onChange={(e) => setUserRoleChanges({ ...userRoleChanges, [user._id]: e.target.value as Role })}
+                        className="px-2.5 py-1.5 border border-slate-200 rounded text-xs font-semibold focus:outline-none focus:border-slate-400"
+                        disabled={updatingRole === user._id || deletingUser === user._id}
+                      >
+                        <option value="associate">Associate</option>
+                        <option value="queue_handler">Queue Handler</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                      <button
+                        onClick={() => {
+                          const newRole = userRoleChanges[user._id] ?? user.role;
+                          if (newRole !== user.role) {
+                            handleUpdateUserRole(user._id, newRole);
+                          }
+                        }}
+                        disabled={updatingRole === user._id || deletingUser === user._id || (userRoleChanges[user._id] === undefined || userRoleChanges[user._id] === user.role)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 text-white rounded text-xs font-semibold hover:bg-slate-800 transition-all active:scale-95 disabled:opacity-40"
+                      >
+                        {updatingRole === user._id ? <RefreshCw size={12} className="animate-spin" /> : <Check size={12} />}
+                        Save
+                      </button>
+                      <button
+                        onClick={() => setDeleteTarget(user)}
+                        disabled={updatingRole === user._id || deletingUser === user._id}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-red-200 text-red-600 rounded text-xs font-semibold hover:bg-red-50 transition-all active:scale-95 disabled:opacity-40"
+                        title="Delete user"
+                      >
+                        {deletingUser === user._id ? <RefreshCw size={12} className="animate-spin" /> : <X size={12} />}
+                        Delete
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    <select
-                      value={userRoleChanges[user._id] ?? user.role}
-                      onChange={(e) => setUserRoleChanges({ ...userRoleChanges, [user._id]: e.target.value as Role })}
-                      className="px-3 py-2 border border-slate-200 rounded-lg text-sm font-semibold focus:outline-none focus:border-slate-400"
-                      disabled={updatingRole === user._id}
-                    >
-                      <option value="associate">Associate</option>
-                      <option value="queue_handler">Queue Handler</option>
-                      <option value="admin">Admin</option>
-                    </select>
-                    <button
-                      onClick={() => {
-                        const newRole = userRoleChanges[user._id] ?? user.role;
-                        if (newRole !== user.role) {
-                          handleUpdateUserRole(user._id, newRole);
-                        }
-                      }}
-                      disabled={updatingRole === user._id || (userRoleChanges[user._id] === undefined || userRoleChanges[user._id] === user.role)}
-                      className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-semibold hover:bg-slate-800 transition-all shadow-sm active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      {updatingRole === user._id ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
-                      Save
-                    </button>
-                  </div>
-                </div>
-              ))
+                ))}
+              </div>
             )}
           </div>
         ) : null}
@@ -816,6 +847,18 @@ const AdminPage: React.FC = () => {
         variant="danger"
         onConfirm={executeReset2FA}
         onCancel={() => setResetTarget(null)}
+      />
+
+      {/* Delete user confirm */}
+      <ConfirmModal
+        isOpen={deleteTarget !== null}
+        title="Delete User"
+        message={deleteTarget ? `Permanently delete ${deleteTarget.fullName}? This cannot be undone. They'll be removed from the database and all their data will be inaccessible.` : ''}
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        variant="danger"
+        onConfirm={handleDeleteUser}
+        onCancel={() => setDeleteTarget(null)}
       />
 
       {/* Kick confirm */}
