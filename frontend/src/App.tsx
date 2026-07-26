@@ -14,6 +14,7 @@ import { setToken, clearToken, authHeaders } from './utils/authToken';
 import { RoleProvider, useRole } from './auth/RoleContext';
 import AdminPage from './pages/AdminPage';
 import PageGuard from './components/PageGuard';
+import NewUserGuide from './components/NewUserGuide';
 
 const BACKEND = (import.meta.env.VITE_BACKEND_URL || '').replace(/\/$/, '');
 
@@ -586,6 +587,7 @@ const AppFrame: React.FC<{
 }> = ({ currentUser, onLogout, onlineUsers, selectedDate, setSelectedDate, bgImage }) => {
   const location = useLocation();
   const isTracker = location.pathname === '/tracker';
+  const [showGuide, setShowGuide] = useState(() => !localStorage.getItem('newUserGuideSeen'));
 
   return (
     <RoleProvider>
@@ -607,6 +609,7 @@ const AppFrame: React.FC<{
           </Routes>
         </main>
       </div>
+      {showGuide && <NewUserGuide onComplete={() => setShowGuide(false)} />}
     </div>
     </RoleProvider>
   );
