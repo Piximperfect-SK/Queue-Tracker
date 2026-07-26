@@ -286,26 +286,39 @@ router.get('/pending', requireRole('admin'), async (req, res) => {
 // 6. Admin: approve user
 router.post('/pending/:fullName/approve', requireRole('admin'), async (req, res) => {
   try {
-    const { fullName } = req.params;
+    const { fullName: encodedFullName } = req.params;
+    const fullName = decodeURIComponent(encodedFullName);
     const { role } = req.body;
+
+    console.log(`[APPROVE] Processing approval for ${fullName}, role: ${role}`);
 
     const pending = await PendingUser.findOne({ fullName, status: 'pending' });
     if (!pending) {
+      console.log(`[APPROVE] Pending user not found: ${fullName}`);
       return res.status(404).json({ error: 'Pending user not found' });
     }
 
-    // Decrypt pending data and create TwoFactorAuth with proper encryption
-    const secret = decrypt(pending.secret);
-    const encryptedSecret = encryptCode(secret);
+    try {
+      // Decrypt pending data and create TwoFactorAuth with proper encryption
+      const secret = decrypt(pending.secret);
+      const encryptedSecret = encryptCode(secret);
 
-    const auth2FA = new TwoFactorAuth({
-      fullName: pending.fullName,
-      encryptedSecret: encryptedSecret,
-      backupCodeHashes: [],
-      enabled: true,
-      enabledAt: new Date()
-    });
-    await auth2FA.save();
+      // Delete any existing TwoFactorAuth for this user (in case of retry)
+      await TwoFactorAuth.deleteOne({ fullName: pending.fullName });
+
+      const auth2FA = new TwoFactorAuth({
+        fullName: pending.fullName,
+        encryptedSecret: encryptedSecret,
+        backupCodeHashes: [],
+        enabled: true,
+        enabledAt: new Date()
+      });
+      await auth2FA.save();
+      console.log(`[APPROVE] Created TwoFactorAuth for ${fullName}`);
+    } catch (authErr) {
+      console.error(`[APPROVE] Error creating TwoFactorAuth:`, authErr.message);
+      throw authErr;
+    }
 
     // Update pending status
     pending.status = 'approved';
@@ -314,17 +327,19 @@ router.post('/pending/:fullName/approve', requireRole('admin'), async (req, res)
     pending.processedBy = req.user?.fullName || 'admin';
     await pending.save();
 
-    res.json({ success: true, message: `${fullName} approved as ${role || 'Associate'}` });
+    console.log(`[APPROVE] Successfully approved ${fullName} as ${role || 'associate'}`);
+    res.json({ success: true, message: `${fullName} approved as ${role || 'associate'}` });
   } catch (err) {
-    console.error('Approve error:', err);
-    res.status(500).json({ error: 'Server error during approval' });
+    console.error('[APPROVE] Approval error:', err.message, err.stack);
+    res.status(500).json({ error: 'Server error during approval', details: err.message });
   }
 });
 
 // 7. Admin: reject user
 router.post('/pending/:fullName/reject', requireRole('admin'), async (req, res) => {
   try {
-    const { fullName } = req.params;
+    const { fullName: encodedFullName } = req.params;
+    const fullName = decodeURIComponent(encodedFullName);
 
     const pending = await PendingUser.findOne({ fullName, status: 'pending' });
     if (!pending) {
