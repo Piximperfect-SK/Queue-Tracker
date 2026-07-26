@@ -263,6 +263,7 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
   const [isImportingRoster, setIsImportingRoster] = useState(false);
   const [times, setTimes] = useState({ ist: '', uk: '' });
   const [currentShift, setCurrentShift] = useState<string>('');
+  const [isOffDutyModalOpen, setIsOffDutyModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Screenshot import state
@@ -930,10 +931,10 @@ Rules:
                   <p className="text-[16px] font-black text-slate-900 tabular-nums leading-none mt-1">{totalOnShift}</p>
                 </div>
                 <div className="w-px h-6 bg-slate-200" />
-                <div className="text-center">
+                <button onClick={() => setIsOffDutyModalOpen(true)} className="text-center hover:opacity-70 transition-opacity cursor-pointer">
                   <p className="text-[7.5px] text-slate-400 uppercase tracking-widest font-black leading-none">Off</p>
                   <p className="text-[16px] font-black text-slate-500 tabular-nums leading-none mt-1">{totalOffDuty}</p>
-                </div>
+                </button>
               </div>
 
               {/* Import button */}
@@ -1090,6 +1091,71 @@ Rules:
           </>
         )}
       </DndContext>
+
+      {/* Off Duty Modal */}
+      {isOffDutyModalOpen && (
+        <div className="fixed inset-0 flex items-center justify-center z-50 p-6">
+          <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={() => setIsOffDutyModalOpen(false)} />
+          <div className="relative bg-white border border-slate-200 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center">
+                    <AlertCircle size={20} className="text-slate-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black text-slate-900">Off Duty Agents</h3>
+                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mt-0.5">{dayLabel}</p>
+                  </div>
+                </div>
+                <button onClick={() => setIsOffDutyModalOpen(false)} className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all">
+                  <X size={16} />
+                </button>
+              </div>
+
+              {getOffDutyHandlers().length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 gap-2">
+                  <div className="w-12 h-12 rounded-full bg-emerald-50 flex items-center justify-center">
+                    <span className="text-emerald-600 text-xl font-black">✓</span>
+                  </div>
+                  <p className="text-[12px] font-bold text-slate-500">No agents off duty</p>
+                  <p className="text-[10px] text-slate-400">Everyone is on shift today</p>
+                </div>
+              ) : (
+                <div className="space-y-1.5 max-h-[60vh] overflow-auto pr-1">
+                  {getOffDutyHandlers().map(({ handler, reason }) => {
+                    const lc = getLeaveConfig(reason);
+                    return (
+                      <div
+                        key={handler.id}
+                        className={`flex items-center justify-between px-4 py-3 rounded-xl border ${lc.bg} ${lc.border}`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-[11px] font-black ${lc.bg} ${lc.text} border ${lc.border}`}>
+                            {handler.name.charAt(0).toUpperCase()}
+                          </div>
+                          <span className="text-[13px] font-bold text-slate-900 truncate">{handler.name}</span>
+                        </div>
+                        <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider ${lc.bg} ${lc.text} border ${lc.border}`}>
+                          {lc.label}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            <div className="px-6 pb-6">
+              <button
+                onClick={() => setIsOffDutyModalOpen(false)}
+                className="w-full py-2.5 rounded-xl font-black text-[11px] uppercase tracking-widest bg-slate-900 hover:bg-black text-white transition-all shadow-md"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Leave Confirmation Modal */}
       {leaveOperation && (
