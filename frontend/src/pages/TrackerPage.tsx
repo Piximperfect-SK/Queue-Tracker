@@ -426,7 +426,7 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
       </div>
 
       {/* ── Table — no outer scroll, fits viewport ──────────────────────────── */}
-      <div className="flex-1 min-h-0 overflow-hidden bg-white flex flex-col">
+      <div className="flex-1 min-h-0 overflow-hidden bg-white flex flex-col" style={{contain:"strict"}}>
         {activeHandlers.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full opacity-20">
             <ShieldCheck size={56} strokeWidth={1} className="text-slate-300 mb-4" />
@@ -451,7 +451,7 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
                 ].map(({ label }, i) => (
                   <div
                     key={i}
-                    className="px-1 py-1.5 text-center border-r border-slate-100 last:border-r-0 flex items-center justify-center"
+                    className="px-1 py-1 text-center border-r border-slate-100 last:border-r-0 flex items-center justify-center h-[28px]"
                   >
                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</span>
                   </div>
@@ -460,7 +460,7 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
             </div>
 
             {/* Shift groups — shrink to content, overall area scrolls if needed */}
-            <div className="flex-1 min-h-0 overflow-hidden flex flex-col divide-y divide-slate-100">
+            <div className="flex-1 min-h-0 overflow-y-auto flex flex-col divide-y divide-slate-100">
               {handlerGroups.map(({ shift, handlers: groupHandlers }) => {
                 const meta = getShiftMeta(shift);
                 const isCollapsed = collapsedShifts.has(shift);
@@ -472,13 +472,13 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
                 return (
                   <div
                     key={shift}
-                    className={`flex flex-col ${isCollapsed ? "shrink-0" : "flex-1 min-h-0"}`}
+                    className="flex flex-col shrink-0"
                   >
                     {/* ── Shift header row (clickable) ── */}
                     <button
                       onClick={() => toggleShift(shift)}
                       className={`
-                        shrink-0 w-full flex items-center gap-2 px-3 py-1
+                        shrink-0 w-full h-[26px] flex items-center gap-2 px-3
                         border-b transition-colors cursor-pointer
                         ${meta.headerBg} ${meta.headerBorder}
                         hover:brightness-[0.97]
@@ -525,7 +525,7 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
 
                     {/* ── Handler rows (hidden when collapsed) ── */}
                     {!isCollapsed && (
-                      <div className="flex-1 min-h-0 flex flex-col divide-y divide-slate-100/80">
+                      <div className="flex flex-col divide-y divide-slate-100/80">
                         {groupHandlers.map(handler => {
                           const hs = getHandlerStats(handler.id);
                           const disabled = isShiftNearEnd(handler.shift);
@@ -544,7 +544,7 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
                             <div
                               key={handler.id}
                               className={`
-                                flex-1 min-h-0 grid items-center transition-colors group
+                                h-[34px] grid items-center transition-colors group
                                 ${meta.rowBg} ${meta.rowHover}
                                 ${disabled ? 'opacity-30 grayscale pointer-events-none' : ''}
                               `}
