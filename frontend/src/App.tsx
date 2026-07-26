@@ -30,7 +30,6 @@ function App() {
   const [inputName, setInputName] = useState('');
   const [inputCode, setInputCode] = useState('');
   const [setupQR, setSetupQR] = useState('');
-  const [backupCodes, setBackupCodes] = useState<string[]>([]);
   const [setupSecret, setSetupSecret] = useState('');
   
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
@@ -182,7 +181,6 @@ function App() {
         }
 
         setSetupQR(setupData.qrCode);
-        setBackupCodes(setupData.backupCodes || []);
         setSetupSecret(setupData.secret);
         setAuthStage('setup-qr');
         setIsVerifying(false);
@@ -456,23 +454,12 @@ function App() {
                     <img src={setupQR} alt="QR Code" className="mx-auto w-48 h-48" />
                     <p className="mt-4 text-[10px] text-slate-600 font-bold">Scan with Google Authenticator or similar app</p>
                   </div>
-                  <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-amber-800 mb-2">Backup Codes</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {backupCodes.map((code, i) => (
-                        <div key={i} className="bg-white px-3 py-2 rounded-lg text-center font-mono text-xs text-slate-900">
-                          {code}
-                        </div>
-                      ))}
-                    </div>
-                    <p className="mt-3 text-[9px] text-amber-700">Save these codes in a secure location</p>
-                  </div>
                   <button
                     type="button"
                     onClick={() => setAuthStage('setup-confirm')}
                     className="w-full bg-slate-900 hover:bg-black text-white py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all shadow-xl active:scale-[0.98]"
                   >
-                    I've saved the codes → Continue
+                    I've scanned the code → Continue
                   </button>
                 </div>
               )}

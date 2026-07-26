@@ -4,7 +4,6 @@ import qrcode from 'qrcode';
 import crypto from 'crypto';
 import { randomUUID } from 'crypto';
 import jwt from 'jsonwebtoken';
-import bcrypt from 'bcrypt';
 import TwoFactorAuth from '../models/TwoFactorAuth.js';
 import PendingUser from '../models/PendingUser.js';
 import User from '../models/User.js';
@@ -102,35 +101,19 @@ router.post('/login/totp', async (req, res) => {
     // Decrypt the secret
     const secret = decryptCode(auth2FA.encryptedSecret);
 
-    // Try TOTP code
+    // Verify TOTP code
     const validTotp = /^\d{6}$/.test(cleanCode) && authenticator.verify({
       token: cleanCode,
       secret: secret
     });
 
-    // If TOTP fails, try backup codes (they're bcrypt hashed)
-    let usedBackup = false;
-    let usedBackupHash = null;
     if (!validTotp) {
-      for (const hash of auth2FA.backupCodeHashes) {
-        if (await bcrypt.compare(cleanCode.toUpperCase(), hash)) {
-          usedBackup = true;
-          usedBackupHash = hash;
-          break;
-        }
-      }
-    }
-
-    if (!validTotp && !usedBackup) {
       return res.status(401).json({ error: 'Invalid code' });
     }
 
-    // Remove used backup code if applicable
-    if (usedBackup && usedBackupHash) {
-      auth2FA.backupCodeHashes = auth2FA.backupCodeHashes.filter(h => h !== usedBackupHash);
-      auth2FA.lastUsedAt = new Date();
-      await auth2FA.save();
-    }
+    // Update last used timestamp
+    auth2FA.lastUsedAt = new Date();
+    await auth2FA.save();
 
     // Determine role: check if admin user, otherwise check approved pending user, default to associate
     let role = 'associate';
@@ -155,8 +138,7 @@ router.post('/login/totp', async (req, res) => {
     
     res.json({
       success: true,
-      ...sessionData,
-      usedBackup
+      ...sessionData
     });
   } catch (err) {
     console.error('TOTP login error:', err);
@@ -189,11 +171,6 @@ router.post('/register/setup', async (req, res) => {
     const secret = authenticator.generateSecret();
     const otpauthUrl = authenticator.keyuri(cleanName, 'Queue Tracker', secret);
 
-    // Generate backup codes (will be bcrypt hashed before storage)
-    const backupCodes = Array.from({ length: 8 }, () =>
-      crypto.randomBytes(4).toString('hex').toUpperCase()
-    );
-
     // Generate QR code
     const qrCodeDataURL = await qrcode.toDataURL(otpauthUrl);
 
@@ -201,13 +178,11 @@ router.post('/register/setup', async (req, res) => {
     req.session = req.session || {};
     req.session.pendingSetup = {
       fullName: cleanName,
-      secret: secret,
-      backupCodes
+      secret: secret
     };
 
     res.json({
       qrCode: qrCodeDataURL,
-      backupCodes,
       secret: secret
     });
   } catch (err) {
@@ -249,16 +224,12 @@ router.post('/register/confirm', async (req, res) => {
 
     if (isAdmin) {
       // Auto-approve admin users
-      // Encrypt secret and hash backup codes to match existing TwoFactorAuth schema
       const encryptedSecret = encryptCode(setupData.secret);
-      const backupCodeHashes = await Promise.all(
-        setupData.backupCodes.map(code => bcrypt.hash(code, 10))
-      );
 
       const auth2FA = new TwoFactorAuth({
         fullName: cleanName,
         encryptedSecret: encryptedSecret,
-        backupCodeHashes: backupCodeHashes,
+        backupCodeHashes: [],
         enabled: true,
         enabledAt: new Date()
       });
@@ -281,7 +252,7 @@ router.post('/register/confirm', async (req, res) => {
     const pendingUser = new PendingUser({
       fullName: cleanName,
       secret: encrypt(setupData.secret),
-      backupCodes: setupData.backupCodes.map(encrypt),
+      backupCodes: [],
       status: 'pending'
     });
     await pendingUser.save();
@@ -324,17 +295,12 @@ router.post('/pending/:fullName/approve', requireRole('admin'), async (req, res)
 
     // Decrypt pending data and create TwoFactorAuth with proper encryption
     const secret = decrypt(pending.secret);
-    const backupCodes = pending.backupCodes.map(decrypt);
-    
     const encryptedSecret = encryptCode(secret);
-    const backupCodeHashes = await Promise.all(
-      backupCodes.map(code => bcrypt.hash(code, 10))
-    );
 
     const auth2FA = new TwoFactorAuth({
       fullName: pending.fullName,
       encryptedSecret: encryptedSecret,
-      backupCodeHashes: backupCodeHashes,
+      backupCodeHashes: [],
       enabled: true,
       enabledAt: new Date()
     });
