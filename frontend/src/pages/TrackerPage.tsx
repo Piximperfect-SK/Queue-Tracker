@@ -269,18 +269,18 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
     <div className="h-full w-full flex flex-col overflow-hidden bg-white">
 
       {/* ── Topbar ─────────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between px-5 py-2.5 border-b border-slate-200 shrink-0 bg-white shadow-sm">
+      <div className="flex items-center justify-between px-4 py-1.5 border-b border-slate-200 shrink-0 bg-white">
 
         {/* Left side */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           {/* Title */}
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-slate-900 rounded-xl flex items-center justify-center shadow-md">
-              <ShieldCheck size={16} className="text-white" />
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 bg-slate-900 rounded-lg flex items-center justify-center shadow-md">
+              <ShieldCheck size={14} className="text-white" />
             </div>
             <div>
-              <p className="text-[7.5px] text-slate-400 font-black uppercase tracking-[0.25em] leading-none">Live Performance Board</p>
-              <h1 className="text-[14px] font-black text-slate-900 tracking-tight uppercase leading-none mt-0.5">Productivity Tracker</h1>
+              <p className="text-[6.5px] text-slate-400 font-black uppercase tracking-[0.25em] leading-none">Live Board</p>
+              <h1 className="text-[12px] font-black text-slate-900 tracking-tight uppercase leading-none mt-0.5">Productivity</h1>
             </div>
           </div>
 
@@ -327,18 +327,18 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
         </div>
 
         {/* Right — totals */}
-        <div className="flex items-center divide-x divide-slate-200 bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+        <div className="flex items-center divide-x divide-slate-100 bg-slate-50 border border-slate-200 rounded-lg overflow-hidden">
           {[
-            { label: 'Total INC',   value: totalStats.incidents, color: 'text-sky-600',    dot: 'bg-sky-500' },
-            { label: 'Total TASK',  value: totalStats.sctasks,   color: 'text-amber-600',  dot: 'bg-amber-400' },
-            { label: 'Total CALLS', value: totalStats.calls,     color: 'text-[#00ADB5]',  dot: 'bg-[#00ADB5]' },
+            { label: 'INC',   value: totalStats.incidents, color: 'text-sky-600',    dot: 'bg-sky-500' },
+            { label: 'TASK',  value: totalStats.sctasks,   color: 'text-amber-600',  dot: 'bg-amber-400' },
+            { label: 'CALLS', value: totalStats.calls,     color: 'text-[#00ADB5]',  dot: 'bg-[#00ADB5]' },
           ].map(({ label, value, color, dot }) => (
-            <div key={label} className="px-4 py-2 flex flex-col items-center min-w-[76px]">
-              <div className="flex items-center gap-1.5 mb-0.5">
-                <div className={`w-1.5 h-1.5 rounded-full ${dot}`} />
-                <span className={`text-[7px] font-black uppercase tracking-[0.2em] ${color}`}>{label}</span>
+            <div key={label} className="px-3 py-1 flex flex-col items-center min-w-[60px]">
+              <div className="flex items-center gap-1">
+                <div className={`w-1 h-1 rounded-full ${dot}`} />
+                <span className={`text-[6.5px] font-black uppercase tracking-wider ${color}`}>{label}</span>
               </div>
-              <span className="text-[18px] font-black text-slate-900 tabular-nums leading-none">{value}</span>
+              <span className="text-[14px] font-black text-slate-900 tabular-nums leading-none">{value}</span>
             </div>
           ))}
         </div>
@@ -355,24 +355,24 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
           <table className="w-full table-fixed border-collapse">
 
             {/* Sticky column headers */}
-            <thead className="sticky top-0 z-20 bg-white shadow-sm">
-              <tr className="border-b-2 border-slate-200">
+            <thead className="sticky top-0 z-20 bg-white">
+              <tr className="border-b border-slate-200">
                 {[
-                  { label: 'On Shift',   w: '22%' },
-                  { label: 'Shift',      w: '14%' },
-                  { label: 'Shift Time', w: '10%' },
-                  { label: 'INC',        w: '9%'  },
-                  { label: 'TASK',       w: '9%'  },
-                  { label: 'CALL',       w: '9%'  },
-                  { label: 'Notes',      w: '21%' },
-                  { label: 'Total',      w: '6%'  },
+                  { label: 'Agent',   w: '20%' },
+                  { label: 'Shift',   w: '12%' },
+                  { label: 'Time',    w: '10%' },
+                  { label: 'INC',     w: '11%'  },
+                  { label: 'TASK',    w: '11%'  },
+                  { label: 'CALL',    w: '11%'  },
+                  { label: 'Status / Notes', w: '19%' },
+                  { label: 'Total',   w: '6%'  },
                 ].map(({ label, w }) => (
                   <th
                     key={label}
-                    className="px-3 py-2.5 text-center border-r border-slate-100 last:border-r-0 bg-slate-50"
+                    className="px-2 py-1.5 text-center border-r border-slate-100 last:border-r-0 bg-slate-50"
                     style={{ width: w }}
                   >
-                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{label}</span>
+                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{label}</span>
                   </th>
                 ))}
               </tr>
@@ -388,19 +388,16 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
                     <tr>
                       <td
                         colSpan={8}
-                        className={`px-4 py-1.5 border-b border-t ${meta.dividerBg}`}
-                        style={{ borderColor: `${meta.accentHex}25` }}
+                        className={`px-3 py-0.5 border-b border-t ${meta.dividerBg}`}
+                        style={{ borderColor: `${meta.accentHex}15` }}
                       >
-                        <div className="flex items-center gap-2.5">
+                        <div className="flex items-center gap-2">
                           <div
-                            className="w-2 h-2 rounded-full shrink-0"
-                            style={{ background: meta.accentHex, boxShadow: `0 0 6px ${meta.accentHex}60` }}
+                            className="w-1.5 h-1.5 rounded-full shrink-0"
+                            style={{ background: meta.accentHex }}
                           />
-                          <span className={`text-[9px] font-black uppercase tracking-[0.25em] ${meta.dividerText}`}>
+                          <span className={`text-[8px] font-black uppercase tracking-widest ${meta.dividerText}`}>
                             {meta.label}
-                          </span>
-                          <span className="text-[8px] text-slate-400 font-bold ml-1">
-                            {groupHandlers.length} handler{groupHandlers.length !== 1 ? 's' : ''}
                           </span>
                         </div>
                       </td>
@@ -430,20 +427,20 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
                           `}
                         >
                           {/* Name */}
-                          <td className="px-3 py-2 border-r border-slate-100">
-                            <div className="flex items-center justify-center gap-2">
-                              <span className="text-[13px] font-semibold text-slate-800 truncate">{handler.name}</span>
+                          <td className="px-2 py-1 border-r border-slate-100">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <span className="text-[12px] font-bold text-slate-800 truncate">{handler.name}</span>
                               {handler.isQH && (
-                                <Shield size={11} className="text-amber-500 shrink-0" title="Queue Handler" />
+                                <Shield size={10} className="text-amber-500 shrink-0" title="Queue Handler" />
                               )}
                             </div>
                           </td>
 
                           {/* Shift label */}
-                          <td className="px-2 py-2 border-r border-slate-100 text-center">
+                          <td className="px-1 py-1 border-r border-slate-100 text-center">
                             <span className={`
-                              inline-flex items-center px-2.5 py-1 rounded-md
-                              text-[10px] font-black border
+                              inline-flex items-center px-2 py-0.5 rounded
+                              text-[8px] font-black border
                               ${meta.badgeBg} ${meta.badgeText} ${meta.badgeBorder}
                             `}>
                               {meta.label}
@@ -451,10 +448,10 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
                           </td>
 
                           {/* Shift time */}
-                          <td className="px-2 py-2 border-r border-slate-100 text-center">
+                          <td className="px-1 py-1 border-r border-slate-100 text-center">
                             <span className={`
-                              inline-flex items-center px-2 py-1 rounded-md
-                              text-[10px] font-black
+                              inline-flex items-center px-1.5 py-0.5 rounded
+                              text-[9px] font-black
                               ${meta.timeBg} ${meta.timeText}
                             `}>
                               {handler.shift}
@@ -462,47 +459,47 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
                           </td>
 
                           {/* INC */}
-                          <td className="px-2 py-2 border-r border-slate-100">
-                            <div className="flex items-center justify-center gap-1.5">
+                          <td className="px-1 py-1 border-r border-slate-100">
+                            <div className="flex items-center justify-center gap-2">
                               <button
                                 onClick={() => updateStat(handler.id, 'incidents', Math.max(0, hs.incidents - 1))}
-                                className="w-6 h-6 rounded-full bg-white border border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-800 flex items-center justify-center text-sm leading-none transition-colors shadow-sm"
+                                className="w-10 h-10 rounded-full bg-white border border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-800 flex items-center justify-center text-xl font-bold transition-all shadow-sm active:scale-95"
                               >−</button>
-                              <span className={`w-7 text-center font-black text-[14px] tabular-nums transition-all ${flash('incidents')}`}>
+                              <span className={`w-8 text-center font-black text-[16px] tabular-nums transition-all ${flash('incidents')}`}>
                                 {hs.incidents}
                               </span>
                               <button
                                 onClick={() => updateStat(handler.id, 'incidents', hs.incidents + 1)}
-                                className="w-6 h-6 rounded-full bg-white border border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-800 flex items-center justify-center text-sm leading-none transition-colors shadow-sm"
+                                className="w-10 h-10 rounded-full bg-white border border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-800 flex items-center justify-center text-xl font-bold transition-all shadow-sm active:scale-95"
                               >+</button>
                             </div>
                           </td>
 
                           {/* TASK */}
-                          <td className="px-2 py-2 border-r border-slate-100">
-                            <div className="flex items-center justify-center gap-1.5">
+                          <td className="px-1 py-1 border-r border-slate-100">
+                            <div className="flex items-center justify-center gap-2">
                               <button
                                 onClick={() => updateStat(handler.id, 'sctasks', Math.max(0, hs.sctasks - 1))}
-                                className="w-6 h-6 rounded-full bg-white border border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-800 flex items-center justify-center text-sm leading-none transition-colors shadow-sm"
+                                className="w-10 h-10 rounded-full bg-white border border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-800 flex items-center justify-center text-xl font-bold transition-all shadow-sm active:scale-95"
                               >−</button>
-                              <span className={`w-7 text-center font-black text-[14px] tabular-nums transition-all ${flash('sctasks')}`}>
+                              <span className={`w-8 text-center font-black text-[16px] tabular-nums transition-all ${flash('sctasks')}`}>
                                 {hs.sctasks}
                               </span>
                               <button
                                 onClick={() => updateStat(handler.id, 'sctasks', hs.sctasks + 1)}
-                                className="w-6 h-6 rounded-full bg-white border border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-800 flex items-center justify-center text-sm leading-none transition-colors shadow-sm"
+                                className="w-10 h-10 rounded-full bg-white border border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-800 flex items-center justify-center text-xl font-bold transition-all shadow-sm active:scale-95"
                               >+</button>
                             </div>
                           </td>
 
                           {/* CALL */}
-                          <td className="px-2 py-2 border-r border-slate-100">
-                            <div className="flex items-center justify-center gap-1.5">
+                          <td className="px-1 py-1 border-r border-slate-100">
+                            <div className="flex items-center justify-center gap-2">
                               <button
                                 onClick={() => updateStat(handler.id, 'calls', Math.max(0, hs.calls - 1))}
-                                className="w-6 h-6 rounded-full bg-white border border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-800 flex items-center justify-center text-sm leading-none transition-colors shadow-sm"
+                                className="w-10 h-10 rounded-full bg-white border border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-800 flex items-center justify-center text-xl font-bold transition-all shadow-sm active:scale-95"
                               >−</button>
-                              <span className={`w-7 text-center font-black text-[14px] tabular-nums transition-all ${flash('calls')}`}>
+                              <span className={`w-8 text-center font-black text-[16px] tabular-nums transition-all ${flash('calls')}`}>
                                 {hs.calls}
                               </span>
                               <button
@@ -510,27 +507,27 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
                                   setCallData({ ...callData, handlerId: handler.id });
                                   setIsCallModalOpen(true);
                                 }}
-                                className="w-6 h-6 rounded-full bg-[#00ADB5] hover:bg-[#00ADB5]/80 text-white flex items-center justify-center text-sm leading-none font-black transition-colors shadow-sm"
+                                className="w-10 h-10 rounded-full bg-[#00ADB5] hover:bg-[#00ADB5]/80 text-white flex items-center justify-center text-xl font-bold transition-all shadow-sm active:scale-95"
                               >+</button>
                             </div>
                           </td>
 
                           {/* Notes */}
-                          <td className="px-2 py-2 border-r border-slate-100">
+                          <td className="px-1 py-1 border-r border-slate-100">
                             <input
                               type="text"
                               placeholder="Log status…"
                               value={hs.comments}
                               onChange={e => updateStat(handler.id, 'comments', e.target.value)}
-                              className="w-full px-2.5 py-1.5 text-[12px] text-center text-slate-700 bg-white border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-[#00ADB5]/20 focus:border-[#00ADB5]/40 transition-all placeholder:text-slate-300 shadow-sm"
+                              className="w-full px-2 py-1 text-[11px] text-center text-slate-700 bg-transparent border border-transparent rounded-lg outline-none focus:ring-1 focus:ring-[#00ADB5]/20 focus:border-[#00ADB5]/40 transition-all placeholder:text-slate-200"
                             />
                           </td>
 
                           {/* Total */}
-                          <td className="px-2 py-2 text-center">
+                          <td className="px-1 py-1 text-center">
                             <span className={`
-                              inline-flex items-center justify-center px-2.5 py-1 rounded-lg
-                              font-black text-[13px] tabular-nums
+                              inline-flex items-center justify-center px-2 py-0.5 rounded-md
+                              font-black text-[12px] tabular-nums
                               ${rowTotal > 0 ? `${meta.totalBg} ${meta.totalText}` : 'bg-slate-100 text-slate-400'}
                             `}>
                               {rowTotal}

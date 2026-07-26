@@ -840,9 +840,15 @@ Rules:
   };
   
   // Get assigned QH for currently active shift (or first shift if none active)
-  const assignedQH = currentShift && shiftOnlyShifts.includes(currentShift)
-    ? getShiftQH(currentShift)
-    : (shiftOnlyShifts.length > 0 ? getShiftQH(shiftOnlyShifts[0]) : []);
+  // Only show "Current" QH logic if looking at TODAY'S roster
+  const todayIST = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+  const isToday = selectedDate === todayIST;
+
+  const assignedQH = isToday
+    ? (currentShift && shiftOnlyShifts.includes(currentShift)
+        ? getShiftQH(currentShift)
+        : (shiftOnlyShifts.length > 0 ? getShiftQH(shiftOnlyShifts[0]) : []))
+    : [];
 
   const navDate = (dir: number) => {
     const [y,m,d] = selectedDate.split('-').map(Number);
