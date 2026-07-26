@@ -134,13 +134,19 @@ router.post('/login/totp', async (req, res) => {
 
     // Determine role: check if admin user, otherwise check approved pending user, default to associate
     let role = 'associate';
-    const adminUser = await User.findOne({ fullName: cleanName });
-    if (adminUser && adminUser.role === 'Admin') {
+    
+    // Hardcoded: Shubham Kumar is always admin
+    if (cleanName.toLowerCase() === 'shubham kumar') {
       role = 'admin';
     } else {
-      const approvedUser = await PendingUser.findOne({ fullName: cleanName, status: 'approved' });
-      if (approvedUser && approvedUser.assignedRole) {
-        role = approvedUser.assignedRole;
+      const adminUser = await User.findOne({ fullName: cleanName });
+      if (adminUser && adminUser.role === 'admin') {
+        role = 'admin';
+      } else {
+        const approvedUser = await PendingUser.findOne({ fullName: cleanName, status: 'approved' });
+        if (approvedUser && approvedUser.assignedRole) {
+          role = approvedUser.assignedRole;
+        }
       }
     }
 
@@ -239,7 +245,7 @@ router.post('/register/confirm', async (req, res) => {
 
     // Check if user is an admin (auto-approve)
     const adminUser = await User.findOne({ fullName: cleanName });
-    const isAdmin = adminUser && adminUser.role === 'Admin';
+    const isAdmin = (adminUser && adminUser.role === 'admin') || cleanName.toLowerCase() === 'shubham kumar';
 
     if (isAdmin) {
       // Auto-approve admin users

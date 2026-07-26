@@ -52,6 +52,10 @@ function App() {
     })();
     setCurrentUser(null);
     setIsAuthenticated(false);
+    setAuthStage('name');
+    setInputName('');
+    setInputCode('');
+    setAuthError(null);
   };
 
   useEffect(() => {
