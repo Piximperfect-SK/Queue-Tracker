@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Calendar, BarChart2, Settings, LogOut, Activity, Shield } from 'lucide-react';
+import { Calendar, BarChart2, Settings, LogOut, Activity, Shield, Moon, Sun } from 'lucide-react';
 import { socket } from '../utils/socket';
+import { useTheme } from '../theme/ThemeContext';
 import { useRole } from '../auth/RoleContext';
 
 interface NavbarProps {
@@ -13,6 +14,7 @@ interface NavbarProps {
 const Navbar: React.FC<NavbarProps> = ({ currentUser, onLogout, onlineUsers }) => {
   const [isConnected, setIsConnected] = useState(socket.connected);
   const { role, pages } = useRole();
+  const { theme, toggle } = useTheme();
 
   useEffect(() => {
     const onConnect = () => setIsConnected(true);
@@ -106,11 +108,20 @@ const Navbar: React.FC<NavbarProps> = ({ currentUser, onLogout, onlineUsers }) =
               )}
             </div>
 
+            {/* Theme toggle */}
+            <button
+              onClick={toggle}
+              title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+              className="w-8 h-8 rounded-xl flex items-center justify-center text-white/50 hover:text-white hover:bg-[#393E46] transition-all"
+            >
+              {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+            </button>
+
             <div className="h-8 w-px bg-white/20" />
 
             {/* Subtle credit */}
             <div className="flex flex-col items-end leading-none mr-1">
-              <span className="text-[7px] text-white/20 uppercase tracking-[0.2em]">Designed &amp; Developed by</span>
+              <span className="text-[7px] text-white/20 uppercase tracking-[0.2em]">Designed &amp; developed with</span>
               <span className="text-[8px] font-black text-[#00ADB5]/60 tracking-widest uppercase">Shubham Kumar</span>
             </div>
 

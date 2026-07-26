@@ -112,3 +112,84 @@ html, body, #root {
     padding: 0.35rem 0.75rem;
   }
 }
+
+/* ── Monitor Page Theme Variables ─────────────────────────────────────── */
+:root, [data-theme="dark"] {
+  --mon-bg:           #0b0f1e;
+  --mon-bg2:          #0d1228;
+  --mon-surface:      rgba(255,255,255,0.02);
+  --mon-surface2:     rgba(255,255,255,0.04);
+  --mon-border:       rgba(255,255,255,0.08);
+  --mon-border2:      rgba(255,255,255,0.06);
+  --mon-border3:      rgba(255,255,255,0.07);
+  --mon-text:         rgba(255,255,255,0.90);
+  --mon-text2:        rgba(255,255,255,0.50);
+  --mon-text3:        rgba(255,255,255,0.30);
+  --mon-text4:        rgba(255,255,255,0.20);
+  --mon-text5:        rgba(255,255,255,0.15);
+  --mon-muted:        rgba(255,255,255,0.07);
+  --mon-hover:        rgba(255,255,255,0.04);
+  --mon-chart-bg:     rgba(0,0,0,0.25);
+  --mon-chart-grid:   rgba(255,255,255,0.04);
+  --mon-stat-bg:      rgba(255,255,255,0.03);
+  --mon-stat-border:  rgba(255,255,255,0.07);
+  --mon-scrollbar:    rgba(255,255,255,0.08);
+  --mon-scrollbar-h:  rgba(255,255,255,0.15);
+  --mon-teal:         #00ADB5;
+  --mon-teal-bg:      rgba(0,173,181,0.15);
+  --mon-teal-border:  rgba(0,173,181,0.30);
+  --mon-teal-text:    rgba(0,173,181,0.70);
+  --mon-footer-bg:    rgba(0,0,0,0.20);
+  --mon-input-bg:     rgba(0,0,0,0.20);
+  --mon-btn-bg:       rgba(255,255,255,0.04);
+  --mon-btn-hover:    rgba(255,255,255,0.08);
+  --mon-btn-text:     rgba(255,255,255,0.50);
+  --mon-tag-all-bg:   rgba(255,255,255,0.10);
+  --mon-tag-all-text: rgba(255,255,255,0.70);
+  --mon-socket-bg:    rgba(0,173,181,0.10);
+  --mon-socket-border:rgba(0,173,181,0.25);
+  --mon-socket-text:  #00ADB5;
+}
+
+[data-theme="light"] {
+  --mon-bg:           #f0f4f8;
+  --mon-bg2:          #e8edf5;
+  --mon-surface:      rgba(255,255,255,0.70);
+  --mon-surface2:     rgba(255,255,255,0.90);
+  --mon-border:       rgba(15,23,42,0.10);
+  --mon-border2:      rgba(15,23,42,0.07);
+  --mon-border3:      rgba(15,23,42,0.09);
+  --mon-text:         rgba(15,23,42,0.90);
+  --mon-text2:        rgba(15,23,42,0.55);
+  --mon-text3:        rgba(15,23,42,0.38);
+  --mon-text4:        rgba(15,23,42,0.25);
+  --mon-text5:        rgba(15,23,42,0.18);
+  --mon-muted:        rgba(15,23,42,0.05);
+  --mon-hover:        rgba(15,23,42,0.04);
+  --mon-chart-bg:     rgba(255,255,255,0.80);
+  --mon-chart-grid:   rgba(15,23,42,0.06);
+  --mon-stat-bg:      rgba(255,255,255,0.80);
+  --mon-stat-border:  rgba(15,23,42,0.10);
+  --mon-scrollbar:    rgba(15,23,42,0.12);
+  --mon-scrollbar-h:  rgba(15,23,42,0.22);
+  --mon-teal:         #007C82;
+  --mon-teal-bg:      rgba(0,124,130,0.10);
+  --mon-teal-border:  rgba(0,124,130,0.25);
+  --mon-teal-text:    rgba(0,124,130,0.80);
+  --mon-footer-bg:    rgba(255,255,255,0.60);
+  --mon-input-bg:     rgba(255,255,255,0.80);
+  --mon-btn-bg:       rgba(15,23,42,0.05);
+  --mon-btn-hover:    rgba(15,23,42,0.09);
+  --mon-btn-text:     rgba(15,23,42,0.50);
+  --mon-tag-all-bg:   rgba(15,23,42,0.08);
+  --mon-tag-all-text: rgba(15,23,42,0.65);
+  --mon-socket-bg:    rgba(0,124,130,0.08);
+  --mon-socket-border:rgba(0,124,130,0.22);
+  --mon-socket-text:  #007C82;
+}
+
+/* Monitor page scrollbar using CSS variables */
+.mon-scrollbar::-webkit-scrollbar { width: 3px; }
+.mon-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.mon-scrollbar::-webkit-scrollbar-thumb { background: var(--mon-scrollbar); border-radius: 2px; }
+.mon-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--mon-scrollbar-h); }

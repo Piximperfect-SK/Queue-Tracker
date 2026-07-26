@@ -1,26 +1,24 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  Terminal, Shield, Zap, Wifi, CheckCircle2, XCircle, AlertCircle,
-  Activity, Radio, RefreshCw, Clock, Database, Server, Filter
+  Terminal, Shield, Wifi, CheckCircle2, XCircle, AlertCircle,
+  Activity, Radio, RefreshCw, Clock, Database, Server, Filter,
+  Zap
 } from 'lucide-react';
 import { AreaChart, Area, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from 'recharts';
 import { socket } from '../utils/socket';
 import type { LogEntry } from '../types';
 import { getLogsForDate, saveSingleLogFromServer } from '../utils/logger';
 
-// ── types ──────────────────────────────────────────────────────────────────
-interface ApiCheck { ts: number; status: number | null; time: number | null; size: number | null; }
-
-// ── constants ──────────────────────────────────────────────────────────────
-const PING_LIMIT   = 40;
-const API_LIMIT    = 30;
-const LOG_LIMIT    = 200;
+const PING_LIMIT    = 40;
+const API_LIMIT     = 30;
+const LOG_LIMIT     = 200;
 const PING_INTERVAL = 3000;
 const API_INTERVAL  = 5000;
 
-// ── helpers ────────────────────────────────────────────────────────────────
-const avg   = (arr: number[]) => arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : null;
+interface ApiCheck { ts: number; status: number | null; time: number | null; size: number | null; }
+
 const safeN = (arr: number[]) => arr.filter(v => v >= 0);
+const avg   = (arr: number[]) => arr.length ? Math.round(arr.reduce((a,b)=>a+b,0)/arr.length) : null;
 
 function useTopOffset() {
   const [top, setTop] = useState(0);
@@ -38,65 +36,80 @@ function useTopOffset() {
   return top;
 }
 
-// ── tiny chart tooltip ─────────────────────────────────────────────────────
+// ── CSS-var helpers so every element reads from the theme ────────────────
+const S = {
+  bg:          { background: 'var(--mon-bg)' },
+  surface:     { background: 'var(--mon-surface)' },
+  surface2:    { background: 'var(--mon-surface2)' },
+  border:      { borderColor: 'var(--mon-border)' },
+  border2:     { borderColor: 'var(--mon-border2)' },
+  text:        { color: 'var(--mon-text)' },
+  text2:       { color: 'var(--mon-text2)' },
+  text3:       { color: 'var(--mon-text3)' },
+  text4:       { color: 'var(--mon-text4)' },
+  text5:       { color: 'var(--mon-text5)' },
+  teal:        { color: 'var(--mon-teal)' },
+  tealBg:      { background: 'var(--mon-teal-bg)', borderColor: 'var(--mon-teal-border)', color: 'var(--mon-teal)' },
+  chartBg:     { background: 'var(--mon-chart-bg)' },
+  statBg:      { background: 'var(--mon-stat-bg)', borderColor: 'var(--mon-stat-border)' },
+  footerBg:    { background: 'var(--mon-footer-bg)' },
+  inputBg:     { background: 'var(--mon-input-bg)', borderColor: 'var(--mon-border)', color: 'var(--mon-text2)' },
+  btnBg:       { background: 'var(--mon-btn-bg)', borderColor: 'var(--mon-border)', color: 'var(--mon-btn-text)' },
+};
+
+// Merge styles helper
+const ms = (...s: React.CSSProperties[]) => Object.assign({}, ...s);
+
+// ── Sub-components ───────────────────────────────────────────────────────
 const ChartTip = ({ active, payload }: any) => {
   if (!active || !payload?.length || payload[0].value == null) return null;
   return (
-    <div className="bg-[#0c1220] border border-white/10 rounded px-2 py-1 text-[9px] font-bold text-white/80">
+    <div style={ms(S.surface2, { border: '1px solid var(--mon-border)', color: 'var(--mon-text)', borderRadius: 6, padding: '2px 8px', fontSize: 9, fontWeight: 700 })}>
       {payload[0].value}ms
     </div>
   );
 };
 
-// ── Status pill ────────────────────────────────────────────────────────────
-const Pill: React.FC<{ ok: boolean | null; labelOk: string; labelFail: string; labelWait?: string }> =
-  ({ ok, labelOk, labelFail, labelWait = 'WAITING' }) => {
-    if (ok === null) return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-[9px] font-bold text-white/30">
-        <span className="w-1.5 h-1.5 rounded-full bg-white/20" />{labelWait}
-      </span>
-    );
-    return ok ? (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-[9px] font-bold text-emerald-400">
-        <CheckCircle2 size={9} />{labelOk}
-      </span>
-    ) : (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-500/15 border border-red-500/30 text-[9px] font-bold text-red-400">
-        <XCircle size={9} />{labelFail}
-      </span>
-    );
-  };
-
-// ── StatCard ───────────────────────────────────────────────────────────────
-const StatCard: React.FC<{ label: string; value: string; accent?: string }> = ({ label, value, accent = 'text-white' }) => (
-  <div className="flex flex-col items-center justify-center bg-white/[0.03] rounded-lg border border-white/[0.07] py-2 px-1 gap-0.5">
-    <span className="text-[8px] text-white/30 uppercase tracking-[0.18em] leading-none">{label}</span>
-    <span className={`text-[13px] font-black tabular-nums leading-tight ${accent}`}>{value}</span>
+const StatCard: React.FC<{ label: string; value: string; valueStyle?: React.CSSProperties }> = ({ label, value, valueStyle }) => (
+  <div style={ms(S.statBg, { borderWidth: 1, borderStyle: 'solid', borderRadius: 8, padding: '6px 4px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 })}>
+    <span style={ms(S.text4, { fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.18em', lineHeight: 1 })}>{label}</span>
+    <span style={ms(S.text, { fontSize: 13, fontWeight: 900, fontVariantNumeric: 'tabular-nums', lineHeight: 1.2, ...valueStyle })}>{value}</span>
   </div>
 );
 
-// ── MiniChart ──────────────────────────────────────────────────────────────
-const MiniChart: React.FC<{
-  samples: number[];
-  color: string;
-  gradId: string;
-  empty?: React.ReactNode;
-}> = ({ samples, color, gradId, empty }) => (
-  <div className="flex-1 min-h-0 relative bg-black/25 rounded-xl border border-white/[0.06] overflow-hidden">
+const Pill: React.FC<{ ok: boolean | null; labelOk: string; labelFail: string }> = ({ ok, labelOk, labelFail }) => {
+  if (ok === null) return (
+    <span style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'2px 8px', borderRadius:999, background:'var(--mon-muted)', border:'1px solid var(--mon-border)', color:'var(--mon-text4)', fontSize:8, fontWeight:700 }}>
+      <span style={{ width:6, height:6, borderRadius:'50%', background:'var(--mon-text4)' }} />WAITING
+    </span>
+  );
+  return ok ? (
+    <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-500 font-bold" style={{ fontSize:8 }}>
+      <CheckCircle2 size={9} />{labelOk}
+    </span>
+  ) : (
+    <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-500/15 border border-red-500/30 text-red-500 font-bold" style={{ fontSize:8 }}>
+      <XCircle size={9} />{labelFail}
+    </span>
+  );
+};
+
+const MiniChart: React.FC<{ samples: number[]; color: string; gradId: string; empty?: React.ReactNode }> = ({ samples, color, gradId, empty }) => (
+  <div style={ms(S.chartBg, { flex: 1, minHeight: 0, position: 'relative', borderRadius: 12, border: '1px solid var(--mon-border2)', overflow: 'hidden' })}>
     {(!samples.length || samples.every(v => v < 0)) && empty && (
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">{empty}</div>
+      <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', pointerEvents:'none', zIndex:10 }}>{empty}</div>
     )}
     <ResponsiveContainer width="100%" height="100%">
-      <AreaChart data={samples.map(v => ({ v: v < 0 ? null : v }))} margin={{ top: 6, right: 6, bottom: 2, left: 6 }}>
+      <AreaChart data={samples.map(v => ({ v: v < 0 ? null : v }))} margin={{ top:6, right:6, bottom:2, left:6 }}>
         <defs>
           <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%"   stopColor={color} stopOpacity="0.45" />
-            <stop offset="100%" stopColor={color} stopOpacity="0.02" />
+            <stop offset="100%" stopColor={color} stopOpacity="0.03" />
           </linearGradient>
         </defs>
-        <CartesianGrid strokeDasharray="3 6" vertical={false} stroke="rgba(255,255,255,0.04)" />
-        <YAxis hide domain={[0, 'auto']} />
-        <Tooltip content={<ChartTip />} cursor={{ stroke: 'rgba(255,255,255,0.1)', strokeWidth: 1 }} />
+        <CartesianGrid strokeDasharray="3 6" vertical={false} stroke="var(--mon-chart-grid)" />
+        <YAxis hide domain={[0,'auto']} />
+        <Tooltip content={<ChartTip />} cursor={{ stroke:'var(--mon-border)', strokeWidth:1 }} />
         <Area type="monotone" dataKey="v" stroke={color} strokeWidth={1.5} fill={`url(#${gradId})`} dot={false} connectNulls={false} />
       </AreaChart>
     </ResponsiveContainer>
@@ -105,35 +118,30 @@ const MiniChart: React.FC<{
 
 // ══════════════════════════════════════════════════════════════════════════
 const LogMonitorPage: React.FC = () => {
-  const topOffset   = useTopOffset();
-  const scrollRef   = useRef<HTMLDivElement>(null);
-  const runPingRef  = useRef<() => void>(() => {});
-  const runApiRef   = useRef<() => void>(() => {});
+  const topOffset  = useTopOffset();
+  const scrollRef  = useRef<HTMLDivElement>(null);
+  const runPingRef = useRef<() => void>(() => {});
+  const runApiRef  = useRef<() => void>(() => {});
+  const today      = () => new Date().toISOString().split('T')[0];
 
-  const today = () => new Date().toISOString().split('T')[0];
+  const [monitoredDate, setMonitoredDate] = useState(today);
+  const [logs,          setLogs]          = useState<LogEntry[]>(() => getLogsForDate(today()));
+  const [showNavLogs,   setShowNavLogs]   = useState(true);
+  const [filterType,    setFilterType]    = useState<'all'|'positive'|'negative'|'neutral'>('all');
 
-  const [monitoredDate,   setMonitoredDate]   = useState(today);
-  const [logs,            setLogs]            = useState<LogEntry[]>(() => getLogsForDate(today()));
-  const [showNavLogs,     setShowNavLogs]     = useState(true);
-  const [filterType,      setFilterType]      = useState<'all' | 'positive' | 'negative' | 'neutral'>('all');
-
-  // Ping state
   const [pingSamples,  setPingSamples]  = useState<number[]>([]);
-  const [lastPing,     setLastPing]     = useState<number | null>(null);
+  const [lastPing,     setLastPing]     = useState<number|null>(null);
+  const [pingChecking, setPingChecking] = useState(false);
 
-  // API state — using VITE_BACKEND_URL correctly (plain-text /health endpoint)
-  const backendBase = import.meta.env.VITE_BACKEND_URL
-    ? import.meta.env.VITE_BACKEND_URL.replace(/\/$/, '')
-    : `${window.location.origin}`;
-  const [apiUrl,         setApiUrl]         = useState(`${backendBase}/health`);
-  const [apiSamples,     setApiSamples]     = useState<number[]>([]);
-  const [lastApiStatus,  setLastApiStatus]  = useState<number | null>(null);
-  const [lastApiSize,    setLastApiSize]    = useState<number | null>(null);
-  const [recentChecks,   setRecentChecks]   = useState<ApiCheck[]>([]);
-  const [apiChecking,    setApiChecking]    = useState(false);
-  const [pingChecking,   setPingChecking]   = useState(false);
+  const backendBase = (import.meta.env.VITE_BACKEND_URL || window.location.origin).replace(/\/$/, '');
+  const [apiUrl,        setApiUrl]        = useState(`${backendBase}/health`);
+  const [apiSamples,    setApiSamples]    = useState<number[]>([]);
+  const [lastApiStatus, setLastApiStatus] = useState<number|null>(null);
+  const [lastApiSize,   setLastApiSize]   = useState<number|null>(null);
+  const [recentChecks,  setRecentChecks]  = useState<ApiCheck[]>([]);
+  const [apiChecking,   setApiChecking]   = useState(false);
 
-  // ── socket / logs ──────────────────────────────────────────────────────
+  // ── socket ──────────────────────────────────────────────────────────
   useEffect(() => {
     const handle = ({ dateStr, logEntry }: { dateStr: string; logEntry: LogEntry }) => {
       try { saveSingleLogFromServer(dateStr, logEntry); } catch {}
@@ -144,19 +152,18 @@ const LogMonitorPage: React.FC = () => {
   }, [monitoredDate]);
 
   useEffect(() => { setLogs(getLogsForDate(monitoredDate)); }, [monitoredDate]);
-
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [logs]);
 
-  // ── Ping ──────────────────────────────────────────────────────────────
+  // ── ping ──────────────────────────────────────────────────────────
   useEffect(() => {
     let alive = true;
     const run = async () => {
       setPingChecking(true);
       const start = performance.now();
       try {
-        await fetch(`${window.location.origin}/?__ping=${Date.now()}`, { cache: 'no-store' });
+        await fetch(`${window.location.origin}/?__ping=${Date.now()}`, { cache:'no-store' });
         const rtt = Math.max(0, Math.round(performance.now() - start));
         if (!alive) return;
         setLastPing(rtt);
@@ -167,340 +174,340 @@ const LogMonitorPage: React.FC = () => {
         setPingSamples(p => [...p, -1].slice(-PING_LIMIT));
       } finally { if (alive) setPingChecking(false); }
     };
-    runPingRef.current = run;
-    run();
+    runPingRef.current = run; run();
     const id = setInterval(run, PING_INTERVAL);
     return () => { alive = false; clearInterval(id); };
   }, []);
 
-  // ── API Health check — correctly handles plain-text "Backend is running" ──
+  // ── API health ────────────────────────────────────────────────────
   const runApi = useCallback(async () => {
     if (!apiUrl) return;
     setApiChecking(true);
     const start = performance.now();
     try {
-      const res = await fetch(apiUrl, { cache: 'no-store' });
+      const res  = await fetch(apiUrl, { cache:'no-store' });
       const time = Math.max(0, Math.round(performance.now() - start));
-      let size: number | null = null;
-      let body = '';
+      let size: number|null = null, body = '';
       try { body = await res.text(); size = new Blob([body]).size; } catch {}
-
-      // Health endpoint returns plain text "Backend is running" — that's a success
-      // Only flag as failure if non-2xx
-      const isHtml = (res.headers.get('content-type') || '').includes('text/html') && /<html/i.test(body);
-      const success = res.ok && !isHtml;
-
-      setLastApiStatus(res.status);
-      setLastApiSize(size);
-      if (success) {
+      const isHtml = (res.headers.get('content-type')||'').includes('text/html') && /<html/i.test(body);
+      const ok = res.ok && !isHtml;
+      setLastApiStatus(res.status); setLastApiSize(size);
+      if (ok) {
         setApiSamples(p => [...p, time].slice(-API_LIMIT));
-        setRecentChecks(p => [{ ts: Date.now(), status: res.status, time, size }, ...p].slice(0, 15));
+        setRecentChecks(p => [{ ts:Date.now(), status:res.status, time, size }, ...p].slice(0,15));
       } else {
         setApiSamples(p => [...p, -1].slice(-API_LIMIT));
-        setRecentChecks(p => [{ ts: Date.now(), status: res.status, time: null, size }, ...p].slice(0, 15));
+        setRecentChecks(p => [{ ts:Date.now(), status:res.status, time:null, size }, ...p].slice(0,15));
       }
     } catch {
       setLastApiStatus(null); setLastApiSize(null);
       setApiSamples(p => [...p, -1].slice(-API_LIMIT));
-      setRecentChecks(p => [{ ts: Date.now(), status: null, time: null, size: null }, ...p].slice(0, 15));
+      setRecentChecks(p => [{ ts:Date.now(), status:null, time:null, size:null }, ...p].slice(0,15));
     } finally { setApiChecking(false); }
   }, [apiUrl]);
 
-  useEffect(() => {
-    runApiRef.current = runApi;
-    runApi();
-    const id = setInterval(runApi, API_INTERVAL);
-    return () => clearInterval(id);
-  }, [runApi]);
+  useEffect(() => { runApiRef.current = runApi; runApi(); const id = setInterval(runApi, API_INTERVAL); return () => clearInterval(id); }, [runApi]);
 
-  // ── Derived ───────────────────────────────────────────────────────────
+  // ── derived ────────────────────────────────────────────────────────
   const lastApiSample = apiSamples.at(-1) ?? null;
   const apiOnline     = lastApiSample !== null && lastApiSample >= 0;
   const apiHasData    = apiSamples.length > 0;
   const goodN         = safeN(pingSamples);
-  const pingLoss      = pingSamples.length ? Math.round((pingSamples.filter(v => v < 0).length / pingSamples.length) * 100) : null;
-  const jitterVal     = goodN.length < 2 ? null : Math.round(safeN(goodN.slice(1).map((v, i) => Math.abs(v - goodN[i]))).reduce((a, b) => a + b, 0) / (goodN.length - 1));
+  const pingLoss      = pingSamples.length ? Math.round((pingSamples.filter(v=>v<0).length/pingSamples.length)*100) : null;
+  const jitterVal     = goodN.length < 2 ? null : Math.round(safeN(goodN.slice(1).map((v,i)=>Math.abs(v-goodN[i]))).reduce((a,b)=>a+b,0)/(goodN.length-1));
 
   const visibleLogs = logs
     .filter(l => showNavLogs || (!/navigate/i.test(l.action) && !/visited/i.test(l.details)))
     .filter(l => filterType === 'all' || l.type === filterType);
 
-  const connectedAt = socket.connected ? new Date().toLocaleTimeString() : '—';
+  const filterColors: Record<string, { bg: string; text: string }> = {
+    all:      { bg:'var(--mon-tag-all-bg)',    text:'var(--mon-tag-all-text)' },
+    positive: { bg:'rgba(16,185,129,0.15)',    text:'rgb(16,185,129)' },
+    negative: { bg:'rgba(239,68,68,0.15)',     text:'rgb(239,68,68)' },
+    neutral:  { bg:'var(--mon-muted)',         text:'var(--mon-text3)' },
+  };
 
+  // ── Row left-border colours stay the same in both themes ──────────
+  const rowBorder = (log: LogEntry) =>
+    log.type === 'positive' ? 'rgba(16,185,129,0.55)'
+    : log.type === 'negative' ? 'rgba(239,68,68,0.55)'
+    : 'var(--mon-border)';
+
+  const logText = (log: LogEntry) =>
+    log.type === 'positive' ? { action:'rgb(16,185,129)', detail:'rgba(16,185,129,0.70)' }
+    : log.type === 'negative' ? { action:'rgb(239,68,68)', detail:'rgba(239,68,68,0.70)' }
+    : { action:'var(--mon-text3)', detail:'var(--mon-text2)' };
+
+  // ── render ─────────────────────────────────────────────────────────
   return (
     <div
-      className="fixed left-0 right-0 bottom-0 flex flex-col overflow-hidden select-none"
-      style={{
-        top: `${topOffset}px`,
-        background: 'linear-gradient(160deg, #0b0f1e 0%, #0d1228 60%, #0a0e1a 100%)',
-        fontFamily: "'JetBrains Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace",
-      }}
+      style={ms(S.bg, {
+        position:'fixed', left:0, right:0, bottom:0, top:`${topOffset}px`,
+        display:'flex', flexDirection:'column', overflow:'hidden',
+        fontFamily:"'JetBrains Mono','Cascadia Code','Fira Code','Consolas',monospace",
+      })}
     >
-      {/* ═══ TOPBAR ═══════════════════════════════════════════════════════ */}
-      <div className="shrink-0 h-11 border-b border-white/[0.08] flex items-center justify-between px-5 bg-white/[0.02]">
+      {/* ═══ TOPBAR ═══════════════════════════════════════════════════ */}
+      <div style={ms(S.surface, { height:44, borderBottom:'1px solid var(--mon-border)', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 20px', flexShrink:0 })}>
         {/* Left */}
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-[#00ADB5]/20 border border-[#00ADB5]/40 flex items-center justify-center shadow-[0_0_12px_rgba(0,173,181,0.2)]">
-              <Terminal size={13} className="text-[#00ADB5]" />
+        <div style={{ display:'flex', alignItems:'center', gap:16 }}>
+          {/* Logo */}
+          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+            <div style={ms(S.tealBg, { width:28, height:28, borderRadius:8, border:'1px solid var(--mon-teal-border)', display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 0 12px rgba(0,173,181,0.15)' })}>
+              <Terminal size={13} style={S.teal} />
             </div>
-            <div className="leading-none">
-              <p className="text-[9px] text-white/30 tracking-[0.25em] uppercase">Queue Tracker</p>
-              <p className="text-[11px] font-black text-white tracking-widest uppercase">System Monitor</p>
+            <div style={{ lineHeight:1 }}>
+              <p style={ms(S.text4, { fontSize:8, letterSpacing:'0.25em', textTransform:'uppercase', marginBottom:2 })}>Queue Tracker</p>
+              <p style={ms(S.text, { fontSize:11, fontWeight:900, letterSpacing:'0.2em', textTransform:'uppercase' })}>System Monitor</p>
             </div>
           </div>
 
-          <div className="w-px h-6 bg-white/10" />
+          <div style={{ width:1, height:24, background:'var(--mon-border)' }} />
 
-          {/* Live pulse */}
-          <div className="flex items-center gap-1.5">
-            <div className="relative w-2 h-2">
-              <div className="absolute inset-0 rounded-full bg-emerald-400 animate-ping opacity-40" />
-              <div className="w-2 h-2 rounded-full bg-emerald-400" />
+          {/* Live */}
+          <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+            <div style={{ position:'relative', width:8, height:8 }}>
+              <div className="animate-ping absolute inset-0 rounded-full bg-emerald-400 opacity-40" />
+              <div style={{ width:8, height:8, borderRadius:'50%', background:'rgb(52,211,153)' }} />
             </div>
-            <span className="text-[9px] font-bold text-emerald-400 tracking-[0.2em] uppercase">Live</span>
+            <span style={{ fontSize:9, fontWeight:700, color:'rgb(52,211,153)', letterSpacing:'0.2em', textTransform:'uppercase' }}>Live</span>
           </div>
 
           {/* Socket */}
-          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[9px] font-bold tracking-wider ${
-            socket.connected
-              ? 'bg-[#00ADB5]/10 border-[#00ADB5]/25 text-[#00ADB5]'
-              : 'bg-red-500/10 border-red-500/25 text-red-400'
-          }`}>
-            <Radio size={9} className={socket.connected ? '' : 'animate-pulse'} />
-            {socket.connected ? `SOCKET · ${socket.id?.slice(0, 6).toUpperCase()}` : 'SOCKET LOST'}
+          <div style={ms(socket.connected ? S.tealBg : {}, {
+            display:'flex', alignItems:'center', gap:6,
+            padding:'4px 10px', borderRadius:999, border:'1px solid',
+            borderColor: socket.connected ? 'var(--mon-teal-border)' : 'rgba(239,68,68,0.3)',
+            background: socket.connected ? 'var(--mon-teal-bg)' : 'rgba(239,68,68,0.1)',
+            color: socket.connected ? 'var(--mon-teal)' : 'rgb(248,113,113)',
+            fontSize:9, fontWeight:700, letterSpacing:'0.15em',
+          })}>
+            <Radio size={9} />
+            {socket.connected ? `SOCKET · ${socket.id?.slice(0,6).toUpperCase()}` : 'SOCKET LOST'}
           </div>
         </div>
 
         {/* Right */}
-        <div className="flex items-center gap-2.5">
-          {/* Date picker */}
-          <div className="flex items-center gap-2 bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 h-7">
-            <Clock size={10} className="text-white/30" />
+        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+          {/* Date */}
+          <div style={ms(S.surface2, { display:'flex', alignItems:'center', gap:8, border:'1px solid var(--mon-border)', borderRadius:8, padding:'0 10px', height:28 })}>
+            <Clock size={10} style={S.text4} />
             <input
               type="date" value={monitoredDate}
               onChange={e => setMonitoredDate(e.target.value)}
-              className="bg-transparent text-[10px] text-white/70 outline-none cursor-pointer w-28"
-              style={{ colorScheme: 'dark' }}
+              style={{ background:'transparent', fontSize:10, outline:'none', cursor:'pointer', width:112, color:'var(--mon-text2)', colorScheme:'auto' }}
             />
           </div>
 
-          {/* Filter */}
-          <div className="flex items-center gap-1 bg-white/[0.04] border border-white/[0.08] rounded-lg px-1 h-7">
-            <Filter size={9} className="text-white/30 ml-1" />
-            {(['all', 'positive', 'negative', 'neutral'] as const).map(t => (
-              <button key={t} onClick={() => setFilterType(t)}
-                className={`px-2 h-5 rounded text-[8px] font-bold uppercase tracking-wider transition-all ${
-                  filterType === t
-                    ? t === 'positive' ? 'bg-emerald-500/20 text-emerald-400'
-                    : t === 'negative' ? 'bg-red-500/20 text-red-400'
-                    : t === 'neutral'  ? 'bg-white/10 text-white/60'
-                    : 'bg-white/10 text-white/70'
-                    : 'text-white/25 hover:text-white/50'
-                }`}>
-                {t === 'all' ? 'All' : t === 'positive' ? '✓' : t === 'negative' ? '✗' : '○'}
-              </button>
-            ))}
+          {/* Filter bar */}
+          <div style={ms(S.surface2, { display:'flex', alignItems:'center', gap:4, border:'1px solid var(--mon-border)', borderRadius:8, padding:'0 4px', height:28 })}>
+            <Filter size={9} style={ms(S.text4, { marginLeft:4 })} />
+            {(['all','positive','negative','neutral'] as const).map(t => {
+              const active = filterType === t;
+              const fc = filterColors[t];
+              return (
+                <button key={t} onClick={() => setFilterType(t)} style={{
+                  padding:'0 8px', height:20, borderRadius:6, border:'none', cursor:'pointer',
+                  fontSize:8, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em',
+                  transition:'all 0.15s',
+                  background: active ? fc.bg : 'transparent',
+                  color: active ? fc.text : 'var(--mon-text4)',
+                }}>
+                  {t === 'all' ? 'All' : t === 'positive' ? '✓' : t === 'negative' ? '✗' : '○'}
+                </button>
+              );
+            })}
           </div>
 
           {/* Nav toggle */}
-          <button onClick={() => setShowNavLogs(s => !s)}
-            className={`px-3 h-7 rounded-lg border text-[9px] font-bold tracking-wider transition-all ${
-              showNavLogs ? 'bg-white/[0.04] border-white/[0.08] text-white/40 hover:text-white/70'
-                         : 'bg-[#00ADB5]/10 border-[#00ADB5]/25 text-[#00ADB5]'
-            }`}>
+          <button onClick={() => setShowNavLogs(s => !s)} style={{
+            padding:'0 12px', height:28, borderRadius:8, cursor:'pointer',
+            border:'1px solid', borderColor: showNavLogs ? 'var(--mon-border)' : 'var(--mon-teal-border)',
+            background: showNavLogs ? 'var(--mon-btn-bg)' : 'var(--mon-teal-bg)',
+            color: showNavLogs ? 'var(--mon-btn-text)' : 'var(--mon-teal)',
+            fontSize:9, fontWeight:700, letterSpacing:'0.12em', textTransform:'uppercase', transition:'all 0.15s',
+          }}>
             {showNavLogs ? 'Hide Nav' : 'Nav Hidden'}
           </button>
         </div>
       </div>
 
-      {/* ═══ BODY ═════════════════════════════════════════════════════════ */}
-      <div className="flex-1 min-h-0 flex overflow-hidden">
+      {/* ═══ BODY ═════════════════════════════════════════════════════ */}
+      <div style={{ flex:1, minHeight:0, display:'flex', overflow:'hidden' }}>
 
-        {/* ── LEFT: Event Log (58%) ──────────────────────────────────────── */}
-        <div className="flex flex-col border-r border-white/[0.07]" style={{ width: '58%' }}>
-
+        {/* ── LEFT: Log stream (58%) ─────────────────────────────── */}
+        <div style={{ width:'58%', display:'flex', flexDirection:'column', borderRight:'1px solid var(--mon-border3)' }}>
           {/* Sub-header */}
-          <div className="shrink-0 h-8 border-b border-white/[0.06] flex items-center justify-between px-4 bg-white/[0.015]">
-            <div className="flex items-center gap-2">
-              <Database size={10} className="text-white/30" />
-              <span className="text-[9px] font-bold text-white/35 tracking-[0.2em] uppercase">Event Stream</span>
+          <div style={ms(S.surface, { height:32, borderBottom:'1px solid var(--mon-border2)', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 16px', flexShrink:0 })}>
+            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+              <Database size={10} style={S.text4} />
+              <span style={ms(S.text3, { fontSize:9, fontWeight:700, letterSpacing:'0.2em', textTransform:'uppercase' })}>Event Stream</span>
             </div>
-            <div className="flex items-center gap-3">
-              <span className="text-[8px] text-white/20 tabular-nums">{visibleLogs.length} events</span>
-              <div className="flex gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400/60" title="Positive" />
-                <span className="w-1.5 h-1.5 rounded-full bg-red-400/60" title="Negative" />
-                <span className="w-1.5 h-1.5 rounded-full bg-white/20" title="Neutral" />
-              </div>
-            </div>
+            <span style={ms(S.text5, { fontSize:8, fontVariantNumeric:'tabular-nums' })}>{visibleLogs.length} events</span>
           </div>
 
-          {/* Entries */}
-          <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto py-1 custom-scrollbar-dark">
+          {/* Log entries */}
+          <div ref={scrollRef} className="mon-scrollbar" style={{ flex:1, minHeight:0, overflowY:'auto', padding:'4px 0' }}>
             {visibleLogs.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center gap-3">
-                <Shield size={36} strokeWidth={1} className="text-white/10" />
-                <p className="text-[9px] font-bold uppercase tracking-[0.4em] text-white/15 animate-pulse">No Events</p>
+              <div style={{ height:'100%', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:12, opacity:0.15 }}>
+                <Shield size={36} strokeWidth={1} style={S.text} />
+                <p className="animate-pulse" style={ms(S.text, { fontSize:9, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.4em' })}>No Events</p>
               </div>
             ) : visibleLogs.map((log, i) => {
-              const pos = log.type === 'positive';
-              const neg = log.type === 'negative';
+              const lc = logText(log);
               return (
-                <div key={i} className={`
-                  flex items-center gap-0 text-[10px] mx-2 my-[1px] rounded-md px-2 py-[3px]
-                  hover:bg-white/[0.03] transition-colors cursor-default
-                  border-l-2 ${pos ? 'border-emerald-400/50' : neg ? 'border-red-400/50' : 'border-white/[0.08]'}
-                `}>
-                  <span className="text-white/20 shrink-0 w-[76px] tabular-nums text-[8.5px]">{log.timestamp}</span>
-                  <span className="text-[#00ADB5]/60 shrink-0 font-bold w-[88px] truncate text-[8.5px]">{log.user}</span>
-                  <span className={`shrink-0 font-black uppercase text-[8.5px] w-[108px] truncate ${
-                    pos ? 'text-emerald-400' : neg ? 'text-red-400' : 'text-white/40'
-                  }`}>{log.action}</span>
-                  <span className={`flex-1 truncate text-[9.5px] ${
-                    pos ? 'text-emerald-300/70' : neg ? 'text-red-300/70' : 'text-white/50'
-                  }`}>{log.details}</span>
+                <div key={i} style={{
+                  display:'flex', alignItems:'center', fontSize:10,
+                  margin:'1px 8px', padding:'3px 8px', borderRadius:6,
+                  borderLeft:`2px solid ${rowBorder(log)}`,
+                  cursor:'default', transition:'background 0.1s',
+                }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--mon-hover)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                >
+                  <span style={ms(S.text4, { flexShrink:0, width:76, fontVariantNumeric:'tabular-nums', fontSize:8.5 })}>{log.timestamp}</span>
+                  <span style={{ flexShrink:0, fontWeight:700, width:88, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontSize:8.5, color:'var(--mon-teal-text)' }}>{log.user}</span>
+                  <span style={{ flexShrink:0, fontWeight:900, textTransform:'uppercase', width:108, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontSize:8.5, color:lc.action }}>{log.action}</span>
+                  <span style={{ flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontSize:9.5, color:lc.detail }}>{log.details}</span>
                 </div>
               );
             })}
           </div>
         </div>
 
-        {/* ── RIGHT: Diagnostics (42%) ───────────────────────────────────── */}
-        <div className="flex flex-col" style={{ width: '42%' }}>
+        {/* ── RIGHT: Diagnostics (42%) ───────────────────────────── */}
+        <div style={{ width:'42%', display:'flex', flexDirection:'column' }}>
 
-          {/* ┌─ PING PANEL ─────────────────────────────────────────────── */}
-          <div className="flex-1 min-h-0 flex flex-col border-b border-white/[0.07] p-3 gap-2">
+          {/* ┌─ PING ─────────────────────────────────────────────── */}
+          <div style={{ flex:1, minHeight:0, display:'flex', flexDirection:'column', borderBottom:'1px solid var(--mon-border3)', padding:12, gap:8 }}>
             {/* Header */}
-            <div className="shrink-0 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-md bg-[#00ADB5]/15 border border-[#00ADB5]/25 flex items-center justify-center">
-                  <Wifi size={11} className="text-[#00ADB5]" />
+            <div style={{ flexShrink:0, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                <div style={ms(S.tealBg, { width:26, height:26, borderRadius:7, display:'flex', alignItems:'center', justifyContent:'center', border:'1px solid var(--mon-teal-border)' })}>
+                  <Wifi size={12} style={S.teal} />
                 </div>
-                <div className="leading-none">
-                  <p className="text-[11px] font-black text-white/90">Network Latency</p>
-                  <p className="text-[8px] text-white/25 tracking-widest">Frontend round-trip ping</p>
+                <div style={{ lineHeight:1 }}>
+                  <p style={ms(S.text, { fontSize:11, fontWeight:900, marginBottom:2 })}>Network Latency</p>
+                  <p style={ms(S.text4, { fontSize:8, letterSpacing:'0.12em' })}>Frontend round-trip</p>
                 </div>
                 {pingLoss !== null && pingLoss > 10 && (
-                  <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-[8px] text-amber-400 font-bold">
+                  <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-500 font-bold" style={{ fontSize:8 }}>
                     <AlertCircle size={8} />{pingLoss}% LOSS
                   </span>
                 )}
               </div>
-              <button onClick={() => runPingRef.current()}
-                disabled={pingChecking}
-                className="flex items-center gap-1.5 px-2.5 py-1 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] rounded-lg text-[9px] text-white/50 hover:text-white/80 transition-all disabled:opacity-40">
+              <button onClick={() => runPingRef.current()} disabled={pingChecking} style={ms(S.btnBg, {
+                display:'flex', alignItems:'center', gap:6, padding:'4px 10px',
+                border:'1px solid var(--mon-border)', borderRadius:7, cursor:'pointer',
+                fontSize:9, transition:'all 0.15s', opacity: pingChecking ? 0.5 : 1,
+              })}>
                 <RefreshCw size={9} className={pingChecking ? 'animate-spin' : ''} />Ping
               </button>
             </div>
 
-            {/* Stats grid */}
-            <div className="shrink-0 grid grid-cols-6 gap-1.5">
-              <StatCard label="Last"   value={lastPing !== null ? `${lastPing}ms` : '—'} accent={lastPing !== null && lastPing > 200 ? 'text-amber-400' : 'text-white'} />
+            {/* Stats */}
+            <div style={{ flexShrink:0, display:'grid', gridTemplateColumns:'repeat(6,1fr)', gap:5 }}>
+              <StatCard label="Last"   value={lastPing !== null ? `${lastPing}ms` : '—'} valueStyle={lastPing !== null && lastPing > 200 ? { color:'rgb(251,191,36)' } : undefined} />
               <StatCard label="Avg"    value={avg(goodN) !== null ? `${avg(goodN)}ms` : '—'} />
-              <StatCard label="Min"    value={goodN.length ? `${Math.min(...goodN)}ms` : '—'} accent="text-emerald-400" />
-              <StatCard label="Max"    value={goodN.length ? `${Math.max(...goodN)}ms` : '—'} accent="text-red-400" />
-              <StatCard label="Loss"   value={pingLoss !== null ? `${pingLoss}%` : '—'} accent={pingLoss !== null && pingLoss > 5 ? 'text-amber-400' : 'text-white'} />
+              <StatCard label="Min"    value={goodN.length ? `${Math.min(...goodN)}ms` : '—'} valueStyle={{ color:'rgb(52,211,153)' }} />
+              <StatCard label="Max"    value={goodN.length ? `${Math.max(...goodN)}ms` : '—'} valueStyle={{ color:'rgb(248,113,113)' }} />
+              <StatCard label="Loss"   value={pingLoss !== null ? `${pingLoss}%` : '—'} valueStyle={pingLoss !== null && pingLoss > 5 ? { color:'rgb(251,191,36)' } : undefined} />
               <StatCard label="Jitter" value={jitterVal !== null ? `${jitterVal}ms` : '—'} />
             </div>
 
-            {/* Chart */}
-            <MiniChart
-              samples={pingSamples} color="#00ADB5" gradId="pingG"
-              empty={<span className="text-[9px] text-white/15 uppercase tracking-widest">Sampling…</span>}
+            <MiniChart samples={pingSamples} color="var(--mon-teal)" gradId="pingG"
+              empty={<span style={ms(S.text5, { fontSize:9, textTransform:'uppercase', letterSpacing:'0.15em' })}>Sampling…</span>}
             />
 
-            <div className="shrink-0 flex justify-between text-[8px] text-white/15">
-              <span>Failures: {pingSamples.filter(v => v < 0).length}</span>
-              <span>Samples: {pingSamples.length} / {PING_LIMIT}</span>
+            <div style={{ flexShrink:0, display:'flex', justifyContent:'space-between' }}>
+              <span style={ms(S.text5, { fontSize:8 })}>Failures: {pingSamples.filter(v=>v<0).length}</span>
+              <span style={ms(S.text5, { fontSize:8 })}>Samples: {pingSamples.length} / {PING_LIMIT}</span>
             </div>
           </div>
 
-          {/* ┌─ API HEALTH PANEL ───────────────────────────────────────── */}
-          <div className="flex-1 min-h-0 flex flex-col p-3 gap-2">
+          {/* ┌─ API HEALTH ───────────────────────────────────────── */}
+          <div style={{ flex:1, minHeight:0, display:'flex', flexDirection:'column', padding:12, gap:8 }}>
             {/* Header */}
-            <div className="shrink-0 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className={`w-6 h-6 rounded-md border flex items-center justify-center ${
-                  !apiHasData ? 'bg-white/5 border-white/10'
-                  : apiOnline  ? 'bg-emerald-500/15 border-emerald-500/30'
-                               : 'bg-red-500/15 border-red-500/30'
-                }`}>
-                  <Server size={11} className={!apiHasData ? 'text-white/30' : apiOnline ? 'text-emerald-400' : 'text-red-400'} />
+            <div style={{ flexShrink:0, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                <div style={{
+                  width:26, height:26, borderRadius:7, display:'flex', alignItems:'center', justifyContent:'center',
+                  border:'1px solid',
+                  borderColor: !apiHasData ? 'var(--mon-border)' : apiOnline ? 'rgba(52,211,153,0.35)' : 'rgba(248,113,113,0.35)',
+                  background:  !apiHasData ? 'var(--mon-muted)' : apiOnline ? 'rgba(52,211,153,0.12)' : 'rgba(248,113,113,0.12)',
+                }}>
+                  <Server size={12} style={{ color: !apiHasData ? 'var(--mon-text4)' : apiOnline ? 'rgb(52,211,153)' : 'rgb(248,113,113)' }} />
                 </div>
-                <div className="leading-none">
-                  <div className="flex items-center gap-2">
-                    <p className="text-[11px] font-black text-white/90">API Health</p>
+                <div style={{ lineHeight:1 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:2 }}>
+                    <p style={ms(S.text, { fontSize:11, fontWeight:900 })}>API Health</p>
                     <Pill ok={!apiHasData ? null : apiOnline} labelOk="ONLINE" labelFail="OFFLINE" />
                   </div>
-                  <p className="text-[8px] text-white/25 tracking-widest">Backend /health endpoint</p>
+                  <p style={ms(S.text4, { fontSize:8, letterSpacing:'0.12em' })}>Backend /health endpoint</p>
                 </div>
               </div>
-              <button onClick={runApi} disabled={apiChecking}
-                className="flex items-center gap-1.5 px-2.5 py-1 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] rounded-lg text-[9px] text-white/50 hover:text-white/80 transition-all disabled:opacity-40">
+              <button onClick={runApi} disabled={apiChecking} style={ms(S.btnBg, {
+                display:'flex', alignItems:'center', gap:6, padding:'4px 10px',
+                border:'1px solid var(--mon-border)', borderRadius:7, cursor:'pointer',
+                fontSize:9, transition:'all 0.15s', opacity: apiChecking ? 0.5 : 1,
+              })}>
                 <RefreshCw size={9} className={apiChecking ? 'animate-spin' : ''} />Check
               </button>
             </div>
 
-            {/* URL input */}
-            <div className="shrink-0 flex items-center gap-1.5 bg-black/20 border border-white/[0.07] rounded-lg px-2 h-7">
-              <Activity size={9} className="text-white/20 shrink-0" />
-              <input
-                value={apiUrl} onChange={e => setApiUrl(e.target.value)}
-                className="flex-1 bg-transparent text-[9px] text-white/60 outline-none placeholder-white/15"
-                placeholder="https://your-backend/health"
-              />
+            {/* URL row */}
+            <div style={ms(S.inputBg, { flexShrink:0, display:'flex', alignItems:'center', gap:6, border:'1px solid var(--mon-border)', borderRadius:8, padding:'0 8px', height:28 })}>
+              <Activity size={9} style={S.text4} />
+              <input value={apiUrl} onChange={e => setApiUrl(e.target.value)} style={{ flex:1, background:'transparent', fontSize:9, outline:'none', color:'var(--mon-text2)' }} placeholder="https://your-backend/health" />
             </div>
 
-            {/* Stats grid */}
-            <div className="shrink-0 grid grid-cols-3 gap-1.5">
+            {/* Stats */}
+            <div style={{ flexShrink:0, display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:5 }}>
               <StatCard
                 label="HTTP Status"
                 value={!apiHasData ? '—' : lastApiStatus === null ? 'No resp' : String(lastApiStatus)}
-                accent={apiHasData && lastApiStatus !== null && lastApiStatus >= 200 && lastApiStatus < 300 ? 'text-emerald-400' : apiHasData ? 'text-red-400' : 'text-white'}
+                valueStyle={apiHasData && lastApiStatus !== null && lastApiStatus >= 200 && lastApiStatus < 300 ? { color:'rgb(52,211,153)' } : apiHasData ? { color:'rgb(248,113,113)' } : undefined}
               />
               <StatCard
                 label="Last RTT"
                 value={!apiHasData ? '—' : lastApiSample !== null && lastApiSample >= 0 ? `${lastApiSample}ms` : 'Timeout'}
               />
-              <StatCard
-                label="Payload"
-                value={lastApiSize !== null ? `${lastApiSize}B` : '—'}
-              />
+              <StatCard label="Payload" value={lastApiSize !== null ? `${lastApiSize}B` : '—'} />
             </div>
 
-            {/* Chart */}
             <MiniChart
-              samples={apiSamples} color={apiOnline ? '#10b981' : '#ef4444'} gradId="apiG"
-              empty={<span className="text-[9px] text-white/15 uppercase tracking-widest">Awaiting first check…</span>}
+              samples={apiSamples}
+              color={apiOnline ? 'rgb(52,211,153)' : 'rgb(248,113,113)'}
+              gradId="apiG"
+              empty={<span style={ms(S.text5, { fontSize:9, textTransform:'uppercase', letterSpacing:'0.15em' })}>Awaiting first check…</span>}
             />
 
-            {/* Recent checks table */}
-            <div className="shrink-0">
-              <div className="flex items-center justify-between mb-1">
-                <p className="text-[8px] text-white/20 uppercase tracking-[0.2em]">Recent Checks</p>
-                <p className="text-[8px] text-white/15 tabular-nums">{recentChecks.length} logged</p>
+            {/* Recent checks */}
+            <div style={{ flexShrink:0 }}>
+              <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4 }}>
+                <p style={ms(S.text4, { fontSize:8, textTransform:'uppercase', letterSpacing:'0.2em' })}>Recent Checks</p>
+                <p style={ms(S.text5, { fontSize:8, fontVariantNumeric:'tabular-nums' })}>{recentChecks.length} logged</p>
               </div>
-              <div className="space-y-[2px]">
+              <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
                 {recentChecks.length === 0 ? (
-                  <p className="text-[8px] text-white/15 italic">No checks yet…</p>
-                ) : recentChecks.slice(0, 6).map((r, i) => {
+                  <p style={ms(S.text5, { fontSize:8 })}>No checks yet…</p>
+                ) : recentChecks.slice(0,6).map((r, i) => {
                   const ok = r.status !== null && r.status >= 200 && r.status < 300;
                   return (
-                    <div key={i} className={`flex items-center gap-2 px-2 py-[2px] rounded text-[8.5px] ${
-                      ok ? 'bg-emerald-500/5' : 'bg-red-500/5'
-                    }`}>
-                      {ok
-                        ? <CheckCircle2 size={9} className="text-emerald-400 shrink-0" />
-                        : r.status ? <AlertCircle size={9} className="text-amber-400 shrink-0" />
-                        : <XCircle size={9} className="text-red-400 shrink-0" />
+                    <div key={i} style={{
+                      display:'flex', alignItems:'center', gap:8, padding:'2px 8px', borderRadius:5, fontSize:8.5,
+                      background: ok ? 'rgba(52,211,153,0.05)' : 'rgba(248,113,113,0.05)',
+                    }}>
+                      {ok ? <CheckCircle2 size={9} style={{ color:'rgb(52,211,153)', flexShrink:0 }} />
+                        : r.status ? <AlertCircle size={9} style={{ color:'rgb(251,191,36)', flexShrink:0 }} />
+                        : <XCircle size={9} style={{ color:'rgb(248,113,113)', flexShrink:0 }} />
                       }
-                      <span className="text-white/20 tabular-nums w-[72px] shrink-0">{new Date(r.ts).toLocaleTimeString()}</span>
-                      <span className={`font-black tabular-nums w-8 shrink-0 ${ok ? 'text-emerald-400' : r.status ? 'text-amber-400' : 'text-red-400'}`}>
+                      <span style={ms(S.text4, { fontVariantNumeric:'tabular-nums', width:72, flexShrink:0 })}>{new Date(r.ts).toLocaleTimeString()}</span>
+                      <span style={{ fontWeight:900, fontVariantNumeric:'tabular-nums', width:28, flexShrink:0, color: ok ? 'rgb(52,211,153)' : r.status ? 'rgb(251,191,36)' : 'rgb(248,113,113)' }}>
                         {r.status ?? 'ERR'}
                       </span>
-                      {r.time !== null && <span className="text-white/30 tabular-nums">{r.time}ms</span>}
-                      {r.size !== null && <span className="text-white/15 tabular-nums ml-auto">{r.size}B</span>}
+                      {r.time !== null && <span style={S.text3}>{r.time}ms</span>}
+                      {r.size !== null && <span style={ms(S.text5, { marginLeft:'auto' })}>{r.size}B</span>}
                     </div>
                   );
                 })}
@@ -510,42 +517,29 @@ const LogMonitorPage: React.FC = () => {
         </div>
       </div>
 
-      {/* ═══ FOOTER ═══════════════════════════════════════════════════════ */}
-      <div className="shrink-0 h-8 border-t border-white/[0.06] bg-black/20 flex items-center justify-between px-5">
-        <div className="flex items-center gap-5 text-[8.5px]">
-          <div className="flex items-center gap-1.5">
-            <div className="w-1 h-1 rounded-full bg-white/20" />
-            <span className="text-white/20 uppercase tracking-widest">Uplink</span>
-            <span className="text-white/50 font-bold tabular-nums">{socket.id?.slice(0, 14).toUpperCase() || 'OFFLINE'}</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-1 h-1 rounded-full bg-white/20" />
-            <span className="text-white/20 uppercase tracking-widest">Buffer</span>
-            <span className="text-white/50 font-bold tabular-nums">{logs.length}/{LOG_LIMIT}</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-1 h-1 rounded-full bg-white/20" />
-            <span className="text-white/20 uppercase tracking-widest">Ping every</span>
-            <span className="text-white/50 font-bold">{PING_INTERVAL / 1000}s</span>
-          </div>
+      {/* ═══ FOOTER ═══════════════════════════════════════════════════ */}
+      <div style={ms(S.footerBg, { height:32, borderTop:'1px solid var(--mon-border)', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 20px', flexShrink:0 })}>
+        <div style={{ display:'flex', alignItems:'center', gap:20, fontSize:8.5 }}>
+          {[
+            ['Uplink', socket.id?.slice(0,14).toUpperCase() || 'OFFLINE'],
+            ['Buffer', `${logs.length}/${LOG_LIMIT}`],
+            ['Interval', `${PING_INTERVAL/1000}s`],
+          ].map(([label, val]) => (
+            <div key={label} style={{ display:'flex', alignItems:'center', gap:6 }}>
+              <span style={{ width:4, height:4, borderRadius:'50%', background:'var(--mon-border)' }} />
+              <span style={S.text4}>{label}</span>
+              <span style={ms(S.text2, { fontWeight:700, fontVariantNumeric:'tabular-nums' })}>{val}</span>
+            </div>
+          ))}
         </div>
-
-        {/* Credit */}
-        <div className="flex items-center gap-2">
-          <Zap size={8} className="text-[#00ADB5]/50" />
-          <span className="text-[8.5px] text-white/25 tracking-widest">
+        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+          <Zap size={9} style={{ color:'var(--mon-teal)', opacity:0.5 }} />
+          <span style={ms(S.text4, { fontSize:8.5, letterSpacing:'0.12em' })}>
             Designed &amp; developed with{' '}
-            <span className="text-[#00ADB5]/70 font-bold">Shubham Kumar</span>
+            <span style={{ color:'var(--mon-teal)', fontWeight:700 }}>Shubham Kumar</span>
           </span>
         </div>
       </div>
-
-      <style>{`
-        .custom-scrollbar-dark::-webkit-scrollbar { width: 3px; }
-        .custom-scrollbar-dark::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar-dark::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.07); border-radius: 2px; }
-        .custom-scrollbar-dark::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.14); }
-      `}</style>
     </div>
   );
 };

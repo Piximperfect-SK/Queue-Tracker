@@ -417,6 +417,7 @@ const SettingsPage: React.FC = () => {
             </div>
             <p className="text-sm font-bold text-slate-900">Queue Tracker</p>
             <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">v4.0.0</p>
+            <p className="text-[10px] font-semibold text-slate-400 mt-1">Designed &amp; Developed by <span className="text-slate-700 font-black">Shubham Kumar</span></p>
           </div>
         </div>
       </div>
