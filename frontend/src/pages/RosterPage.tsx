@@ -22,7 +22,28 @@ const ALL_SHIFT_TYPES: ShiftType[] = [
   '6AM-3PM','12PM-9PM','1PM-10PM','2PM-11PM','10PM-7AM',
   'WeekOff','Medical Leave','Planned Leave','Earned Leave','Unplanned Leave','Complimentary Off','MID-LEAVE'
 ];
+
+// Default QH for weekday/normal shifts
+const DEFAULT_QH_NAMES = ['Kanchan Mokashi', 'Akanksha Arya', 'Biklu Bora'];
+
+// Shifts where all handlers become automatic QH
+const AUTO_QH_SHIFTS = ['6AM-3PM', '10PM-7AM']; // Morning and Night shifts
+
+// Check if handler is weekend (Sat/Sun)
+const isWeekend = (date: string): boolean => {
+  const d = new Date(date + 'T00:00:00');
+  const day = d.getDay();
+  return day === 0 || day === 6;
+};
+
 type ImportFeedback = { message: string; tone: 'success' | 'warning' | 'error' };
+
+// Type for shift-specific QH assignment
+interface ShiftQH {
+  handlerId: string;
+  date: string;
+  shift: string;
+}
 
 const normalizeCellValue = (value: unknown) => {
   if (value === null || value === undefined) return '';
@@ -134,20 +155,22 @@ interface SortableHandlerProps {
   shift: string;
   onShiftChange: (id: string, shift: ShiftType) => void;
   onDelete: (id: string) => void;
+  onToggleQH?: (handlerId: string, shift: string) => void;
+  isQH?: boolean;
   shiftOptions: ShiftType[];
   compact?: boolean;
 }
 
-const SortableHandler: React.FC<SortableHandlerProps> = ({ handler, shift, onShiftChange, onDelete, shiftOptions, compact }) => {
+const SortableHandler: React.FC<SortableHandlerProps> = ({ handler, shift, onShiftChange, onDelete, onToggleQH, isQH, shiftOptions, compact }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: handler.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.2 : 1, zIndex: isDragging ? 50 : 1 };
   const cfg = getShiftConfig(shift);
   const lc = getLeaveConfig(shift);
   // For leave types, use leave config; otherwise shift config
   const isLeave = ['WeekOff','Medical Leave','Planned Leave','Earned Leave','Unplanned Leave','Complimentary Off','MID-LEAVE'].includes(shift);
-  const bg = isLeave ? lc.bg : cfg.pillBg;
-  const text = isLeave ? lc.text : cfg.pillText;
-  const border = isLeave ? lc.border : cfg.pillBorder;
+  const bg = isQH ? 'bg-yellow-200' : (isLeave ? lc.bg : cfg.pillBg);
+  const text = isQH ? 'text-yellow-900' : (isLeave ? lc.text : cfg.pillText);
+  const border = isQH ? 'border-yellow-400' : (isLeave ? lc.border : cfg.pillBorder);
 
   return (
     <li
@@ -165,6 +188,19 @@ const SortableHandler: React.FC<SortableHandlerProps> = ({ handler, shift, onShi
         {handler.name}
       </span>
       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+        {!isLeave && onToggleQH && (
+          <button
+            onClick={e => { e.stopPropagation(); onToggleQH(handler.id, shift); }}
+            title={isQH ? 'Remove as QH' : 'Assign as QH'}
+            className={`p-0.5 rounded transition-colors text-[9px] font-black uppercase ${
+              isQH
+                ? 'bg-yellow-400 text-yellow-900 hover:bg-yellow-500'
+                : 'text-slate-400 hover:text-yellow-600 hover:bg-yellow-100'
+            }`}
+          >
+            ⭐
+          </button>
+        )}
         <select
           value={shift}
           onChange={e => onShiftChange(handler.id, e.target.value as ShiftType)}
@@ -223,6 +259,66 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
     newHandlers: Handler[];
     summary: string;
   } | null>(null);
+
+  // Shift-specific QH assignments
+  const [shiftQH, setShiftQH] = useState<ShiftQH[]>(() => {
+    const saved = localStorage.getItem('shiftQH');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const saveShiftQH = (qhArray: ShiftQH[]) => {
+    setShiftQH(qhArray);
+    localStorage.setItem('shiftQH', JSON.stringify(qhArray));
+    syncData.updateRoster(roster); // Notify changes
+  };
+
+  // Determine if handler should be QH for a shift/date
+  const isHandlerQH = (handlerId: string, date: string, shift: string): boolean => {
+    // Check if explicitly assigned
+    if (shiftQH.some(q => q.handlerId === handlerId && q.date === date && q.shift === shift)) {
+      return true;
+    }
+
+    // Auto-QH for Morning/Night shifts: anyone assigned to those shifts
+    if (AUTO_QH_SHIFTS.includes(shift)) {
+      const assigned = roster.some(r => r.handlerId === handlerId && r.date === date && r.shift === shift);
+      return assigned;
+    }
+
+    // Auto-QH for weekend shifts: anyone assigned to any shift
+    if (isWeekend(date)) {
+      const assigned = roster.some(r => r.handlerId === handlerId && r.date === date && !['WeekOff','Medical Leave','Planned Leave','Earned Leave','Unplanned Leave','Complimentary Off','MID-LEAVE'].includes(r.shift));
+      return assigned;
+    }
+
+    // For normal weekday shifts: check if handler is in DEFAULT_QH list
+    const handler = handlers.find(h => h.id === handlerId);
+    if (handler && DEFAULT_QH_NAMES.includes(handler.name)) {
+      const assigned = roster.some(r => r.handlerId === handlerId && r.date === date && r.shift === shift);
+      return assigned;
+    }
+
+    return false;
+  };
+
+  // Toggle QH assignment for a handler
+  const toggleShiftQH = (handlerId: string, date: string, shift: string) => {
+    const isCurrentlyQH = shiftQH.some(q => q.handlerId === handlerId && q.date === date && q.shift === shift);
+    
+    let updated: ShiftQH[];
+    if (isCurrentlyQH) {
+      // Remove from explicit QH list
+      updated = shiftQH.filter(q => !(q.handlerId === handlerId && q.date === date && q.shift === shift));
+    } else {
+      // Add to explicit QH list
+      updated = [...shiftQH, { handlerId, date, shift }];
+    }
+    
+    const handler = handlers.find(h => h.id === handlerId);
+    addLog('Shift QH Assignment', `${handler?.name}: ${isCurrentlyQH ? 'removed from' : 'assigned as'} QH for ${shift} on ${date}`, isCurrentlyQH ? 'negative' : 'positive');
+    
+    saveShiftQH(updated);
+  };
 
   useEffect(() => {
     const update = () => {
@@ -909,6 +1005,8 @@ Rules:
                                 shift={shift}
                                 onShiftChange={updateShift}
                                 onDelete={deleteHandlerGlobally}
+                                onToggleQH={(hid, s) => toggleShiftQH(hid, selectedDate, s)}
+                                isQH={isHandlerQH(handler.id, selectedDate, shift)}
                                 shiftOptions={shiftPickerOptions}
                               />
                             ))}
