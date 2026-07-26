@@ -6,7 +6,7 @@ import TwoFactorAuth from '../models/TwoFactorAuth.js';
 import PendingUser from '../models/PendingUser.js';
 import User from '../models/User.js';
 import Session from '../models/Session.js';
-import requireRole from '../middleware/requireRole.js';
+import { requireRole } from '../middleware/requireRole.js';
 
 const router = express.Router();
 
