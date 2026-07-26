@@ -14,6 +14,7 @@ const SettingsPage: React.FC = () => {
   const { role, pages, actions } = useRole();
   const isPrivileged = actions.editHandlers;
   const canDownloadLogs = actions.downloadLogs;
+  const canManageShifts = actions.shiftManagement;
   const [handlers, setHandlers] = useState<Handler[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
@@ -349,7 +350,7 @@ const SettingsPage: React.FC = () => {
 
           <TwoFactorCard />
 
-          {isPrivileged && (
+          {canManageShifts && (
             <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-3">
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-7 h-7 bg-purple-50 rounded flex items-center justify-center text-purple-600 border border-purple-100">

@@ -7,6 +7,7 @@ import {
 import ConfirmModal from '../components/ConfirmModal';
 import { authHeaders } from '../utils/authToken';
 import type { PagePermissions, ActionPermissions } from '../auth/RoleContext';
+import { useRole } from '../auth/RoleContext';
 
 const BACKEND = (import.meta.env.VITE_BACKEND_URL || '').replace(/\/$/, '');
 
@@ -38,6 +39,12 @@ const ACTION_META: { key: keyof ActionPermissions; label: string }[] = [
   { key: 'exportData', label: 'Export Data' },
   { key: 'manageUsers', label: 'Manage Users' },
   { key: 'downloadLogs', label: 'Download Logs' },
+  { key: 'shiftManagement', label: 'Shift Management' },
+  { key: 'importRoster', label: 'Import Roster' },
+  { key: 'manageRoles', label: 'Manage Roles & Permissions' },
+  { key: 'manage2FA', label: 'Manage 2FA Settings' },
+  { key: 'manageAccessCodes', label: 'Manage Access Codes' },
+  { key: 'manageSessions', label: 'Manage Sessions' },
 ];
 
 interface CodesState { admin: string | null; queue_handler: string | null; associate: string | null; }
@@ -81,6 +88,11 @@ async function api(path: string, opts: RequestInit = {}) {
 }
 
 const AdminPage: React.FC = () => {
+  const { actions } = useRole();
+  const canManageAccessCodes = actions.manageAccessCodes;
+  const canManageRoles = actions.manageRoles;
+  const canManageSessions = actions.manageSessions;
+  const canManage2FA = actions.manage2FA;
   const [tab, setTab] = useState<'pending' | 'codes' | 'permissions' | 'sessions' | 'twofactor' | 'users'>('pending');
 
   // ---- Users state (for role management) ----
@@ -169,6 +181,14 @@ const AdminPage: React.FC = () => {
   }, []);
 
   useEffect(() => { loadAll(); }, [loadAll]);
+
+  // Check and restrict tab access based on permissions
+  useEffect(() => {
+    if (tab === 'codes' && !canManageAccessCodes) setTab('pending');
+    if (tab === 'permissions' && !canManageRoles) setTab('pending');
+    if (tab === 'sessions' && !canManageSessions) setTab('pending');
+    if (tab === 'twofactor' && !canManage2FA) setTab('pending');
+  }, [tab, canManageAccessCodes, canManageRoles, canManageSessions, canManage2FA]);
 
   // Lightweight live-ish refresh of just the sessions list while that tab is open
   useEffect(() => {
@@ -431,8 +451,12 @@ const AdminPage: React.FC = () => {
           )}
         </button>
         <button
-          onClick={() => setTab('codes')}
+          onClick={() => canManageAccessCodes && setTab('codes')}
+          disabled={!canManageAccessCodes}
+          title={!canManageAccessCodes ? 'Permission denied' : ''}
           className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs font-bold transition-all whitespace-nowrap ${
+            !canManageAccessCodes ? 'opacity-40 cursor-not-allowed' : ''
+          } ${
             tab === 'codes' ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
           }`}
         >
@@ -440,8 +464,12 @@ const AdminPage: React.FC = () => {
           Codes
         </button>
         <button
-          onClick={() => setTab('permissions')}
+          onClick={() => canManageRoles && setTab('permissions')}
+          disabled={!canManageRoles}
+          title={!canManageRoles ? 'Permission denied' : ''}
           className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs font-bold transition-all whitespace-nowrap ${
+            !canManageRoles ? 'opacity-40 cursor-not-allowed' : ''
+          } ${
             tab === 'permissions' ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
           }`}
         >
@@ -449,8 +477,12 @@ const AdminPage: React.FC = () => {
           Perms
         </button>
         <button
-          onClick={() => setTab('sessions')}
+          onClick={() => canManageSessions && setTab('sessions')}
+          disabled={!canManageSessions}
+          title={!canManageSessions ? 'Permission denied' : ''}
           className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs font-bold transition-all whitespace-nowrap ${
+            !canManageSessions ? 'opacity-40 cursor-not-allowed' : ''
+          } ${
             tab === 'sessions' ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
           }`}
         >
@@ -463,8 +495,12 @@ const AdminPage: React.FC = () => {
           )}
         </button>
         <button
-          onClick={() => setTab('twofactor')}
+          onClick={() => canManage2FA && setTab('twofactor')}
+          disabled={!canManage2FA}
+          title={!canManage2FA ? 'Permission denied' : ''}
           className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs font-bold transition-all whitespace-nowrap ${
+            !canManage2FA ? 'opacity-40 cursor-not-allowed' : ''
+          } ${
             tab === 'twofactor' ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
           }`}
         >

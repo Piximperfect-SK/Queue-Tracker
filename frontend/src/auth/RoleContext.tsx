@@ -19,6 +19,12 @@ export interface ActionPermissions {
   exportData: boolean;
   manageUsers: boolean;
   downloadLogs: boolean;
+  shiftManagement: boolean;
+  importRoster: boolean;
+  manageRoles: boolean;
+  manage2FA: boolean;
+  manageAccessCodes: boolean;
+  manageSessions: boolean;
 }
 
 interface RoleContextValue {
@@ -30,7 +36,7 @@ interface RoleContextValue {
 }
 
 const NO_PAGES: PagePermissions = { roster: false, stats: false, logMonitor: false, settings: false, admin: false };
-const NO_ACTIONS: ActionPermissions = { editRoster: false, editHandlers: false, deleteLog: false, exportData: false, manageUsers: false, downloadLogs: false };
+const NO_ACTIONS: ActionPermissions = { editRoster: false, editHandlers: false, deleteLog: false, exportData: false, manageUsers: false, downloadLogs: false, shiftManagement: false, importRoster: false, manageRoles: false, manage2FA: false, manageAccessCodes: false, manageSessions: false };
 
 const RoleContext = createContext<RoleContextValue>({
   role: null,

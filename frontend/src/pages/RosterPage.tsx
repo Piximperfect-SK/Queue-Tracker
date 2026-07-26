@@ -232,6 +232,7 @@ interface RosterPageProps {
 
 const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }) => {
   const { actions } = useRole();
+  const canImportRoster = actions.importRoster;
   const [handlers, setHandlers] = useState<Handler[]>(() => {
     const s = localStorage.getItem('handlers'); return s ? JSON.parse(s) : MOCK_HANDLERS;
   });
@@ -920,7 +921,7 @@ Rules:
               </div>
 
               {/* Import button - restricted */}
-              {!actions.editRoster ? (
+              {!canImportRoster ? (
                 <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-rose-50 border border-rose-200 text-rose-500 text-[10px] font-black uppercase tracking-widest shadow-sm opacity-60 cursor-not-allowed" title="Access Restricted">
                   <Lock size={13} />
                   <span className="hidden sm:inline">Import</span>
