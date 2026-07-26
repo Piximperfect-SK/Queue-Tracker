@@ -15,9 +15,17 @@ export async function optionalAuth(socketOrReq, next) {
 
   try {
     const payload = jwt.verify(token, JWT_SECRET);
-    const user = await User.findById(payload.userId).select('-passwordHash');
-    if (user) {
-      socketOrReq.user = user;
+    
+    // Handle 2FA tokens (have fullName/role/jti, no userId)
+    if (payload.fullName && payload.role) {
+      socketOrReq.user = { fullName: payload.fullName, role: payload.role, jti: payload.jti };
+    }
+    // Handle legacy User model tokens (have userId, no fullName)
+    else if (payload.userId) {
+      const user = await User.findById(payload.userId).select('-passwordHash');
+      if (user) {
+        socketOrReq.user = user;
+      }
     }
   } catch (err) {
     // ignore invalid tokens
