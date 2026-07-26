@@ -862,156 +862,156 @@ Rules:
 
   // ── RENDER ──────────────────────────────────────────────────────────────────
   return (
-    <div className="h-full flex flex-col overflow-hidden bg-slate-50">
+    <div className="h-full flex flex-col overflow-hidden bg-slate-50 p-2">
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
 
-        {/* Main content - Expanding to all 4 directions */}
+        {/* Main content - Expanding with graceful margins & rounding */}
         <div className={`
           flex-1 flex flex-col overflow-hidden
-          bg-white
+          bg-white border border-slate-200 rounded-2xl shadow-sm
           ${isModalOpen || leaveOperation ? 'brightness-50' : ''}
           transition-all duration-300
         `}>
 
-          {/* Topbar - Ultra Compact */}
-          <div className="flex items-center justify-between px-4 py-2 border-b border-slate-200 shrink-0 bg-white">
+          {/* Topbar - Professional Density */}
+          <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 shrink-0 bg-white rounded-t-2xl">
             {/* Left */}
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-6">
               <div>
-                <p className="text-[7px] font-black text-slate-400 uppercase tracking-[0.25em] leading-none mb-0.5">Agent Roster</p>
-                <h1 className="text-[14px] font-black text-slate-900 tracking-tight uppercase leading-none">Schedule</h1>
+                <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.25em] leading-none mb-1">Agent Roster</p>
+                <h1 className="text-[18px] font-black text-slate-900 tracking-tight uppercase leading-none">Schedule</h1>
               </div>
 
-              <div className="w-px h-6 bg-slate-200" />
+              <div className="w-px h-8 bg-slate-200" />
 
               {/* Date nav */}
-              <div className="flex items-center gap-1">
-                <button onClick={() => navDate(-1)} className="w-6 h-6 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-900 flex items-center justify-center transition-colors shadow-sm">
-                  <ChevronLeft size={12} />
+              <div className="flex items-center gap-2">
+                <button onClick={() => navDate(-1)} className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-900 flex items-center justify-center transition-colors shadow-sm">
+                  <ChevronLeft size={16} />
                 </button>
                 <div className="relative">
-                  <div className="px-3 py-1 bg-white rounded-lg border border-slate-200 cursor-pointer min-w-[150px] text-center shadow-sm">
-                    <span className="text-[10px] font-black text-slate-900 uppercase tracking-widest">{dayLabel}</span>
+                  <div className="px-5 py-2 bg-white rounded-xl border border-slate-200 cursor-pointer min-w-[180px] text-center shadow-sm">
+                    <span className="text-[12px] font-black text-slate-900 uppercase tracking-widest">{dayLabel}</span>
                   </div>
                   <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="absolute inset-0 opacity-0 cursor-pointer w-full" />
                 </div>
-                <button onClick={() => navDate(1)} className="w-6 h-6 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-900 flex items-center justify-center transition-colors shadow-sm">
-                  <ChevronRight size={12} />
+                <button onClick={() => navDate(1)} className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-900 flex items-center justify-center transition-colors shadow-sm">
+                  <ChevronRight size={16} />
                 </button>
               </div>
 
               {/* Shift QH */}
-              <div className="hidden md:flex items-center gap-2 px-2.5 py-1 bg-blue-50 border border-blue-200 rounded-lg text-blue-700">
-                <span className="text-[8px] font-black uppercase tracking-widest">QH:</span>
-                <span className="text-[10px] font-bold">
+              <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg text-blue-700">
+                <span className="text-[9px] font-black uppercase tracking-widest">QH:</span>
+                <span className="text-[11px] font-bold">
                   {assignedQH.length > 0 ? assignedQH.join(' & ') : 'None'}
                 </span>
               </div>
 
               {/* Clocks */}
               <div className="hidden lg:flex items-center gap-0 bg-slate-50 rounded-lg border border-slate-200 overflow-hidden shadow-sm">
-                <div className="flex items-center gap-2 px-2.5 py-1 border-r border-slate-200">
-                  <span className="text-[8px] font-black text-[#00ADB5] tracking-widest uppercase">IST</span>
-                  <span className="text-[11px] font-black text-slate-800 tabular-nums">{times.ist}</span>
+                <div className="flex items-center gap-3 px-3 py-2 border-r border-slate-200">
+                  <span className="text-[9px] font-black text-[#00ADB5] tracking-widest uppercase">IST</span>
+                  <span className="text-[13px] font-black text-slate-800 tabular-nums">{times.ist}</span>
                 </div>
-                <div className="flex items-center gap-2 px-2.5 py-1">
-                  <span className="text-[8px] font-black text-slate-400 tracking-widest uppercase">GMT</span>
-                  <span className="text-[11px] font-black text-slate-700 tabular-nums">{times.uk}</span>
+                <div className="flex items-center gap-3 px-3 py-2">
+                  <span className="text-[9px] font-black text-slate-400 tracking-widest uppercase">GMT</span>
+                  <span className="text-[13px] font-black text-slate-700 tabular-nums">{times.uk}</span>
                 </div>
               </div>
             </div>
 
             {/* Right */}
-            <div className="flex items-center gap-2">
-              {/* Stats - Compact */}
-              <div className="flex items-center gap-2 px-3 py-1 bg-slate-50 rounded-lg border border-slate-200 shadow-sm">
+            <div className="flex items-center gap-3">
+              {/* Stats - Balanced */}
+              <div className="flex items-center gap-4 px-4 py-2 bg-slate-50 rounded-xl border border-slate-200 shadow-sm">
                 <div className="text-center">
-                  <p className="text-[6px] text-slate-400 uppercase tracking-widest font-black leading-none">On</p>
-                  <p className="text-[13px] font-black text-slate-900 tabular-nums leading-none mt-0.5">{totalOnShift}</p>
+                  <p className="text-[7.5px] text-slate-400 uppercase tracking-widest font-black leading-none">On</p>
+                  <p className="text-[16px] font-black text-slate-900 tabular-nums leading-none mt-1">{totalOnShift}</p>
                 </div>
-                <div className="w-px h-4 bg-slate-200" />
+                <div className="w-px h-6 bg-slate-200" />
                 <div className="text-center">
-                  <p className="text-[6px] text-slate-400 uppercase tracking-widest font-black leading-none">Off</p>
-                  <p className="text-[13px] font-black text-slate-500 tabular-nums leading-none mt-0.5">{totalOffDuty}</p>
+                  <p className="text-[7.5px] text-slate-400 uppercase tracking-widest font-black leading-none">Off</p>
+                  <p className="text-[16px] font-black text-slate-500 tabular-nums leading-none mt-1">{totalOffDuty}</p>
                 </div>
               </div>
 
-              {/* Import button - restricted */}
+              {/* Import button */}
               {!canImportRoster ? (
-                <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-500 text-[9px] font-black uppercase tracking-widest shadow-sm opacity-60 cursor-not-allowed" title="Access Restricted">
-                  <Lock size={12} />
+                <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-rose-50 border border-rose-200 text-rose-500 text-[10px] font-black uppercase tracking-widest shadow-sm opacity-60 cursor-not-allowed" title="Access Restricted">
+                  <Lock size={14} />
                   <span className="hidden sm:inline">Import</span>
                 </div>
               ) : (
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isImportingRoster}
-                  className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 hover:text-slate-900 text-[9px] font-black uppercase tracking-widest transition-all shadow-sm disabled:opacity-40"
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 hover:text-slate-900 text-[10px] font-black uppercase tracking-widest transition-all shadow-sm disabled:opacity-40"
                 >
-                  <Upload size={12} />
+                  <Upload size={14} />
                   <span className="hidden sm:inline">{isImportingRoster ? 'Loading…' : 'Import'}</span>
                 </button>
               )}
               <input type="file" ref={fileInputRef} onChange={handleRosterFileChange} accept=".xlsx,.xls,.csv" className="hidden" />
 
-              {/* Register button - restricted */}
+              {/* Register button */}
               {!actions.editHandlers ? (
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-500 text-[9px] font-black uppercase tracking-widest shadow-sm opacity-60 cursor-not-allowed" title="Access Restricted">
-                  <Lock size={12} />
+                <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-rose-50 border border-rose-200 text-rose-500 text-[10px] font-black uppercase tracking-widest shadow-sm opacity-60 cursor-not-allowed" title="Access Restricted">
+                  <Lock size={14} />
                   <span className="hidden sm:inline">Register</span>
                 </div>
               ) : (
                 <button
                   onClick={() => setIsModalOpen(true)}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-black text-white text-[9px] font-black uppercase tracking-widest transition-all shadow-md"
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 hover:bg-black text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-md"
                 >
-                  <Plus size={12} />
+                  <Plus size={14} />
                   <span className="hidden sm:inline">Register Agent</span>
                 </button>
               )}
             </div>
           </div>
 
-          {/* Import status banner - Compact */}
+          {/* Import status banner */}
           {importStatus && (
-            <div className={`px-4 py-1 flex items-center justify-between text-[10px] font-bold border-b shrink-0 ${
+            <div className={`mx-4 mt-2 px-4 py-2 rounded-xl flex items-center justify-between text-[11px] font-bold border shrink-0 ${
               importStatus.tone === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' :
               importStatus.tone === 'warning' ? 'bg-amber-50 border-amber-100 text-amber-700' :
               'bg-red-50 border-red-100 text-red-700'
             }`}>
               <span>{importStatus.message}</span>
-              <button onClick={() => setImportStatus(null)} className="opacity-50 hover:opacity-100 ml-4"><X size={12} /></button>
+              <button onClick={() => setImportStatus(null)} className="opacity-50 hover:opacity-100 ml-4"><X size={14} /></button>
             </div>
           )}
 
-          {/* Shift grid - Full Screen Utilization */}
-          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          {/* Shift grid - Maximized for visibility */}
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden mt-1">
             <div className="flex-1 overflow-auto">
-              <div className="flex h-full min-w-[800px]">
+              <div className="flex h-full min-w-[900px]">
                 {shiftOnlyShifts.map((shift, idx) => {
                   const cfg = getShiftConfig(shift);
                   const shiftHandlers = getHandlersForShift(shift);
                   const isLast = idx === shiftOnlyShifts.length - 1;
 
                   return (
-                    <div key={shift} className={`flex flex-col flex-1 min-w-0 ${!isLast ? 'border-r border-slate-200' : ''}`}>
-                      {/* Column header - Small */}
-                      <div className={`${cfg.headerBg} px-2 py-1.5 border-b border-slate-200 shrink-0`}>
+                    <div key={shift} className={`flex flex-col flex-1 min-w-0 ${!isLast ? 'border-r border-slate-100' : ''}`}>
+                      {/* Column header */}
+                      <div className={`${cfg.headerBg} px-3 py-2.5 border-b border-slate-200 shrink-0`}>
                         <div className="flex items-center justify-between">
                           <div className="min-w-0">
-                            <p className="text-[7px] text-white/70 font-black uppercase tracking-widest leading-none truncate">{cfg.label}</p>
-                            <p className="text-[10px] text-white font-black uppercase tracking-tight leading-none mt-0.5 truncate">{shift}</p>
+                            <p className="text-[8px] text-white/70 font-black uppercase tracking-widest leading-none truncate">{cfg.label}</p>
+                            <p className="text-[12px] text-white font-black uppercase tracking-wide leading-none mt-1 truncate">{shift}</p>
                           </div>
-                          <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-white/20 text-white tabular-nums shrink-0">
+                          <span className="text-[12px] font-black px-2 py-0.5 rounded-md bg-white/20 text-white tabular-nums shrink-0">
                             {shiftHandlers.length}
                           </span>
                         </div>
                       </div>
 
-                      {/* Column body - Zero scroll focused */}
-                      <DroppableContainer id={shift} className={`flex-1 ${cfg.colBg} px-1 py-1`}>
+                      {/* Column body */}
+                      <DroppableContainer id={shift} className={`flex-1 ${cfg.colBg} px-2 py-2`}>
                         <SortableContext id={shift} items={shiftHandlers.map(h => h.id)} strategy={verticalListSortingStrategy}>
-                          <ul className="flex flex-col gap-0.5">
+                          <ul className="flex flex-col gap-1">
                             {shiftHandlers.map(handler => (
                               <SortableHandler
                                 key={handler.id}
@@ -1025,8 +1025,8 @@ Rules:
                               />
                             ))}
                             {shiftHandlers.length === 0 && (
-                              <li className="flex items-center justify-center h-8 rounded border border-dashed border-slate-200 mt-0.5">
-                                <span className="text-[8px] font-black text-slate-300 uppercase tracking-widest">Empty</span>
+                              <li className="flex items-center justify-center h-10 rounded-xl border-2 border-dashed border-slate-200/50 mt-1">
+                                <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">No Agents</span>
                               </li>
                             )}
                           </ul>
@@ -1038,17 +1038,17 @@ Rules:
               </div>
             </div>
 
-            {/* Off Duty strip - High Density */}
-            <div className="shrink-0 border-t border-slate-200 bg-slate-50">
-              <div className="flex items-center gap-3 px-3 py-1 border-b border-slate-100">
-                <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Leaves / Week Off</span>
-                <span className="px-1.5 py-0 rounded-full bg-white border border-slate-200 text-[8px] font-black text-slate-400 shadow-sm">
-                  {totalOffDuty}
+            {/* Off Duty strip - Footer area */}
+            <div className="shrink-0 border-t border-slate-200 bg-slate-50/50">
+              <div className="flex items-center gap-3 px-5 py-2 border-b border-slate-100">
+                <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Leaves / Week Off</span>
+                <span className="px-2 py-0.5 rounded-full bg-white border border-slate-200 text-[9px] font-black text-slate-400 shadow-sm">
+                  {totalOffDuty} Planned
                 </span>
               </div>
-              <DroppableContainer id="OFF_DUTY" className="px-3 py-1.5">
+              <DroppableContainer id="OFF_DUTY" className="px-5 py-2.5">
                 <SortableContext id="OFF_DUTY" items={getOffDutyHandlers().map(i => i.handler.id)} strategy={verticalListSortingStrategy}>
-                  <div className="flex flex-wrap gap-1 min-h-[22px]">
+                  <div className="flex flex-wrap gap-2 min-h-[32px]">
                     {getOffDutyHandlers().map(({ handler, reason }) => (
                       <SortableHandler
                         key={handler.id}
@@ -1062,8 +1062,8 @@ Rules:
                       />
                     ))}
                     {totalOffDuty === 0 && (
-                      <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest self-center py-1">
-                        No agents on leave today
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest self-center">
+                        Zero Agents on leave
                       </p>
                     )}
                   </div>
