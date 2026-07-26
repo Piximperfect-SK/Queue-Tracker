@@ -132,11 +132,11 @@ const TactileBtn: React.FC<{
     disabled={disabled}
     style={{
       background: `linear-gradient(145deg, ${color}ee, ${color}cc)`,
-      boxShadow: `0 4px 0 0 ${color}88, 0 6px 12px ${glow}, inset 0 1px 0 rgba(255,255,255,0.25)`,
+      boxShadow: `0 3px 0 0 ${color}88, 0 4px 8px ${glow}, inset 0 1px 0 rgba(255,255,255,0.25)`,
       border: `1px solid ${color}99`,
     }}
-    className="w-9 h-9 rounded-xl text-white font-black text-lg flex items-center justify-center
-      transition-all duration-100 active:translate-y-[3px] active:shadow-none select-none
+    className="w-7 h-7 rounded-lg text-white font-black text-base flex items-center justify-center
+      transition-all duration-100 active:translate-y-[2px] active:shadow-none select-none
       hover:brightness-110 disabled:opacity-30 disabled:pointer-events-none shrink-0"
   >
     {children}
@@ -149,11 +149,11 @@ const MinusBtn: React.FC<{ onClick: () => void; disabled?: boolean }> = ({ onCli
     disabled={disabled}
     style={{
       background: 'linear-gradient(145deg, #6b7280, #4b5563)',
-      boxShadow: '0 4px 0 0 #374151, 0 6px 12px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.15)',
+      boxShadow: '0 3px 0 0 #374151, 0 4px 8px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.15)',
       border: '1px solid #4b556388',
     }}
-    className="w-9 h-9 rounded-xl text-white font-black text-lg flex items-center justify-center
-      transition-all duration-100 active:translate-y-[3px] active:shadow-none select-none
+    className="w-7 h-7 rounded-lg text-white font-black text-base flex items-center justify-center
+      transition-all duration-100 active:translate-y-[2px] active:shadow-none select-none
       hover:brightness-110 disabled:opacity-30 disabled:pointer-events-none shrink-0"
   >
     −
@@ -453,14 +453,14 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
                     key={i}
                     className="px-1 py-1.5 text-center border-r border-slate-100 last:border-r-0 flex items-center justify-center"
                   >
-                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{label}</span>
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</span>
                   </div>
                 ))}
               </div>
             </div>
 
             {/* Shift groups — shrink to content, overall area scrolls if needed */}
-            <div className="flex-1 min-h-0 overflow-y-auto flex flex-col divide-y divide-slate-100">
+            <div className="flex-1 min-h-0 overflow-hidden flex flex-col divide-y divide-slate-100">
               {handlerGroups.map(({ shift, handlers: groupHandlers }) => {
                 const meta = getShiftMeta(shift);
                 const isCollapsed = collapsedShifts.has(shift);
@@ -472,7 +472,7 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
                 return (
                   <div
                     key={shift}
-                    className="flex flex-col shrink-0"
+                    className={`flex flex-col ${isCollapsed ? "shrink-0" : "flex-1 min-h-0"}`}
                   >
                     {/* ── Shift header row (clickable) ── */}
                     <button
@@ -489,14 +489,14 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
                       <div className="w-2 h-2 rounded-full shrink-0" style={{ background: meta.accentHex }} />
 
                       {/* Shift label */}
-                      <span className={`text-[9px] font-black uppercase tracking-widest ${meta.dividerText} flex-1 text-left`}>
+                      <span className={`text-[11px] font-black uppercase tracking-widest ${meta.dividerText} flex-1 text-left`}>
                         {meta.label}
-                        <span className="ml-2 text-[8px] font-semibold opacity-50">{shift}</span>
+                        <span className="ml-2 text-[10px] font-semibold opacity-50">{shift}</span>
                       </span>
 
                       {/* Agent count badge */}
                       <span
-                        className="text-[8px] font-black px-2 py-0.5 rounded-full"
+                        className="text-[10px] font-black px-2 py-0.5 rounded-full"
                         style={{ background: `${meta.accentHex}18`, color: meta.accentHex }}
                       >
                         {groupHandlers.length} agent{groupHandlers.length !== 1 ? 's' : ''}
@@ -525,7 +525,7 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
 
                     {/* ── Handler rows (hidden when collapsed) ── */}
                     {!isCollapsed && (
-                      <div className="flex flex-col divide-y divide-slate-100/80">
+                      <div className="flex-1 min-h-0 flex flex-col divide-y divide-slate-100/80">
                         {groupHandlers.map(handler => {
                           const hs = getHandlerStats(handler.id);
                           const disabled = isShiftNearEnd(handler.shift);
@@ -544,7 +544,7 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
                             <div
                               key={handler.id}
                               className={`
-                                h-[52px] grid items-center transition-colors group
+                                flex-1 min-h-0 grid items-center transition-colors group
                                 ${meta.rowBg} ${meta.rowHover}
                                 ${disabled ? 'opacity-30 grayscale pointer-events-none' : ''}
                               `}
@@ -554,18 +554,18 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
                               <div className="self-stretch border-r border-slate-100/80" />
 
                               {/* Name */}
-                              <div className="px-2 py-1 border-r border-slate-100/80 flex items-center justify-center gap-1.5 h-full">
-                                <span className="text-[12px] font-bold text-slate-800 truncate">{handler.name}</span>
+                              <div className="px-1.5 py-0 border-r border-slate-100/80 flex items-center justify-center gap-1.5 h-full">
+                                <span className="text-[14px] font-bold text-slate-800 truncate">{handler.name}</span>
                                 {handler.isQH && (
                                   <Shield size={10} className="text-amber-500 shrink-0" title="Queue Handler" />
                                 )}
                               </div>
 
                               {/* Shift label */}
-                              <div className="px-1 py-1 border-r border-slate-100/80 flex items-center justify-center h-full">
+                              <div className="px-1 py-0 border-r border-slate-100/80 flex items-center justify-center h-full">
                                 <span className={`
                                   inline-flex items-center px-2 py-0.5 rounded
-                                  text-[7px] font-black border leading-none
+                                  text-[9px] font-black border leading-none
                                   ${meta.badgeBg} ${meta.badgeText} ${meta.badgeBorder}
                                 `}>
                                   {meta.label}
@@ -573,10 +573,10 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
                               </div>
 
                               {/* Shift time */}
-                              <div className="px-1 py-1 border-r border-slate-100/80 flex items-center justify-center h-full">
+                              <div className="px-1 py-0 border-r border-slate-100/80 flex items-center justify-center h-full">
                                 <span className={`
                                   inline-flex items-center px-1.5 py-0.5 rounded
-                                  text-[8px] font-black leading-none
+                                  text-[10px] font-black leading-none
                                   ${meta.timeBg} ${meta.timeText}
                                 `}>
                                   {handler.shift}
@@ -584,9 +584,9 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
                               </div>
 
                               {/* INC */}
-                              <div className="px-2 py-1 border-r border-slate-100/80 flex items-center justify-center gap-2 h-full">
+                              <div className="px-1.5 py-0 border-r border-slate-100/80 flex items-center justify-center gap-1.5 h-full">
                                 <MinusBtn onClick={() => updateStat(handler.id, 'incidents', Math.max(0, hs.incidents - 1))} />
-                                <span className={`w-7 text-center font-black text-[15px] tabular-nums transition-all ${flash('incidents')}`}>
+                                <span className={`w-8 text-center font-black text-[17px] tabular-nums transition-all ${flash('incidents')}`}>
                                   {hs.incidents}
                                 </span>
                                 <TactileBtn
@@ -597,9 +597,9 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
                               </div>
 
                               {/* TASK */}
-                              <div className="px-2 py-1 border-r border-slate-100/80 flex items-center justify-center gap-2 h-full">
+                              <div className="px-1.5 py-0 border-r border-slate-100/80 flex items-center justify-center gap-1.5 h-full">
                                 <MinusBtn onClick={() => updateStat(handler.id, 'sctasks', Math.max(0, hs.sctasks - 1))} />
-                                <span className={`w-7 text-center font-black text-[15px] tabular-nums transition-all ${flash('sctasks')}`}>
+                                <span className={`w-8 text-center font-black text-[17px] tabular-nums transition-all ${flash('sctasks')}`}>
                                   {hs.sctasks}
                                 </span>
                                 <TactileBtn
@@ -610,9 +610,9 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
                               </div>
 
                               {/* CALL */}
-                              <div className="px-2 py-1 border-r border-slate-100/80 flex items-center justify-center gap-2 h-full">
+                              <div className="px-1.5 py-0 border-r border-slate-100/80 flex items-center justify-center gap-1.5 h-full">
                                 <MinusBtn onClick={() => updateStat(handler.id, 'calls', Math.max(0, hs.calls - 1))} />
-                                <span className={`w-7 text-center font-black text-[15px] tabular-nums transition-all ${flash('calls')}`}>
+                                <span className={`w-8 text-center font-black text-[17px] tabular-nums transition-all ${flash('calls')}`}>
                                   {hs.calls}
                                 </span>
                                 <TactileBtn
@@ -626,7 +626,7 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
                               </div>
 
                               {/* Notes */}
-                              <div className="px-1 py-1 border-r border-slate-100/80 flex items-center h-full">
+                              <div className="px-1 py-0 border-r border-slate-100/80 flex items-center h-full">
                                 <input
                                   type="text"
                                   placeholder="Log status…"
@@ -637,10 +637,10 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
                               </div>
 
                               {/* Total */}
-                              <div className="px-1 py-1 flex items-center justify-center h-full">
+                              <div className="px-1 py-0 flex items-center justify-center h-full">
                                 <span className={`
                                   inline-flex items-center justify-center px-2 py-0.5 rounded-md
-                                  font-black text-[12px] tabular-nums
+                                  font-black text-[14px] tabular-nums
                                   ${rowTotal > 0 ? `${meta.totalBg} ${meta.totalText}` : 'bg-slate-100 text-slate-400'}
                                 `}>
                                   {rowTotal}
