@@ -309,9 +309,9 @@ router.post('/pending/:fullName/approve', requireRole('admin'), async (req, res)
 
     // Update pending status
     pending.status = 'approved';
-    pending.assignedRole = role || 'Associate';
+    pending.assignedRole = role || 'associate';
     pending.processedAt = new Date();
-    pending.processedBy = req.session.fullName;
+    pending.processedBy = req.user?.fullName || 'admin';
     await pending.save();
 
     res.json({ success: true, message: `${fullName} approved as ${role || 'Associate'}` });
@@ -333,7 +333,7 @@ router.post('/pending/:fullName/reject', requireRole('admin'), async (req, res) 
 
     pending.status = 'rejected';
     pending.processedAt = new Date();
-    pending.processedBy = req.session.fullName;
+    pending.processedBy = req.user?.fullName || 'admin';
     await pending.save();
 
     res.json({ success: true, message: `${fullName} rejected` });
