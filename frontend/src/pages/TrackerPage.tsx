@@ -459,8 +459,8 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
               </div>
             </div>
 
-            {/* Shift groups — each takes proportional flex space */}
-            <div className="flex-1 min-h-0 flex flex-col divide-y divide-slate-100">
+            {/* Shift groups — shrink to content, overall area scrolls if needed */}
+            <div className="flex-1 min-h-0 overflow-y-auto flex flex-col divide-y divide-slate-100">
               {handlerGroups.map(({ shift, handlers: groupHandlers }) => {
                 const meta = getShiftMeta(shift);
                 const isCollapsed = collapsedShifts.has(shift);
@@ -472,7 +472,7 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
                 return (
                   <div
                     key={shift}
-                    className={`flex flex-col transition-all duration-200 ${isCollapsed ? 'shrink-0' : 'flex-1 min-h-0'}`}
+                    className="flex flex-col shrink-0"
                   >
                     {/* ── Shift header row (clickable) ── */}
                     <button
@@ -525,7 +525,7 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
 
                     {/* ── Handler rows (hidden when collapsed) ── */}
                     {!isCollapsed && (
-                      <div className="flex-1 min-h-0 overflow-hidden flex flex-col divide-y divide-slate-100/80">
+                      <div className="flex flex-col divide-y divide-slate-100/80">
                         {groupHandlers.map(handler => {
                           const hs = getHandlerStats(handler.id);
                           const disabled = isShiftNearEnd(handler.shift);
@@ -544,14 +544,14 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
                             <div
                               key={handler.id}
                               className={`
-                                flex-1 grid items-center transition-colors group
+                                h-[52px] grid items-center transition-colors group
                                 ${meta.rowBg} ${meta.rowHover}
                                 ${disabled ? 'opacity-30 grayscale pointer-events-none' : ''}
                               `}
                               style={{ gridTemplateColumns: '28px 18% 10% 9% 1fr 1fr 1fr 18% 7%' }}
                             >
                               {/* Collapse toggle spacer */}
-                              <div className="h-full border-r border-slate-100/80" />
+                              <div className="self-stretch border-r border-slate-100/80" />
 
                               {/* Name */}
                               <div className="px-2 py-1 border-r border-slate-100/80 flex items-center justify-center gap-1.5 h-full">
