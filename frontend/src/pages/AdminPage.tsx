@@ -73,7 +73,10 @@ async function api(path: string, opts: RequestInit = {}) {
     headers: { 'Content-Type': 'application/json', ...authHeaders(), ...(opts.headers || {}) },
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  if (!res.ok) {
+    const msg = data.details ? `${data.error}: ${data.details}` : data.error || `Request failed (${res.status})`;
+    throw new Error(msg);
+  }
   return data;
 }
 
