@@ -926,12 +926,12 @@ Rules:
               {/* Stats - Compact */}
               <div className="flex items-center gap-2 px-3 py-1 bg-slate-50 rounded-lg border border-slate-200 shadow-sm">
                 <div className="text-center">
-                  <p className="text-[6px] text-slate-400 uppercase tracking-widest font-black leading-none uppercase">On</p>
+                  <p className="text-[6px] text-slate-400 uppercase tracking-widest font-black leading-none">On</p>
                   <p className="text-[13px] font-black text-slate-900 tabular-nums leading-none mt-0.5">{totalOnShift}</p>
                 </div>
                 <div className="w-px h-4 bg-slate-200" />
                 <div className="text-center">
-                  <p className="text-[6px] text-slate-400 uppercase tracking-widest font-black leading-none uppercase">Off</p>
+                  <p className="text-[6px] text-slate-400 uppercase tracking-widest font-black leading-none">Off</p>
                   <p className="text-[13px] font-black text-slate-500 tabular-nums leading-none mt-0.5">{totalOffDuty}</p>
                 </div>
               </div>
