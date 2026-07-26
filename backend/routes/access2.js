@@ -8,6 +8,7 @@ import TwoFactorAuth from '../models/TwoFactorAuth.js';
 import PendingUser from '../models/PendingUser.js';
 import User from '../models/User.js';
 import Session from '../models/Session.js';
+import SetupSession from '../models/SetupSession.js';
 import { requireRole } from '../middleware/requireRole.js';
 import { encryptCode, decryptCode } from '../models/AccessCode.js';
 
@@ -174,12 +175,12 @@ router.post('/register/setup', async (req, res) => {
     // Generate QR code
     const qrCodeDataURL = await qrcode.toDataURL(otpauthUrl);
 
-    // Store temporarily in session (for confirmation step)
-    req.session = req.session || {};
-    req.session.pendingSetup = {
-      fullName: cleanName,
-      secret: secret
-    };
+    // Store temporarily in database (auto-expires after 10 minutes)
+    await SetupSession.findOneAndUpdate(
+      { fullName: cleanName },
+      { fullName: cleanName, secret: secret },
+      { upsert: true, new: true }
+    );
 
     res.json({
       qrCode: qrCodeDataURL,
@@ -202,9 +203,9 @@ router.post('/register/confirm', async (req, res) => {
     const cleanName = fullName.trim();
     const cleanCode = code.trim();
 
-    // Get setup data from session
-    const setupData = req.session?.pendingSetup;
-    if (!setupData || setupData.fullName !== cleanName) {
+    // Get setup data from database
+    const setupData = await SetupSession.findOne({ fullName: cleanName });
+    if (!setupData) {
       return res.status(400).json({ error: 'Setup session expired. Please start over.' });
     }
 
@@ -239,7 +240,7 @@ router.post('/register/confirm', async (req, res) => {
       const sessionData = await issueSession(res, cleanName, 'admin');
 
       // Clear setup session
-      delete req.session.pendingSetup;
+      await SetupSession.deleteOne({ fullName: cleanName });
 
       return res.json({
         success: true,
@@ -258,7 +259,7 @@ router.post('/register/confirm', async (req, res) => {
     await pendingUser.save();
 
     // Clear setup session
-    delete req.session.pendingSetup;
+    await SetupSession.deleteOne({ fullName: cleanName });
 
     res.json({
       success: true,
