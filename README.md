@@ -107,9 +107,21 @@ Queue Tracker is a production-ready web application designed for teams managing 
 - Color-coded status indicators for quick insights
 
 **Roster Management**
-- Create and manage team schedules
-- Drag-and-drop interface for shift assignment
+- Create and manage team schedules with visual drag-and-drop interface
+- **Flexible Excel Import** - Auto-detects wide format (dates as columns) and long format (one row per date)
+- Support for multiple date formats in Excel (ISO dates, written format like "25th July 2026")
+- **Queue Handler (QH) Assignment** - Designate team members as Queue Handlers per shift/day
+- Auto-assign QH for specific shifts:
+  - **Morning (6AM-3PM)**: All assigned handlers become QH
+  - **Night (10PM-7AM)**: All assigned handlers become QH
+  - **Weekend shifts**: All working handlers become QH
+  - **Weekday normal shifts**: Default QH (configurable team members) + manual override
+- Manual QH override with star icon - click to toggle QH status per handler/shift
+- **Custom Shift Creation** - Admins can add new shifts beyond defaults (e.g., "3PM-12AM", "4AM-1PM")
+- Custom shifts persist in localStorage and appear in all roster views
 - Visual calendar view of who's working when
+- QH display in topbar: "Shift QH: Kanchan & Akanksha & Jyoti"
+- Gold highlight for QH handlers in shift columns
 - Export roster data for reporting
 
 **Live Statistics**
@@ -184,13 +196,17 @@ Queue Tracker is a production-ready web application designed for teams managing 
 
 **User Management**
 - **Approvals Tab** - Review and approve/reject new registrations
-- **Role Management** - View all users, change roles, deactivate accounts
+- **Manage Users Tab** - View all registered users with their roles
+  - Change user roles post-approval (roles take effect on next page load)
+  - Delete users from database with confirmation dialog
+  - Safety checks: Prevent deleting self, prevent deleting last admin
 - **Session Monitoring** - View active sessions, force logout users
 
 **Permission Matrix**
 - Configure page-level permissions for each role
 - Set action-level permissions (view, edit, delete, export)
 - Changes apply instantly without redeployment
+- Lock icon with hover tooltip shows access restrictions (no modal)
 
 **Access Code System** (Legacy PIN-based auth)
 - Generate 6-digit PIN codes for device/kiosk access
@@ -201,8 +217,37 @@ Queue Tracker is a production-ready web application designed for teams managing 
 **Two-Factor Administration**
 - View all users with 2FA enabled
 - Reset 2FA for locked-out users
+- Display backend error details during 2FA approval for debugging
 - Monitor backup code usage
 - Enforce 2FA policy across organization
+
+**Shift Management** (Settings page)
+- Admins can create custom shifts beyond default roster shifts
+- Input field with validation for new shift times (e.g., "3PM-12AM")
+- Delete custom shifts with confirmation
+- Custom shifts persist across sessions and appear in all roster views
+
+---
+
+### 🎯 **Recent Improvements (v4.0.0)**
+
+**Enhanced Roster Intelligence**
+- ✅ Show all handler names without truncation - improved visibility
+- ✅ Shift-specific Queue Handler assignment with auto-detection
+- ✅ Custom shift management for flexibility
+- ✅ Queue Handler status display in topbar
+
+**Admin Panel Refinements**
+- ✅ Compact, natural UI - reduced padding and spacing
+- ✅ Post-approval user role management
+- ✅ User deletion with safety checks
+- ✅ Error details display for debugging (2FA approval, etc.)
+
+**User Experience**
+- ✅ Lock icon with hover tooltips for access restrictions (no disruptive modals)
+- ✅ Improved Excel import with dual-format auto-detection
+- ✅ Support for flexible date formats in roster imports
+- ✅ Grid-based layout for users and data (more compact)
 
 ---
 
