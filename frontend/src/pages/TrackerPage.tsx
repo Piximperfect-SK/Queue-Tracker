@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { MOCK_HANDLERS, MOCK_ROSTER } from '../data/mockData';
-import { ShieldCheck, PhoneCall, X, Check, ChevronLeft, ChevronRight, Shield, ChevronDown } from 'lucide-react';
+import { ShieldCheck, PhoneCall, X, Check, ChevronLeft, ChevronRight, Shield, ChevronDown, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import type { DailyStats, Handler, RosterEntry, ShiftType } from '../types';
 import { addLog, saveLogsFromServer, saveSingleLogFromServer } from '../utils/logger';
 import { socket, syncData } from '../utils/socket';
@@ -182,6 +182,8 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
   });
   // Track which shift groups are collapsed (default: all expanded)
   const [collapsedShifts, setCollapsedShifts] = useState<Set<string>>(new Set());
+  // Shift sort direction in the grid ('asc' | 'desc' | null)
+  const [shiftSort, setShiftSort] = useState<'asc' | 'desc' | null>(null);
 
   const toggleShift = (shift: string) => {
     setCollapsedShifts(prev => {
@@ -344,8 +346,10 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
       if (last && last.shift === h.shift) last.handlers.push(h);
       else groups.push({ shift: h.shift, handlers: [h] });
     });
+    if (shiftSort === 'asc') groups.sort((a, b) => a.shift.localeCompare(b.shift));
+    else if (shiftSort === 'desc') groups.sort((a, b) => b.shift.localeCompare(a.shift));
     return groups;
-  }, [activeHandlers]);
+  }, [activeHandlers, shiftSort]);
 
   return (
     <div className="h-full w-full flex flex-col overflow-hidden bg-white">
@@ -451,9 +455,22 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
                 ].map(({ label }, i) => (
                   <div
                     key={i}
-                    className="px-1 py-1 text-center border-r border-slate-300 last:border-r-0 flex items-center justify-center h-[24px]"
+                    className={`px-1 py-1 text-center border-r border-slate-300 last:border-r-0 flex items-center justify-center h-[24px] ${i === 2 ? 'cursor-pointer select-none hover:bg-slate-100 transition-colors' : ''}`}
+                    onClick={i === 2 ? () => setShiftSort(s => s === 'asc' ? 'desc' : s === 'desc' ? null : 'asc') : undefined}
                   >
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</span>
+                    {i === 2 ? (
+                      <button
+                        onClick={e => { e.stopPropagation(); setShiftSort(s => s === 'asc' ? 'desc' : s === 'desc' ? null : 'asc'); }}
+                        className="flex items-center gap-1 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-700 transition-colors"
+                      >
+                        {label}
+                        {shiftSort === 'asc' ? <ArrowUp size={11} className="text-indigo-600" /> :
+                         shiftSort === 'desc' ? <ArrowDown size={11} className="text-indigo-600" /> :
+                         <ArrowUpDown size={11} className="opacity-30" />}
+                      </button>
+                    ) : (
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</span>
+                    )}
                   </div>
                 ))}
               </div>

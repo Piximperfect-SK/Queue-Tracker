@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { Calendar, BarChart2, Settings, LogOut, Activity, Shield } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
+import { Calendar, BarChart2, Settings, LogOut, Activity, Shield, X, ChevronRight, ChevronLeft } from 'lucide-react';
 import { socket } from '../utils/socket';
 import { useRole } from '../auth/RoleContext';
 
@@ -13,6 +13,19 @@ interface NavbarProps {
 const Navbar: React.FC<NavbarProps> = ({ currentUser, onLogout, onlineUsers }) => {
   const [isConnected, setIsConnected] = useState(socket.connected);
   const { role, pages } = useRole();
+  const location = useLocation();
+
+  const isActive = (path: string) => {
+    if (path === '/') return location.pathname === '/';
+    return location.pathname.startsWith(path);
+  };
+
+  const linkClass = (path: string) =>
+    `px-3 py-1.5 rounded-xl text-[10.5px] font-black uppercase tracking-widest transition-all flex items-center space-x-2 ${
+      isActive(path)
+        ? 'bg-white text-[#222831] shadow-md'
+        : 'text-white/80 hover:text-white hover:bg-[#393E46]'
+    }`;
 
   useEffect(() => {
     const onConnect = () => setIsConnected(true);
@@ -75,31 +88,31 @@ const Navbar: React.FC<NavbarProps> = ({ currentUser, onLogout, onlineUsers }) =
 
             <div className="flex space-x-0.5">
               {pages.roster && (
-                <Link to="/" className="px-3 py-1.5 rounded-xl text-[10.5px] font-black uppercase tracking-widest text-white/80 hover:text-white hover:bg-[#393E46] transition-all flex items-center space-x-2">
+                <Link to="/" className={linkClass('/')}>
                   <Calendar size={14} />
                   <span>Roster</span>
                 </Link>
               )}
               {pages.stats && (
-                <Link to="/tracker" className="px-3 py-1.5 rounded-xl text-[10.5px] font-black uppercase tracking-widest text-white/80 hover:text-white hover:bg-[#393E46] transition-all flex items-center space-x-2">
+                <Link to="/tracker" className={linkClass('/tracker')}>
                   <BarChart2 size={14} />
                   <span>Tracker</span>
                 </Link>
               )}
               {pages.settings && (
-                <Link to="/settings" className="px-3 py-1.5 rounded-xl text-[10.5px] font-black uppercase tracking-widest text-white/80 hover:text-white hover:bg-[#393E46] transition-all flex items-center space-x-2">
+                <Link to="/settings" className={linkClass('/settings')}>
                   <Settings size={14} />
                   <span>Settings</span>
                 </Link>
               )}
               {pages.logMonitor && (
-                <Link to="/logs" className="px-3 py-1.5 rounded-xl text-[10.5px] font-black uppercase tracking-widest text-white/80 hover:text-white hover:bg-[#393E46] transition-all flex items-center space-x-2">
+                <Link to="/logs" className={linkClass('/logs')}>
                   <Activity size={14} />
                   <span>Monitor</span>
                 </Link>
               )}
               {pages.admin && (
-                <Link to="/admin" className="px-3 py-1.5 rounded-xl text-[10.5px] font-black uppercase tracking-widest text-white/80 hover:text-white hover:bg-[#393E46] transition-all flex items-center space-x-2">
+                <Link to="/admin" className={linkClass('/admin')}>
                   <Shield size={14} />
                   <span>Admin</span>
                 </Link>
