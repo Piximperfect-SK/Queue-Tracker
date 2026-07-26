@@ -301,7 +301,7 @@ router.post('/register/confirm', async (req, res) => {
 });
 
 // 5. Admin: list pending users
-router.get('/pending', requireRole('Admin'), async (req, res) => {
+router.get('/pending', requireRole('admin'), async (req, res) => {
   try {
     const pending = await PendingUser.find({ status: 'pending' }).sort({ requestedAt: 1 });
     res.json(pending);
@@ -312,7 +312,7 @@ router.get('/pending', requireRole('Admin'), async (req, res) => {
 });
 
 // 6. Admin: approve user
-router.post('/pending/:fullName/approve', requireRole('Admin'), async (req, res) => {
+router.post('/pending/:fullName/approve', requireRole('admin'), async (req, res) => {
   try {
     const { fullName } = req.params;
     const { role } = req.body;
@@ -355,7 +355,7 @@ router.post('/pending/:fullName/approve', requireRole('Admin'), async (req, res)
 });
 
 // 7. Admin: reject user
-router.post('/pending/:fullName/reject', requireRole('Admin'), async (req, res) => {
+router.post('/pending/:fullName/reject', requireRole('admin'), async (req, res) => {
   try {
     const { fullName } = req.params;
 
