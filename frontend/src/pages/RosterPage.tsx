@@ -193,22 +193,22 @@ const SortableHandler: React.FC<SortableHandlerProps> = ({ handler, shift, onShi
     <li
       ref={setNodeRef}
       style={style}
-      className={`group relative flex items-center gap-2 rounded-lg border transition-all cursor-default
-        ${compact ? 'px-2.5 py-1.5' : 'px-3 py-2'}
+      className={`group relative flex items-center gap-1.5 rounded border transition-all cursor-default
+        ${compact ? 'px-1 py-0.5' : 'px-1.5 py-1'}
         ${bg} ${border} border hover:shadow-sm active:scale-[0.98]`}
     >
       {canEdit && (
-        <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-600 shrink-0 transition-colors">
-          <GripVertical size={12} />
+        <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 shrink-0 transition-colors">
+          <GripVertical size={10} />
         </div>
       )}
       {handler.isQH && <Shield size={10} className="text-amber-500 shrink-0" />}
-      <span className={`flex-1 font-semibold ${text} ${compact ? 'text-[11px]' : 'text-[12px]'} leading-none`}>
+      <span className={`flex-1 font-semibold ${text} ${compact ? 'text-[10px]' : 'text-[11px]'} leading-tight truncate`}>
         {handler.name}
       </span>
       <div className="flex items-center gap-1 shrink-0">
         {isQH && (
-          <span className="px-1.5 py-0.5 rounded-md bg-yellow-400 text-yellow-900 text-[8px] font-black uppercase tracking-widest shadow-sm">
+          <span className="px-1 py-0 rounded bg-yellow-400 text-yellow-900 text-[7px] font-black uppercase tracking-tighter shadow-sm">
             QH
           </span>
         )}
@@ -217,13 +217,13 @@ const SortableHandler: React.FC<SortableHandlerProps> = ({ handler, shift, onShi
             <select
               value={shift}
               onChange={e => onShiftChange(handler.id, e.target.value as ShiftType)}
-              className="text-[8px] font-black bg-white/80 text-slate-600 px-1 py-0.5 rounded border border-slate-200 focus:ring-0 outline-none cursor-pointer uppercase tracking-wider max-w-[60px]"
+              className="text-[7px] font-black bg-white/80 text-slate-600 px-0.5 py-0 rounded border border-slate-200 focus:ring-0 outline-none cursor-pointer uppercase tracking-tighter max-w-[45px]"
             >
               {shiftOptions.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
             <button
               onClick={e => { e.stopPropagation(); onDelete(handler.id); }}
-              className="p-1 rounded text-red-400 hover:bg-red-50 transition-colors"
+              className="p-0.5 rounded text-red-300 hover:bg-red-50 hover:text-red-500 transition-colors"
             >
               <Trash2 size={10} />
             </button>
@@ -862,150 +862,132 @@ Rules:
 
   // ── RENDER ──────────────────────────────────────────────────────────────────
   return (
-    <div className="h-full flex flex-col overflow-hidden">
+    <div className="h-full flex flex-col overflow-hidden bg-slate-50">
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
 
-        {/* Main card */}
+        {/* Main content - Expanding to all 4 directions */}
         <div className={`
-          flex-1 flex flex-col overflow-hidden mx-3 my-2
-          bg-white border border-slate-200 rounded-2xl shadow-sm
+          flex-1 flex flex-col overflow-hidden
+          bg-white
           ${isModalOpen || leaveOperation ? 'brightness-50' : ''}
           transition-all duration-300
         `}>
 
-          {/* Topbar */}
-          <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 shrink-0 bg-white rounded-t-2xl">
+          {/* Topbar - Ultra Compact */}
+          <div className="flex items-center justify-between px-4 py-2 border-b border-slate-200 shrink-0 bg-white">
             {/* Left */}
             <div className="flex items-center gap-4">
               <div>
-                <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.25em] leading-none mb-0.5">Agent Roster</p>
-                <h1 className="text-[15px] font-black text-slate-900 tracking-tight uppercase leading-none">Schedule</h1>
+                <p className="text-[7px] font-black text-slate-400 uppercase tracking-[0.25em] leading-none mb-0.5">Agent Roster</p>
+                <h1 className="text-[14px] font-black text-slate-900 tracking-tight uppercase leading-none">Schedule</h1>
               </div>
 
-              <div className="w-px h-8 bg-slate-200" />
+              <div className="w-px h-6 bg-slate-200" />
 
               {/* Date nav */}
-              <div className="flex items-center gap-1.5">
-                <button onClick={() => navDate(-1)} className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-900 flex items-center justify-center transition-colors">
-                  <ChevronLeft size={14} />
+              <div className="flex items-center gap-1">
+                <button onClick={() => navDate(-1)} className="w-6 h-6 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-900 flex items-center justify-center transition-colors shadow-sm">
+                  <ChevronLeft size={12} />
                 </button>
                 <div className="relative">
-                  <div className="px-4 py-1.5 bg-white rounded-lg border border-slate-200 cursor-pointer min-w-[168px] text-center shadow-sm">
-                    <span className="text-[11px] font-black text-slate-900 uppercase tracking-widest">{dayLabel}</span>
+                  <div className="px-3 py-1 bg-white rounded-lg border border-slate-200 cursor-pointer min-w-[150px] text-center shadow-sm">
+                    <span className="text-[10px] font-black text-slate-900 uppercase tracking-widest">{dayLabel}</span>
                   </div>
                   <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="absolute inset-0 opacity-0 cursor-pointer w-full" />
                 </div>
-                <button onClick={() => navDate(1)} className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-900 flex items-center justify-center transition-colors">
-                  <ChevronRight size={14} />
+                <button onClick={() => navDate(1)} className="w-6 h-6 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-900 flex items-center justify-center transition-colors shadow-sm">
+                  <ChevronRight size={12} />
                 </button>
               </div>
 
               {/* Shift QH */}
-              <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg text-blue-700">
-                <span className="text-[9px] font-black uppercase tracking-widest">QH:</span>
-                <span className="text-[11px] font-semibold">
+              <div className="hidden md:flex items-center gap-2 px-2.5 py-1 bg-blue-50 border border-blue-200 rounded-lg text-blue-700">
+                <span className="text-[8px] font-black uppercase tracking-widest">QH:</span>
+                <span className="text-[10px] font-bold">
                   {assignedQH.length > 0 ? assignedQH.join(' & ') : 'None'}
                 </span>
               </div>
 
               {/* Clocks */}
               <div className="hidden lg:flex items-center gap-0 bg-slate-50 rounded-lg border border-slate-200 overflow-hidden shadow-sm">
-                <div className="flex items-center gap-2 px-3 py-1.5 border-r border-slate-200">
-                  <span className="text-[9px] font-black text-[#00ADB5] tracking-widest uppercase">IST</span>
-                  <span className="text-[12px] font-black text-slate-800 tabular-nums">{times.ist}</span>
+                <div className="flex items-center gap-2 px-2.5 py-1 border-r border-slate-200">
+                  <span className="text-[8px] font-black text-[#00ADB5] tracking-widest uppercase">IST</span>
+                  <span className="text-[11px] font-black text-slate-800 tabular-nums">{times.ist}</span>
                 </div>
-                <div className="flex items-center gap-2 px-3 py-1.5">
-                  <span className="text-[9px] font-black text-slate-400 tracking-widest uppercase">GMT</span>
-                  <span className="text-[12px] font-black text-slate-700 tabular-nums">{times.uk}</span>
+                <div className="flex items-center gap-2 px-2.5 py-1">
+                  <span className="text-[8px] font-black text-slate-400 tracking-widest uppercase">GMT</span>
+                  <span className="text-[11px] font-black text-slate-700 tabular-nums">{times.uk}</span>
                 </div>
               </div>
             </div>
 
             {/* Right */}
-            <div className="flex items-center gap-3">
-              {/* Stats */}
-              <div className="flex items-center gap-3 px-4 py-2 bg-slate-50 rounded-xl border border-slate-200 shadow-sm">
+            <div className="flex items-center gap-2">
+              {/* Stats - Compact */}
+              <div className="flex items-center gap-2 px-3 py-1 bg-slate-50 rounded-lg border border-slate-200 shadow-sm">
                 <div className="text-center">
-                  <p className="text-[7.5px] text-slate-400 uppercase tracking-widest font-black leading-none">On Shift</p>
-                  <p className="text-[16px] font-black text-slate-900 tabular-nums leading-none mt-0.5">{totalOnShift}</p>
+                  <p className="text-[6px] text-slate-400 uppercase tracking-widest font-black leading-none uppercase">On</p>
+                  <p className="text-[13px] font-black text-slate-900 tabular-nums leading-none mt-0.5">{totalOnShift}</p>
                 </div>
-                <div className="w-px h-6 bg-slate-200" />
+                <div className="w-px h-4 bg-slate-200" />
                 <div className="text-center">
-                  <p className="text-[7.5px] text-slate-400 uppercase tracking-widest font-black leading-none">Off Duty</p>
-                  <p className="text-[16px] font-black text-slate-500 tabular-nums leading-none mt-0.5">{totalOffDuty}</p>
+                  <p className="text-[6px] text-slate-400 uppercase tracking-widest font-black leading-none uppercase">Off</p>
+                  <p className="text-[13px] font-black text-slate-500 tabular-nums leading-none mt-0.5">{totalOffDuty}</p>
                 </div>
               </div>
 
               {/* Import button - restricted */}
               {!canImportRoster ? (
-                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-rose-50 border border-rose-200 text-rose-500 text-[10px] font-black uppercase tracking-widest shadow-sm opacity-60 cursor-not-allowed" title="Access Restricted">
-                  <Lock size={13} />
+                <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-500 text-[9px] font-black uppercase tracking-widest shadow-sm opacity-60 cursor-not-allowed" title="Access Restricted">
+                  <Lock size={12} />
                   <span className="hidden sm:inline">Import</span>
                 </div>
               ) : (
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isImportingRoster}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 hover:text-slate-900 text-[10px] font-black uppercase tracking-widest transition-all shadow-sm disabled:opacity-40"
+                  className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 hover:text-slate-900 text-[9px] font-black uppercase tracking-widest transition-all shadow-sm disabled:opacity-40"
                 >
-                  <Upload size={13} />
-                  <span className="hidden sm:inline">{isImportingRoster ? 'Importing…' : 'Import'}</span>
+                  <Upload size={12} />
+                  <span className="hidden sm:inline">{isImportingRoster ? 'Loading…' : 'Import'}</span>
                 </button>
               )}
               <input type="file" ref={fileInputRef} onChange={handleRosterFileChange} accept=".xlsx,.xls,.csv" className="hidden" />
 
-              {/* AI Scan button - restricted */}
-              {!actions.editRoster ? (
-                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-rose-50 border border-rose-200 text-rose-500 text-[10px] font-black uppercase tracking-widest shadow-sm opacity-60 cursor-not-allowed" title="Access Restricted">
-                  <Lock size={13} />
-                  <span className="hidden sm:inline">AI Scan</span>
-                </div>
-              ) : (
-                <button
-                  onClick={() => screenshotInputRef.current?.click()}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-600 hover:text-indigo-800 text-[10px] font-black uppercase tracking-widest transition-all shadow-sm"
-                  title="Import from screenshot"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                  <span className="hidden sm:inline">AI Scan</span>
-                </button>
-              )}
-              <input type="file" ref={screenshotInputRef} onChange={handleScreenshotFileChange} accept="image/*" className="hidden" />
-
               {/* Register button - restricted */}
               {!actions.editHandlers ? (
-                <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-rose-50 border border-rose-200 text-rose-500 text-[10px] font-black uppercase tracking-widest shadow-sm opacity-60 cursor-not-allowed" title="Access Restricted">
-                  <Lock size={13} />
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-500 text-[9px] font-black uppercase tracking-widest shadow-sm opacity-60 cursor-not-allowed" title="Access Restricted">
+                  <Lock size={12} />
                   <span className="hidden sm:inline">Register</span>
                 </div>
               ) : (
                 <button
                   onClick={() => setIsModalOpen(true)}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-900 hover:bg-black text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-md"
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-black text-white text-[9px] font-black uppercase tracking-widest transition-all shadow-md"
                 >
-                  <Plus size={13} />
-                  <span className="hidden sm:inline">Register</span>
+                  <Plus size={12} />
+                  <span className="hidden sm:inline">Register Agent</span>
                 </button>
               )}
             </div>
           </div>
 
-          {/* Import banner */}
+          {/* Import status banner - Compact */}
           {importStatus && (
-            <div className={`mx-4 mt-3 px-4 py-2.5 rounded-xl flex items-center justify-between text-[11px] font-bold border shrink-0 ${
-              importStatus.tone === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' :
-              importStatus.tone === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-700' :
-              'bg-red-50 border-red-200 text-red-700'
+            <div className={`px-4 py-1 flex items-center justify-between text-[10px] font-bold border-b shrink-0 ${
+              importStatus.tone === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' :
+              importStatus.tone === 'warning' ? 'bg-amber-50 border-amber-100 text-amber-700' :
+              'bg-red-50 border-red-100 text-red-700'
             }`}>
               <span>{importStatus.message}</span>
-              <button onClick={() => setImportStatus(null)} className="opacity-50 hover:opacity-100 ml-4"><X size={13} /></button>
+              <button onClick={() => setImportStatus(null)} className="opacity-50 hover:opacity-100 ml-4"><X size={12} /></button>
             </div>
           )}
 
-          {/* Shift grid */}
-          <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+          {/* Shift grid - Full Screen Utilization */}
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
             <div className="flex-1 overflow-auto">
-              <div className="flex h-full min-w-[700px]" style={{ minHeight: '300px' }}>
+              <div className="flex h-full min-w-[800px]">
                 {shiftOnlyShifts.map((shift, idx) => {
                   const cfg = getShiftConfig(shift);
                   const shiftHandlers = getHandlersForShift(shift);
@@ -1013,23 +995,23 @@ Rules:
 
                   return (
                     <div key={shift} className={`flex flex-col flex-1 min-w-0 ${!isLast ? 'border-r border-slate-200' : ''}`}>
-                      {/* Column header */}
-                      <div className={`${cfg.headerBg} px-3 py-2.5 border-b border-slate-200 shrink-0`}>
+                      {/* Column header - Small */}
+                      <div className={`${cfg.headerBg} px-2 py-1.5 border-b border-slate-200 shrink-0`}>
                         <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-[8px] text-white/70 font-black uppercase tracking-widest leading-none">{cfg.label}</p>
-                            <p className="text-[12px] text-white font-black uppercase tracking-wide leading-none mt-0.5">{shift}</p>
+                          <div className="min-w-0">
+                            <p className="text-[7px] text-white/70 font-black uppercase tracking-widest leading-none truncate">{cfg.label}</p>
+                            <p className="text-[10px] text-white font-black uppercase tracking-tight leading-none mt-0.5 truncate">{shift}</p>
                           </div>
-                          <span className="text-[12px] font-black px-2 py-0.5 rounded-md bg-white/20 text-white tabular-nums">
+                          <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-white/20 text-white tabular-nums shrink-0">
                             {shiftHandlers.length}
                           </span>
                         </div>
                       </div>
 
-                      {/* Column body */}
-                      <DroppableContainer id={shift} className={`flex-1 ${cfg.colBg} px-2 py-2`}>
+                      {/* Column body - Zero scroll focused */}
+                      <DroppableContainer id={shift} className={`flex-1 ${cfg.colBg} px-1 py-1`}>
                         <SortableContext id={shift} items={shiftHandlers.map(h => h.id)} strategy={verticalListSortingStrategy}>
-                          <ul className="flex flex-col gap-1">
+                          <ul className="flex flex-col gap-0.5">
                             {shiftHandlers.map(handler => (
                               <SortableHandler
                                 key={handler.id}
@@ -1043,8 +1025,8 @@ Rules:
                               />
                             ))}
                             {shiftHandlers.length === 0 && (
-                              <li className="flex items-center justify-center h-10 rounded-lg border-2 border-dashed border-slate-200 mt-1">
-                                <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Empty</span>
+                              <li className="flex items-center justify-center h-8 rounded border border-dashed border-slate-200 mt-0.5">
+                                <span className="text-[8px] font-black text-slate-300 uppercase tracking-widest">Empty</span>
                               </li>
                             )}
                           </ul>
@@ -1056,17 +1038,17 @@ Rules:
               </div>
             </div>
 
-            {/* Off Duty strip */}
+            {/* Off Duty strip - High Density */}
             <div className="shrink-0 border-t border-slate-200 bg-slate-50">
-              <div className="flex items-center gap-3 px-4 py-2 border-b border-slate-200">
-                <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Leaves / Week Off</span>
-                <span className="px-2 py-0.5 rounded-full bg-white border border-slate-200 text-[9px] font-black text-slate-500 shadow-sm">
-                  {totalOffDuty} agents
+              <div className="flex items-center gap-3 px-3 py-1 border-b border-slate-100">
+                <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Leaves / Week Off</span>
+                <span className="px-1.5 py-0 rounded-full bg-white border border-slate-200 text-[8px] font-black text-slate-400 shadow-sm">
+                  {totalOffDuty}
                 </span>
               </div>
-              <DroppableContainer id="OFF_DUTY" className="px-4 py-2.5">
+              <DroppableContainer id="OFF_DUTY" className="px-3 py-1.5">
                 <SortableContext id="OFF_DUTY" items={getOffDutyHandlers().map(i => i.handler.id)} strategy={verticalListSortingStrategy}>
-                  <div className="flex flex-wrap gap-2 min-h-[28px]">
+                  <div className="flex flex-wrap gap-1 min-h-[22px]">
                     {getOffDutyHandlers().map(({ handler, reason }) => (
                       <SortableHandler
                         key={handler.id}
@@ -1080,7 +1062,7 @@ Rules:
                       />
                     ))}
                     {totalOffDuty === 0 && (
-                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest self-center">
+                      <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest self-center py-1">
                         No agents on leave today
                       </p>
                     )}
