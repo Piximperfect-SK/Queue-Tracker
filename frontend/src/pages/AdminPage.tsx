@@ -59,6 +59,12 @@ interface TwoFactorRecord {
   enabledAt?: string;
   lastUsedAt?: string;
 }
+interface PendingUserRecord {
+  fullName: string;
+  status: 'pending' | 'approved' | 'rejected';
+  requestedAt: string;
+  assignedRole?: string;
+}
 
 async function api(path: string, opts: RequestInit = {}) {
   const res = await fetch(`${BACKEND}${path}`, {
@@ -72,7 +78,7 @@ async function api(path: string, opts: RequestInit = {}) {
 }
 
 const AdminPage: React.FC = () => {
-  const [tab, setTab] = useState<'codes' | 'permissions' | 'sessions' | 'twofactor'>('codes');
+  const [tab, setTab] = useState<'pending' | 'codes' | 'permissions' | 'sessions' | 'twofactor'>('pending');
 
   // ---- Access codes state ----
   const [codes, setCodes] = useState<CodesState>({ admin: null, queue_handler: null, associate: null });
@@ -98,6 +104,12 @@ const AdminPage: React.FC = () => {
   // ---- 2FA oversight state ----
   const [twoFactorRecords, setTwoFactorRecords] = useState<TwoFactorRecord[]>([]);
   const [resetTarget, setResetTarget] = useState<TwoFactorRecord | null>(null);
+
+  // ---- Pending approvals state ----
+  const [pendingUsers, setPendingUsers] = useState<PendingUserRecord[]>([]);
+  const [approvingUser, setApprovingUser] = useState<string | null>(null);
+  const [rejectingUser, setRejectingUser] = useState<string | null>(null);
+  const [selectedRole, setSelectedRole] = useState<Record<string, Role>>({});
   const [resetting, setResetting] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
@@ -107,12 +119,13 @@ const AdminPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const [codesRes, qhRes, assocRes, sessionsRes, twoFactorRes] = await Promise.all([
+      const [codesRes, qhRes, assocRes, sessionsRes, twoFactorRes, pendingRes] = await Promise.all([
         api('/api/access/codes'),
         api('/api/access/permissions/queue_handler'),
         api('/api/access/permissions/associate'),
         api('/api/access/sessions'),
         api('/api/access/2fa/list'),
+        api('/api/access/pending'),
       ]);
       setCodes(codesRes.codes);
       setPerms({
@@ -121,6 +134,7 @@ const AdminPage: React.FC = () => {
       });
       setSessions(sessionsRes.sessions || []);
       setTwoFactorRecords(twoFactorRes.records || []);
+      setPendingUsers(pendingRes || []);
       setDirty({});
     } catch (err: any) {
       const isNetworkError = err instanceof TypeError || err?.message === 'Failed to fetch';
@@ -174,6 +188,38 @@ const AdminPage: React.FC = () => {
       setError(err.message || 'Failed to reset 2FA');
     } finally {
       setResetting(null);
+    }
+  };
+
+  const handleApproveUser = async (fullName: string) => {
+    setApprovingUser(fullName);
+    setError(null);
+    try {
+      const role = selectedRole[fullName] || 'associate';
+      await api(`/api/access/pending/${encodeURIComponent(fullName)}/approve`, {
+        method: 'POST',
+        body: JSON.stringify({ role })
+      });
+      setPendingUsers((p) => p.filter((u) => u.fullName !== fullName));
+    } catch (err: any) {
+      setError(err.message || 'Failed to approve user');
+    } finally {
+      setApprovingUser(null);
+    }
+  };
+
+  const handleRejectUser = async (fullName: string) => {
+    setRejectingUser(fullName);
+    setError(null);
+    try {
+      await api(`/api/access/pending/${encodeURIComponent(fullName)}/reject`, {
+        method: 'POST'
+      });
+      setPendingUsers((p) => p.filter((u) => u.fullName !== fullName));
+    } catch (err: any) {
+      setError(err.message || 'Failed to reject user');
+    } finally {
+      setRejectingUser(null);
     }
   };
 
@@ -318,6 +364,20 @@ const AdminPage: React.FC = () => {
       {/* Tabs */}
       <div className="flex gap-2 mb-6 shrink-0">
         <button
+          onClick={() => setTab('pending')}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
+            tab === 'pending' ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          <Clock size={16} />
+          User Approvals
+          {pendingUsers.length > 0 && (
+            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${tab === 'pending' ? 'bg-amber-500' : 'bg-amber-500 text-white'}`}>
+              {pendingUsers.length}
+            </span>
+          )}
+        </button>
+        <button
           onClick={() => setTab('codes')}
           className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
             tab === 'codes' ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
@@ -364,6 +424,56 @@ const AdminPage: React.FC = () => {
         {loading ? (
           <div className="flex items-center justify-center py-24 text-slate-400">
             <RefreshCw size={32} className="animate-spin opacity-50" />
+          </div>
+        ) : tab === 'pending' ? (
+          <div className="space-y-4 max-w-3xl">
+            {pendingUsers.length === 0 ? (
+              <div className="text-center py-24 text-slate-400">
+                <Clock size={48} className="mx-auto mb-4 opacity-30" />
+                <p className="text-sm font-semibold">No pending approval requests</p>
+              </div>
+            ) : (
+              pendingUsers.map((user) => (
+                <div key={user.fullName} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-lg font-bold text-slate-900">{user.fullName}</h3>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Requested {timeAgo(user.requestedAt)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <select
+                        value={selectedRole[user.fullName] || 'associate'}
+                        onChange={(e) => setSelectedRole({ ...selectedRole, [user.fullName]: e.target.value as Role })}
+                        className="px-3 py-2 border border-slate-200 rounded-lg text-sm font-semibold"
+                        disabled={approvingUser === user.fullName || rejectingUser === user.fullName}
+                      >
+                        <option value="associate">Associate</option>
+                        <option value="queue_handler">Queue Handler</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                      <button
+                        onClick={() => handleApproveUser(user.fullName)}
+                        disabled={approvingUser === user.fullName || rejectingUser === user.fullName}
+                        className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white rounded-lg text-sm font-semibold transition-all"
+                      >
+                        {approvingUser === user.fullName ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => handleRejectUser(user.fullName)}
+                        disabled={approvingUser === user.fullName || rejectingUser === user.fullName}
+                        className="flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-700 disabled:bg-slate-300 text-white rounded-lg text-sm font-semibold transition-all"
+                      >
+                        {rejectingUser === user.fullName ? <RefreshCw size={14} className="animate-spin" /> : <X size={14} />}
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         ) : tab === 'codes' ? (
           <div className="space-y-4 max-w-3xl">

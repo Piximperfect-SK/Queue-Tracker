@@ -229,6 +229,10 @@ app.use('/api', rolesRouter);
 import accessRouter from './routes/access.js';
 app.use('/api', accessRouter);
 
+// New 2FA-first authentication flow
+import access2Router from './routes/access2.js';
+app.use('/api/access', access2Router);
+
 import twoFactorRouter from './routes/twoFactor.js';
 app.use('/api', twoFactorRouter);
 

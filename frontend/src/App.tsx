@@ -5,7 +5,7 @@ import RosterPage from './pages/RosterPage';
 import TrackerPage from './pages/TrackerPage';
 import SettingsPage from './pages/SettingsPage';
 import LogMonitorPage from './pages/LogMonitorPage';
-import { User, LogIn, ShieldAlert, ShieldCheck, Lock, Fingerprint, Loader2 } from 'lucide-react';
+import { User, LogIn, ShieldAlert, ShieldCheck, Fingerprint, Loader2 } from 'lucide-react';
 import { syncData, socket } from './utils/socket';
 import signinBg from './assets/Background.mp4';
 import bgImage from './assets/background.jpg';
@@ -24,10 +24,15 @@ function App() {
   });
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
-  const [tempName, setTempName] = useState('');
-  const [tempCode, setTempCode] = useState('');
-  const [pending2FA, setPending2FA] = useState<{ pendingToken: string; fullName: string; role: string } | null>(null);
-  const [totpCode, setTotpCode] = useState('');
+  
+  // New auth flow state
+  const [authStage, setAuthStage] = useState<'name' | 'totp' | 'setup-qr' | 'setup-confirm' | 'pending' | 'rejected'>('name');
+  const [inputName, setInputName] = useState('');
+  const [inputCode, setInputCode] = useState('');
+  const [setupQR, setSetupQR] = useState('');
+  const [backupCodes, setBackupCodes] = useState<string[]>([]);
+  const [setupSecret, setSetupSecret] = useState('');
+  
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
   const [authError, setAuthError] = useState<string | null>(null);
   const [isBackendDown, setIsBackendDown] = useState(false);
@@ -49,9 +54,6 @@ function App() {
     setIsAuthenticated(false);
   };
 
-  // Note: initial 'Guest' cleanup is handled in the lazy initializer above
-  // to avoid calling setState synchronously inside an effect.
-
   useEffect(() => {
     const handleConnect = () => {
       console.log('CONNECTED to server');
@@ -72,13 +74,10 @@ function App() {
     const handleErrorMessage = (msg: string) => {
       setAuthError(msg);
       setIsVerifying(false);
-      // Any rejection from 'join' means the session isn't valid — force
-      // back to the login screen rather than leaving a half-authenticated state.
       handleLogout();
     };
 
     const handleInit = () => {
-      // SECURITY: If for some reason the name is missing or set to "Guest", force logout
       if (!currentUser || currentUser === 'Guest') {
         handleLogout();
         return;
@@ -118,17 +117,17 @@ function App() {
     };
   }, [currentUser, isAuthenticated]);
 
-  const handleLogin = async (e: React.FormEvent) => {
+  // New auth handlers
+  const handleNameLookup = async (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanName = tempName.trim();
-    const cleanCode = tempCode.trim();
+    const cleanName = inputName.trim();
 
     if (cleanName === 'Guest') {
       setAuthError('The name "Guest" is reserved. Please use your professional name.');
       return;
     }
-    if (!cleanName || !/^\d{6}$/.test(cleanCode)) {
-      setAuthError('Enter your full name and the 6-digit access code.');
+    if (!cleanName) {
+      setAuthError('Enter your full name.');
       return;
     }
 
@@ -136,40 +135,89 @@ function App() {
     setAuthError(null);
 
     try {
-      const res = await fetch(`${BACKEND}/api/access/login`, {
+      const res = await fetch(`${BACKEND}/api/access/lookup`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fullName: cleanName, code: cleanCode }),
+        body: JSON.stringify({ fullName: cleanName }),
       });
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        // Distinguish "server/network problem" from "wrong code" so this
-        // doesn't send people hunting for a typo that isn't there.
-        setAuthError(data.error || `Login failed (server returned ${res.status}). Please try again.`);
+        setAuthError(data.error || 'Server error. Please try again.');
         setIsVerifying(false);
         return;
       }
 
-      if (data.requiresTwoFactor) {
-        setPending2FA({ pendingToken: data.pendingToken, fullName: data.fullName, role: data.role });
+      if (data.exists && data.status === 'active') {
+        // Existing user - go to TOTP entry
+        setAuthStage('totp');
+        setIsVerifying(false);
+      } else if (data.exists && data.status === 'pending') {
+        // User is waiting for approval
+        setAuthStage('pending');
+        setIsVerifying(false);
+      } else if (data.exists && data.status === 'rejected') {
+        // User was rejected
+        setAuthStage('rejected');
+        setIsVerifying(false);
+      } else {
+        // New user - start 2FA setup
+        const setupRes = await fetch(`${BACKEND}/api/access/register/setup`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fullName: cleanName }),
+        });
+        const setupData = await setupRes.json().catch(() => ({}));
+
+        if (!setupRes.ok) {
+          setAuthError(setupData.error || 'Setup failed. Please try again.');
+          setIsVerifying(false);
+          return;
+        }
+
+        setSetupQR(setupData.qrCode);
+        setBackupCodes(setupData.backupCodes || []);
+        setSetupSecret(setupData.secret);
+        setAuthStage('setup-qr');
+        setIsVerifying(false);
+      }
+    } catch (err) {
+      setAuthError('Unable to reach server. Please try again.');
+      setIsVerifying(false);
+    }
+  };
+
+  const handleTotpLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanCode = inputCode.trim();
+
+    if (!cleanCode) {
+      setAuthError('Enter the code from your authenticator app.');
+      return;
+    }
+
+    setIsVerifying(true);
+    setAuthError(null);
+
+    try {
+      const res = await fetch(`${BACKEND}/api/access/login/totp`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fullName: inputName, code: cleanCode }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setAuthError(data.error || 'Verification failed.');
         setIsVerifying(false);
         return;
       }
 
-      // JWT is stored as a bearer token (not just relying on the cookie —
-      // cross-origin third-party cookies get silently blocked by many
-      // browsers regardless of SameSite/Secure settings). The socket auth
-      // function (see utils/socket.ts) reads this fresh on every connect.
-      if (data.token) {
-        setToken(data.token);
-      }
-
-      // The socket may already be connected from BEFORE login (it connects
-      // on page load), and socket.io only reads its `auth` payload at
-      // handshake time — so force a fresh connection now that the token exists.
-      setCurrentUser(cleanName);
+      if (data.token) setToken(data.token);
+      setCurrentUser(inputName);
       if (socket.connected) {
         socket.disconnect();
       }
@@ -180,40 +228,46 @@ function App() {
     }
   };
 
-  const handleVerify2FA = async (e: React.FormEvent) => {
+  const handleSetupConfirm = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!pending2FA) return;
-    const cleanCode = totpCode.trim();
+    const cleanCode = inputCode.trim();
+
     if (!cleanCode) {
-      setAuthError('Enter the code from your authenticator app.');
+      setAuthError('Enter the code from your authenticator app to confirm setup.');
       return;
     }
+
     setIsVerifying(true);
     setAuthError(null);
+
     try {
-      const res = await fetch(`${BACKEND}/api/access/login/verify-2fa`, {
+      const res = await fetch(`${BACKEND}/api/access/register/confirm`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pendingToken: pending2FA.pendingToken, code: cleanCode }),
+        body: JSON.stringify({ fullName: inputName, code: cleanCode }),
       });
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        setAuthError(data.error || `Verification failed (server returned ${res.status}).`);
+        setAuthError(data.error || 'Confirmation failed.');
         setIsVerifying(false);
         return;
       }
 
-      if (data.token) setToken(data.token);
-      const name = pending2FA.fullName;
-      setPending2FA(null);
-      setTotpCode('');
-      setCurrentUser(name);
-      if (socket.connected) {
-        socket.disconnect();
+      if (data.autoApproved) {
+        // Admin auto-approved
+        if (data.token) setToken(data.token);
+        setCurrentUser(inputName);
+        if (socket.connected) {
+          socket.disconnect();
+        }
+        socket.connect();
+      } else {
+        // Regular user - pending approval
+        setAuthStage('pending');
+        setIsVerifying(false);
       }
-      socket.connect();
     } catch (err) {
       setAuthError('Unable to reach server. Please try again.');
       setIsVerifying(false);
@@ -257,6 +311,32 @@ function App() {
   // 2. Auth State
 
   if (!isAuthenticated) {
+    const getStageIcon = () => {
+      if (authStage === 'pending') return <ShieldAlert size={28} className="text-white" />;
+      if (authStage === 'rejected') return <ShieldAlert size={28} className="text-white" />;
+      if (authStage === 'setup-qr' || authStage === 'setup-confirm') return <Fingerprint size={28} className="text-white" />;
+      if (authStage === 'totp') return <ShieldCheck size={28} className="text-white" />;
+      return <User size={28} className="text-white" />;
+    };
+
+    const getStageTitle = () => {
+      if (authStage === 'pending') return 'Approval Pending';
+      if (authStage === 'rejected') return 'Access Denied';
+      if (authStage === 'setup-qr') return 'Setup Authenticator';
+      if (authStage === 'setup-confirm') return 'Confirm Setup';
+      if (authStage === 'totp') return 'Verify Identity';
+      return 'Access Gate';
+    };
+
+    const getStageSubtitle = () => {
+      if (authStage === 'pending') return 'Waiting for admin approval';
+      if (authStage === 'rejected') return 'Contact an administrator';
+      if (authStage === 'setup-qr') return 'Scan QR code with your authenticator app';
+      if (authStage === 'setup-confirm') return 'Enter code to confirm setup';
+      if (authStage === 'totp') return 'Enter the code from your authenticator app';
+      return 'Authorized Handlers Only';
+    };
+
     return (
       <div className="h-screen w-screen bg-slate-50 flex items-center justify-center p-6 relative overflow-hidden font-sans">
           {/* Background Video for Auth Screen */}
@@ -275,16 +355,51 @@ function App() {
             <div className="bg-white/80 backdrop-blur-3xl rounded-[2.5rem] border border-white/50 shadow-2xl overflow-hidden p-10 animate-in fade-in zoom-in duration-500">
               <div className="text-center mb-10">
                 <div className="w-14 h-14 bg-slate-900 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-slate-900/40">
-                  {pending2FA ? <ShieldCheck size={28} className="text-white" /> : <Fingerprint size={28} className="text-white" />}
+                  {getStageIcon()}
                 </div>
-                <h1 className="text-2xl font-black text-slate-950 mb-1 tracking-tight">{pending2FA ? 'Verify Identity' : 'Access Gate'}</h1>
+                <h1 className="text-2xl font-black text-slate-950 mb-1 tracking-tight">{getStageTitle()}</h1>
                 <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">
-                  {pending2FA ? `Enter the code from your authenticator app` : 'Authorized Handlers Only'}
+                  {getStageSubtitle()}
                 </p>
               </div>
 
-              {pending2FA ? (
-                <form onSubmit={handleVerify2FA} className="space-y-6">
+              {/* Name Entry Stage */}
+              {authStage === 'name' && (
+                <form onSubmit={handleNameLookup} className="space-y-6">
+                  {authError && (
+                    <div className="p-4 bg-rose-600/10 border border-rose-500/30 rounded-2xl text-rose-700 text-[10px] font-black uppercase tracking-widest text-center animate-pulse">
+                      {authError}
+                    </div>
+                  )}
+                  <div className="group">
+                    <div className="flex items-center gap-2 mb-2 ml-1">
+                      <User size={12} className="text-slate-500 group-focus-within:text-blue-600 transition-colors" />
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest group-focus-within:text-blue-600 transition-colors">Full Name</label>
+                    </div>
+                    <input 
+                      autoFocus
+                      type="text" 
+                      value={inputName}
+                      onChange={(e) => setInputName(e.target.value)}
+                      placeholder="Enter your full name"
+                      disabled={isVerifying}
+                      className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:border-blue-600 focus:bg-white outline-none text-slate-950 font-black transition-all placeholder:text-slate-400"
+                      required
+                    />
+                  </div>
+                  <button 
+                    type="submit"
+                    disabled={isVerifying}
+                    className="w-full bg-slate-900 hover:bg-black disabled:bg-slate-300 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all shadow-xl active:scale-[0.98] flex items-center justify-center gap-3"
+                  >
+                    {isVerifying ? <Loader2 size={18} className="animate-spin" /> : <><LogIn size={18} /><span>Continue</span></>}
+                  </button>
+                </form>
+              )}
+
+              {/* TOTP Entry Stage (Existing User) */}
+              {authStage === 'totp' && (
+                <form onSubmit={handleTotpLogin} className="space-y-6">
                   {authError && (
                     <div className="p-4 bg-rose-600/10 border border-rose-500/30 rounded-2xl text-rose-700 text-[10px] font-black uppercase tracking-widest text-center animate-pulse">
                       {authError}
@@ -300,8 +415,8 @@ function App() {
                       type="text"
                       inputMode="numeric"
                       maxLength={8}
-                      value={totpCode}
-                      onChange={(e) => setTotpCode(e.target.value.replace(/[^0-9A-Za-z]/g, '').slice(0, 8))}
+                      value={inputCode}
+                      onChange={(e) => setInputCode(e.target.value.replace(/[^0-9A-Za-z]/g, '').slice(0, 8))}
                       placeholder="6-digit code or backup code"
                       disabled={isVerifying}
                       className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:border-blue-600 focus:bg-white outline-none text-slate-950 font-black tracking-[0.3em] transition-all placeholder:text-slate-400 placeholder:tracking-normal placeholder:text-xs"
@@ -313,77 +428,119 @@ function App() {
                     disabled={isVerifying}
                     className="w-full bg-slate-900 hover:bg-black disabled:bg-slate-300 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all shadow-xl active:scale-[0.98] flex items-center justify-center gap-3"
                   >
-                    {isVerifying ? <Loader2 size={18} className="animate-spin" /> : <><LogIn size={18} /><span>Verify & Continue</span></>}
+                    {isVerifying ? <Loader2 size={18} className="animate-spin" /> : <><LogIn size={18} /><span>Verify & Login</span></>}
                   </button>
                   <button
                     type="button"
-                    onClick={() => { setPending2FA(null); setTotpCode(''); setAuthError(null); }}
+                    onClick={() => { setAuthStage('name'); setInputCode(''); setAuthError(null); }}
                     className="w-full text-center text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 transition-colors"
                   >
-                    Back to login
+                    Back
                   </button>
                 </form>
-              ) : (
-              <form onSubmit={handleLogin} className="space-y-6">
-                {authError && (
-                  <div className="p-4 bg-rose-600/10 border border-rose-500/30 rounded-2xl text-rose-700 text-[10px] font-black uppercase tracking-widest text-center animate-pulse">
-                    {authError}
-                  </div>
-                )}
+              )}
 
-                <div className="space-y-4">
+              {/* Setup QR Stage (New User) */}
+              {authStage === 'setup-qr' && (
+                <div className="space-y-6">
+                  {authError && (
+                    <div className="p-4 bg-rose-600/10 border border-rose-500/30 rounded-2xl text-rose-700 text-[10px] font-black uppercase tracking-widest text-center animate-pulse">
+                      {authError}
+                    </div>
+                  )}
+                  <div className="bg-white p-6 rounded-2xl text-center">
+                    <img src={setupQR} alt="QR Code" className="mx-auto w-48 h-48" />
+                    <p className="mt-4 text-[10px] text-slate-600 font-bold">Scan with Google Authenticator or similar app</p>
+                  </div>
+                  <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-amber-800 mb-2">Backup Codes</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {backupCodes.map((code, i) => (
+                        <div key={i} className="bg-white px-3 py-2 rounded-lg text-center font-mono text-xs text-slate-900">
+                          {code}
+                        </div>
+                      ))}
+                    </div>
+                    <p className="mt-3 text-[9px] text-amber-700">Save these codes in a secure location</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAuthStage('setup-confirm')}
+                    className="w-full bg-slate-900 hover:bg-black text-white py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all shadow-xl active:scale-[0.98]"
+                  >
+                    I've saved the codes → Continue
+                  </button>
+                </div>
+              )}
+
+              {/* Setup Confirm Stage */}
+              {authStage === 'setup-confirm' && (
+                <form onSubmit={handleSetupConfirm} className="space-y-6">
+                  {authError && (
+                    <div className="p-4 bg-rose-600/10 border border-rose-500/30 rounded-2xl text-rose-700 text-[10px] font-black uppercase tracking-widest text-center animate-pulse">
+                      {authError}
+                    </div>
+                  )}
                   <div className="group">
                     <div className="flex items-center gap-2 mb-2 ml-1">
-                      <User size={12} className="text-slate-500 group-focus-within:text-blue-600 transition-colors" />
-                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest group-focus-within:text-blue-600 transition-colors">Identification</label>
+                      <Fingerprint size={12} className="text-slate-500 group-focus-within:text-blue-600 transition-colors" />
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest group-focus-within:text-blue-600 transition-colors">Verification Code</label>
                     </div>
-                    <input 
+                    <input
                       autoFocus
-                      type="text" 
-                      value={tempName}
-                      onChange={(e) => setTempName(e.target.value)}
-                      placeholder="Enter your full name"
-                      disabled={isVerifying}
-                      className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:border-blue-600 focus:bg-white outline-none text-slate-950 font-black transition-all placeholder:text-slate-400"
-                      required
-                    />
-                  </div>
-
-                  <div className="group">
-                    <div className="flex items-center gap-2 mb-2 ml-1">
-                      <Lock size={12} className="text-slate-500 group-focus-within:text-blue-600 transition-colors" />
-                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest group-focus-within:text-blue-600 transition-colors">Access Code</label>
-                    </div>
-                    <input 
-                      type="password"
+                      type="text"
                       inputMode="numeric"
-                      pattern="[0-9]{6}"
                       maxLength={6}
-                      value={tempCode}
-                      onChange={(e) => setTempCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      value={inputCode}
+                      onChange={(e) => setInputCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                       placeholder="6-digit code"
                       disabled={isVerifying}
                       className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:border-blue-600 focus:bg-white outline-none text-slate-950 font-black tracking-[0.3em] transition-all placeholder:text-slate-400 placeholder:tracking-normal"
                       required
                     />
                   </div>
-                </div>
+                  <button
+                    type="submit"
+                    disabled={isVerifying}
+                    className="w-full bg-slate-900 hover:bg-black disabled:bg-slate-300 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all shadow-xl active:scale-[0.98] flex items-center justify-center gap-3"
+                  >
+                    {isVerifying ? <Loader2 size={18} className="animate-spin" /> : <><ShieldCheck size={18} /><span>Confirm & Submit</span></>}
+                  </button>
+                </form>
+              )}
 
-                <button 
-                  type="submit"
-                  disabled={isVerifying}
-                  className="w-full bg-slate-900 hover:bg-black disabled:bg-slate-300 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all shadow-xl active:scale-[0.98] flex items-center justify-center gap-3"
-                >
-                  {isVerifying ? (
-                    <Loader2 size={18} className="animate-spin" />
-                  ) : (
-                    <>
-                      <LogIn size={18} />
-                      <span>Establish Link</span>
-                    </>
-                  )}
-                </button>
-              </form>
+              {/* Pending Approval Stage */}
+              {authStage === 'pending' && (
+                <div className="space-y-6 text-center">
+                  <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6">
+                    <p className="text-sm text-amber-900 font-semibold">Your registration has been submitted.</p>
+                    <p className="text-xs text-amber-700 mt-2">An administrator will review and approve your access shortly.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setAuthStage('name'); setInputName(''); setInputCode(''); setAuthError(null); }}
+                    className="w-full text-center text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 transition-colors"
+                  >
+                    Back to login
+                  </button>
+                </div>
+              )}
+
+              {/* Rejected Stage */}
+              {authStage === 'rejected' && (
+                <div className="space-y-6 text-center">
+                  <div className="bg-rose-50 border border-rose-200 rounded-2xl p-6">
+                    <p className="text-sm text-rose-900 font-semibold">Your access request was declined.</p>
+                    <p className="text-xs text-rose-700 mt-2">Please contact an administrator if you believe this is an error.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setAuthStage('name'); setInputName(''); setAuthError(null); }}
+                    className="w-full text-center text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 transition-colors"
+                  >
+                    Back to login
+                  </button>
+                </div>
               )}
 
               <div className="mt-8 text-center">
