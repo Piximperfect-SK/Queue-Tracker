@@ -169,13 +169,12 @@ interface SortableHandlerProps {
   shift: string;
   onShiftChange: (id: string, shift: ShiftType) => void;
   onDelete: (id: string) => void;
-  onToggleQH?: (handlerId: string, shift: string) => void;
   isQH?: boolean;
   shiftOptions: ShiftType[];
   compact?: boolean;
 }
 
-const SortableHandler: React.FC<SortableHandlerProps> = ({ handler, shift, onShiftChange, onDelete, onToggleQH, isQH, shiftOptions, compact }) => {
+const SortableHandler: React.FC<SortableHandlerProps> = ({ handler, shift, onShiftChange, onDelete, isQH, shiftOptions, compact }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: handler.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.2 : 1, zIndex: isDragging ? 50 : 1 };
   const cfg = getShiftConfig(shift);
@@ -202,18 +201,10 @@ const SortableHandler: React.FC<SortableHandlerProps> = ({ handler, shift, onShi
         {handler.name}
       </span>
       <div className="flex items-center gap-1 shrink-0">
-        {!isLeave && onToggleQH && (
-          <button
-            onClick={e => { e.stopPropagation(); onToggleQH(handler.id, shift); }}
-            title={isQH ? 'Remove as QH' : 'Assign as QH'}
-            className={`p-0.5 rounded transition-colors text-[9px] font-black uppercase ${
-              isQH
-                ? 'bg-yellow-400 text-yellow-900 hover:bg-yellow-500'
-                : 'text-slate-400 hover:text-yellow-600 hover:bg-yellow-100'
-            }`}
-          >
-            ⭐
-          </button>
+        {!isLeave && isQH && (
+          <span className="px-1.5 py-0.5 rounded-md bg-yellow-400 text-yellow-900 text-[8px] font-black uppercase tracking-widest">
+            QH
+          </span>
         )}
         <select
           value={shift}
@@ -1029,7 +1020,6 @@ Rules:
                                 shift={shift}
                                 onShiftChange={updateShift}
                                 onDelete={deleteHandlerGlobally}
-                                onToggleQH={(hid, s) => toggleShiftQH(hid, selectedDate, s)}
                                 isQH={isHandlerQH(handler.id, selectedDate, shift)}
                                 shiftOptions={shiftPickerOptions}
                               />
