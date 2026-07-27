@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Tailwind v4: configure dark mode to use data-theme attribute on html */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 html, body, #root {
   height: 100%;
   margin: 0;
@@ -193,3 +196,44 @@ html, body, #root {
 .mon-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .mon-scrollbar::-webkit-scrollbar-thumb { background: var(--mon-scrollbar); border-radius: 2px; }
 .mon-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--mon-scrollbar-h); }
+
+/* ── App-wide theme: Navbar + body respond to data-theme ─────────────── */
+
+/* Navbar */
+[data-theme="light"] nav.app-nav {
+  background: #ffffff !important;
+  border-bottom-color: #e2e8f0 !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important;
+}
+[data-theme="light"] nav.app-nav .nav-text   { color: #1e293b !important; }
+[data-theme="light"] nav.app-nav .nav-text-m { color: rgba(30,41,59,0.6) !important; }
+[data-theme="light"] nav.app-nav .nav-item:hover { background: #f1f5f9 !important; }
+[data-theme="light"] nav.app-nav .nav-pill   { background: rgba(30,41,59,0.06) !important; border-color: rgba(30,41,59,0.15) !important; }
+[data-theme="light"] nav.app-nav .nav-avatar { background: #1e293b !important; }
+[data-theme="light"] nav.app-nav .nav-user   { background: #f1f5f9 !important; border-color: #e2e8f0 !important; }
+[data-theme="light"] nav.app-nav .nav-credit { color: rgba(30,41,59,0.35) !important; }
+[data-theme="light"] nav.app-nav .nav-divider { background: #e2e8f0 !important; }
+
+/* Pages that use bg-white / bg-slate-* already look fine in light */
+/* TrackerPage: make borders and backgrounds respond */
+[data-theme="light"] .tracker-wrap { background: #ffffff; }
+[data-theme="dark"]  .tracker-wrap { background: #0f172a; }
+
+/* Nav links + icon buttons in light mode */
+[data-theme="light"] nav.app-nav .nav-item {
+  color: rgba(30,41,59,0.65) !important;
+}
+[data-theme="light"] nav.app-nav .nav-item:hover {
+  color: #1e293b !important;
+  background: #f1f5f9 !important;
+}
+[data-theme="light"] nav.app-nav .nav-user {
+  background: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+}
+[data-theme="light"] nav.app-nav .nav-user .nav-text {
+  color: #1e293b !important;
+}
+[data-theme="light"] nav.app-nav .nav-divider {
+  background: #e2e8f0 !important;
+}

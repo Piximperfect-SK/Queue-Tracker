@@ -30,14 +30,14 @@ const Navbar: React.FC<NavbarProps> = ({ currentUser, onLogout, onlineUsers }) =
   }, []);
 
   return (
-    <nav className="bg-[#222831] border-b border-[#222831]/80 shrink-0 sticky top-0 z-50 shadow-xl">
+    <nav className="app-nav bg-[#222831] border-b border-[#222831]/80 shrink-0 sticky top-0 z-50 shadow-xl transition-colors duration-200">
       <div className="max-w-screen-2xl mx-auto px-6">
         <div className="flex justify-between h-14 items-center">
           <div className="flex items-center space-x-4">
             <div className="w-9 h-9 bg-[#393E46] rounded-xl flex items-center justify-center text-white font-black text-xl shadow-lg">P</div>
-            <span className="text-lg font-normal text-white tracking-tight">Productivity Tracker</span>
+            <span className="nav-text text-lg font-normal text-white tracking-tight transition-colors duration-200">Productivity Tracker</span>
             
-            <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ml-2 border transition-colors ${isConnected ? 'bg-[#00ADB5]/20 text-[#00ADB5] border-[#00ADB5]/40' : 'bg-red-500/20 text-red-400 border-red-500/40'}`}>
+            <div className={`nav-pill flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ml-2 border transition-colors ${isConnected ? 'bg-[#00ADB5]/20 text-[#00ADB5] border-[#00ADB5]/40' : 'bg-red-500/20 text-red-400 border-red-500/40'}`}>
               <div className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-[#00ADB5] animate-pulse' : 'bg-red-500'}`} />
               {isConnected ? 'Sync Active' : 'Offline'}
             </div>
@@ -77,31 +77,31 @@ const Navbar: React.FC<NavbarProps> = ({ currentUser, onLogout, onlineUsers }) =
 
             <div className="flex space-x-0.5">
               {pages.roster && (
-                <Link to="/" className="px-3 py-1.5 rounded-xl text-[10.5px] font-black uppercase tracking-widest text-white/80 hover:text-white hover:bg-[#393E46] transition-all flex items-center space-x-2">
+                <Link to="/" className="nav-item px-3 py-1.5 rounded-xl text-[10.5px] font-black uppercase tracking-widest text-white/80 hover:text-white hover:bg-[#393E46] transition-all flex items-center space-x-2">
                   <Calendar size={14} />
                   <span>Roster</span>
                 </Link>
               )}
               {pages.stats && (
-                <Link to="/tracker" className="px-3 py-1.5 rounded-xl text-[10.5px] font-black uppercase tracking-widest text-white/80 hover:text-white hover:bg-[#393E46] transition-all flex items-center space-x-2">
+                <Link to="/tracker" className="nav-item px-3 py-1.5 rounded-xl text-[10.5px] font-black uppercase tracking-widest text-white/80 hover:text-white hover:bg-[#393E46] transition-all flex items-center space-x-2">
                   <BarChart2 size={14} />
                   <span>Tracker</span>
                 </Link>
               )}
               {pages.settings && (
-                <Link to="/settings" className="px-3 py-1.5 rounded-xl text-[10.5px] font-black uppercase tracking-widest text-white/80 hover:text-white hover:bg-[#393E46] transition-all flex items-center space-x-2">
+                <Link to="/settings" className="nav-item px-3 py-1.5 rounded-xl text-[10.5px] font-black uppercase tracking-widest text-white/80 hover:text-white hover:bg-[#393E46] transition-all flex items-center space-x-2">
                   <Settings size={14} />
                   <span>Settings</span>
                 </Link>
               )}
               {pages.logMonitor && (
-                <Link to="/logs" className="px-3 py-1.5 rounded-xl text-[10.5px] font-black uppercase tracking-widest text-white/80 hover:text-white hover:bg-[#393E46] transition-all flex items-center space-x-2">
+                <Link to="/logs" className="nav-item px-3 py-1.5 rounded-xl text-[10.5px] font-black uppercase tracking-widest text-white/80 hover:text-white hover:bg-[#393E46] transition-all flex items-center space-x-2">
                   <Activity size={14} />
                   <span>Monitor</span>
                 </Link>
               )}
               {pages.admin && (
-                <Link to="/admin" className="px-3 py-1.5 rounded-xl text-[10.5px] font-black uppercase tracking-widest text-white/80 hover:text-white hover:bg-[#393E46] transition-all flex items-center space-x-2">
+                <Link to="/admin" className="nav-item px-3 py-1.5 rounded-xl text-[10.5px] font-black uppercase tracking-widest text-white/80 hover:text-white hover:bg-[#393E46] transition-all flex items-center space-x-2">
                   <Shield size={14} />
                   <span>Admin</span>
                 </Link>
@@ -112,29 +112,29 @@ const Navbar: React.FC<NavbarProps> = ({ currentUser, onLogout, onlineUsers }) =
             <button
               onClick={toggle}
               title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-              className="w-8 h-8 rounded-xl flex items-center justify-center text-white/50 hover:text-white hover:bg-[#393E46] transition-all"
+              className="nav-item w-8 h-8 rounded-xl flex items-center justify-center text-white/50 hover:text-white hover:bg-[#393E46] transition-all"
             >
               {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
             </button>
 
-            <div className="h-8 w-px bg-white/20" />
+            <div className="nav-divider h-8 w-px bg-white/20 transition-colors duration-200" />
 
             {/* Subtle credit */}
             <div className="flex flex-col items-end leading-none mr-1">
-              <span className="text-[7px] text-white/20 uppercase tracking-[0.2em]">Designed &amp; developed with</span>
+              <span className="nav-credit text-[7px] text-white/20 uppercase tracking-[0.2em] transition-colors duration-200">Designed &amp; developed with</span>
               <span className="text-[8px] font-black text-[#00ADB5]/60 tracking-widest uppercase">Shubham Kumar</span>
             </div>
 
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-3 bg-[#393E46] px-4 py-1.5 rounded-full border border-[#393E46] shadow-md">
+              <div className="nav-user flex items-center gap-3 bg-[#393E46] px-4 py-1.5 rounded-full border border-[#393E46] shadow-md transition-colors duration-200">
                 <div className="w-6 h-6 bg-white rounded-full flex items-center justify-center text-[10px] text-[#222831] font-black">
                   {currentUser.charAt(0).toUpperCase()}
                 </div>
-                <span className="text-[11px] font-black text-white uppercase tracking-widest">{currentUser}</span>
+                <span className="nav-text text-[11px] font-black text-white uppercase tracking-widest transition-colors duration-200">{currentUser}</span>
               </div>
               <button 
                 onClick={onLogout}
-                className="p-2 text-white/60 hover:text-white hover:bg-red-500 rounded-xl transition-all"
+                className="nav-item p-2 text-white/60 hover:text-white hover:bg-red-500 rounded-xl transition-all"
                 title="Logout"
               >
                 <LogOut size={20} />
