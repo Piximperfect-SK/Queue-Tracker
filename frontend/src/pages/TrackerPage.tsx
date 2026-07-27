@@ -1,199 +1,162 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { MOCK_HANDLERS, MOCK_ROSTER } from '../data/mockData';
-import { ShieldCheck, PhoneCall, X, Check, ChevronLeft, ChevronRight, Shield, ChevronDown, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { ShieldCheck, PhoneCall, X, Check, ChevronLeft, ChevronRight, Shield } from 'lucide-react';
 import type { DailyStats, Handler, RosterEntry, ShiftType } from '../types';
 import { addLog, saveLogsFromServer, saveSingleLogFromServer } from '../utils/logger';
 import { socket, syncData } from '../utils/socket';
 
-// ─── Shift colour system ─────────────────────────────────────────────────────
-const SHIFT_META: Record<string, {
-  label: string;
-  accent: string;
-  accentHex: string;
-  rowBg: string;
-  rowHover: string;
-  badgeBg: string;
-  badgeText: string;
-  badgeBorder: string;
-  timeBg: string;
-  timeText: string;
-  dividerBg: string;
-  dividerText: string;
-  totalBg: string;
-  totalText: string;
-  headerBg: string;
-  headerBorder: string;
-  btnMinus: string;
-  btnPlus: string;
-  glowColor: string;
+// ── Shift colour palette (Excel-style solid fills) ────────────────────────
+const SHIFT_STYLE: Record<string, {
+  label: string; hex: string;
+  rowBg: string; rowBgAlt: string; rowText: string;
+  headerBg: string; headerText: string; headerBorder: string;
 }> = {
-  '6AM-3PM': {
-    label: 'Morning Shift',
-    accent: 'text-sky-600', accentHex: '#0284C7',
-    rowBg: 'bg-sky-50/40', rowHover: 'hover:bg-sky-50/80',
-    badgeBg: 'bg-sky-100', badgeText: 'text-sky-700', badgeBorder: 'border-sky-200',
-    timeBg: 'bg-sky-100', timeText: 'text-sky-700',
-    dividerBg: 'bg-sky-50', dividerText: 'text-sky-700',
-    totalBg: 'bg-sky-100', totalText: 'text-sky-800',
-    headerBg: 'bg-gradient-to-r from-sky-50 to-white',
-    headerBorder: 'border-sky-200',
-    btnMinus: '#64748b',
-    btnPlus: '#0284C7',
-    glowColor: 'rgba(2,132,199,0.35)',
+  '6AM-3PM':  {
+    label: 'Morning',    hex: '#0284C7',
+    rowBg: '#e0f2fe',    rowBgAlt: '#bae6fd', rowText: '#0c4a6e',
+    headerBg: '#0369a1', headerText: '#ffffff', headerBorder: '#0284C7',
   },
   '12PM-9PM': {
-    label: 'Afternoon Shift',
-    accent: 'text-yellow-600', accentHex: '#CA8A04',
-    rowBg: 'bg-yellow-50/40', rowHover: 'hover:bg-yellow-50/80',
-    badgeBg: 'bg-yellow-100', badgeText: 'text-yellow-700', badgeBorder: 'border-yellow-200',
-    timeBg: 'bg-yellow-100', timeText: 'text-yellow-700',
-    dividerBg: 'bg-yellow-50', dividerText: 'text-yellow-700',
-    totalBg: 'bg-yellow-100', totalText: 'text-yellow-800',
-    headerBg: 'bg-gradient-to-r from-yellow-50 to-white',
-    headerBorder: 'border-yellow-200',
-    btnMinus: '#64748b',
-    btnPlus: '#CA8A04',
-    glowColor: 'rgba(202,138,4,0.35)',
+    label: 'Afternoon',  hex: '#b45309',
+    rowBg: '#fef9c3',    rowBgAlt: '#fde68a', rowText: '#713f12',
+    headerBg: '#92400e', headerText: '#ffffff', headerBorder: '#b45309',
   },
   '1PM-10PM': {
-    label: 'Afternoon Team',
-    accent: 'text-amber-600', accentHex: '#D97706',
-    rowBg: 'bg-amber-50/40', rowHover: 'hover:bg-amber-50/80',
-    badgeBg: 'bg-amber-100', badgeText: 'text-amber-700', badgeBorder: 'border-amber-200',
-    timeBg: 'bg-amber-100', timeText: 'text-amber-700',
-    dividerBg: 'bg-amber-50', dividerText: 'text-amber-700',
-    totalBg: 'bg-amber-100', totalText: 'text-amber-800',
-    headerBg: 'bg-gradient-to-r from-amber-50 to-white',
-    headerBorder: 'border-amber-200',
-    btnMinus: '#64748b',
-    btnPlus: '#D97706',
-    glowColor: 'rgba(217,119,6,0.35)',
+    label: 'Aft. Team',  hex: '#d97706',
+    rowBg: '#fff7ed',    rowBgAlt: '#fed7aa', rowText: '#7c2d12',
+    headerBg: '#b45309', headerText: '#ffffff', headerBorder: '#d97706',
   },
   '2PM-11PM': {
-    label: 'Evening Shift',
-    accent: 'text-orange-600', accentHex: '#EA580C',
-    rowBg: 'bg-orange-50/40', rowHover: 'hover:bg-orange-50/80',
-    badgeBg: 'bg-orange-100', badgeText: 'text-orange-700', badgeBorder: 'border-orange-200',
-    timeBg: 'bg-orange-100', timeText: 'text-orange-700',
-    dividerBg: 'bg-orange-50', dividerText: 'text-orange-700',
-    totalBg: 'bg-orange-100', totalText: 'text-orange-800',
-    headerBg: 'bg-gradient-to-r from-orange-50 to-white',
-    headerBorder: 'border-orange-200',
-    btnMinus: '#64748b',
-    btnPlus: '#EA580C',
-    glowColor: 'rgba(234,88,12,0.35)',
+    label: 'Evening',    hex: '#ea580c',
+    rowBg: '#fff7ed',    rowBgAlt: '#fdba74', rowText: '#7c2d12',
+    headerBg: '#c2410c', headerText: '#ffffff', headerBorder: '#ea580c',
   },
   '10PM-7AM': {
-    label: 'Night Shift',
-    accent: 'text-indigo-600', accentHex: '#4F46E5',
-    rowBg: 'bg-indigo-50/40', rowHover: 'hover:bg-indigo-50/80',
-    badgeBg: 'bg-indigo-100', badgeText: 'text-indigo-700', badgeBorder: 'border-indigo-200',
-    timeBg: 'bg-indigo-100', timeText: 'text-indigo-700',
-    dividerBg: 'bg-indigo-50', dividerText: 'text-indigo-700',
-    totalBg: 'bg-indigo-100', totalText: 'text-indigo-800',
-    headerBg: 'bg-gradient-to-r from-indigo-50 to-white',
-    headerBorder: 'border-indigo-200',
-    btnMinus: '#64748b',
-    btnPlus: '#4F46E5',
-    glowColor: 'rgba(79,70,229,0.35)',
+    label: 'Night',      hex: '#4f46e5',
+    rowBg: '#eef2ff',    rowBgAlt: '#c7d2fe', rowText: '#1e1b4b',
+    headerBg: '#3730a3', headerText: '#ffffff', headerBorder: '#4f46e5',
   },
 };
+const getStyle = (shift: string) => SHIFT_STYLE[shift] ?? {
+  label: shift, hex: '#475569',
+  rowBg: '#f8fafc', rowBgAlt: '#e2e8f0', rowText: '#1e293b',
+  headerBg: '#334155', headerText: '#ffffff', headerBorder: '#475569',
+};
 
-const getShiftMeta = (shift: string) =>
-  SHIFT_META[shift] ?? {
-    label: shift, accent: 'text-slate-600', accentHex: '#475569',
-    rowBg: 'bg-slate-50/40', rowHover: 'hover:bg-slate-100/80',
-    badgeBg: 'bg-slate-100', badgeText: 'text-slate-600', badgeBorder: 'border-slate-200',
-    timeBg: 'bg-slate-100', timeText: 'text-slate-600',
-    dividerBg: 'bg-slate-50', dividerText: 'text-slate-600',
-    totalBg: 'bg-slate-100', totalText: 'text-slate-700',
-    headerBg: 'bg-gradient-to-r from-slate-50 to-white',
-    headerBorder: 'border-slate-200',
-    btnMinus: '#64748b',
-    btnPlus: '#475569',
-    glowColor: 'rgba(71,85,105,0.25)',
+// ── Inline editable number cell ───────────────────────────────────────────
+const EditCell: React.FC<{
+  value: number;
+  onChange: (v: number) => void;
+  flash: 'positive' | 'negative' | null;
+  isCall?: boolean;
+  onCallClick?: () => void;
+  textColor: string;
+}> = ({ value, onChange, flash, isCall, onCallClick, textColor }) => {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const startEdit = () => {
+    if (isCall && onCallClick) { onCallClick(); return; }
+    setDraft(String(value));
+    setEditing(true);
   };
 
+  useEffect(() => {
+    if (editing && inputRef.current) inputRef.current.select();
+  }, [editing]);
+
+  const commit = () => {
+    const n = Math.max(0, parseInt(draft, 10) || 0);
+    onChange(n);
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false); }}
+        className="w-full h-full text-center font-black text-[13px] outline-none bg-white border-2 border-[#00ADB5] tabular-nums"
+        style={{ color: textColor }}
+        type="number" min={0}
+      />
+    );
+  }
+
+  return (
+    <div
+      onClick={startEdit}
+      title={isCall ? 'Click to log call' : 'Click to edit'}
+      className="w-full h-full flex items-center justify-center cursor-pointer select-none transition-all"
+      style={{
+        fontWeight: 900,
+        fontSize: 14,
+        fontVariantNumeric: 'tabular-nums',
+        color: flash === 'positive' ? '#16a34a'
+             : flash === 'negative' ? '#dc2626'
+             : value > 0 ? textColor : '#94a3b8',
+        background: flash === 'positive' ? '#dcfce7'
+                  : flash === 'negative' ? '#fee2e2'
+                  : 'transparent',
+      }}
+    >
+      {value}
+      {isCall && value === 0 && (
+        <PhoneCall size={9} className="ml-1 opacity-30" />
+      )}
+    </div>
+  );
+};
+
+// ── Props ─────────────────────────────────────────────────────────────────
 interface TrackerPageProps {
   selectedDate: string;
   setSelectedDate: (date: string) => void;
 }
 
-// 3D tactile button component
-const TactileBtn: React.FC<{
-  onClick: () => void;
-  color: string;
-  glow: string;
-  children: React.ReactNode;
-  disabled?: boolean;
-}> = ({ onClick, color, glow, children, disabled }) => (
-  <button
-    onClick={onClick}
-    disabled={disabled}
-    style={{
-      background: `linear-gradient(145deg, ${color}ee, ${color}cc)`,
-      boxShadow: `0 3px 0 0 ${color}88, 0 4px 8px ${glow}, inset 0 1px 0 rgba(255,255,255,0.25)`,
-      border: `1px solid ${color}99`,
-    }}
-    className="w-6 h-6 rounded-md text-white font-black text-sm flex items-center justify-center
-      transition-all duration-100 active:translate-y-[2px] active:shadow-none select-none
-      hover:brightness-110 disabled:opacity-30 disabled:pointer-events-none shrink-0"
-  >
-    {children}
-  </button>
-);
-
-const MinusBtn: React.FC<{ onClick: () => void; disabled?: boolean }> = ({ onClick, disabled }) => (
-  <button
-    onClick={onClick}
-    disabled={disabled}
-    style={{
-      background: 'linear-gradient(145deg, #6b7280, #4b5563)',
-      boxShadow: '0 3px 0 0 #374151, 0 4px 8px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.15)',
-      border: '1px solid #4b556388',
-    }}
-    className="w-6 h-6 rounded-md text-white font-black text-sm flex items-center justify-center
-      transition-all duration-100 active:translate-y-[2px] active:shadow-none select-none
-      hover:brightness-110 disabled:opacity-30 disabled:pointer-events-none shrink-0"
-  >
-    −
-  </button>
-);
-
+// ═════════════════════════════════════════════════════════════════════════
 const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate }) => {
   const [handlers, setHandlers] = useState<Handler[]>(() => {
-    const s = localStorage.getItem('handlers');
-    return s ? JSON.parse(s) : MOCK_HANDLERS;
+    const s = localStorage.getItem('handlers'); return s ? JSON.parse(s) : MOCK_HANDLERS;
   });
   const [roster, setRoster] = useState<RosterEntry[]>(() => {
-    const s = localStorage.getItem('roster');
-    return s ? JSON.parse(s) : MOCK_ROSTER;
+    const s = localStorage.getItem('roster'); return s ? JSON.parse(s) : MOCK_ROSTER;
   });
   const [stats, setStats] = useState<DailyStats[]>(() => {
-    const s = localStorage.getItem('stats');
-    return s ? JSON.parse(s) : [];
+    const s = localStorage.getItem('stats'); return s ? JSON.parse(s) : [];
   });
-  const [currentTime, setCurrentTime] = useState(new Date());
-  const [flashMap, setFlashMap] = useState<Record<string, 'positive' | 'negative'>>({});
-  const [times, setTimes] = useState({ ist: '', uk: '' });
+  const [currentTime, setCurrentTime]   = useState(new Date());
+  const [flashMap, setFlashMap]         = useState<Record<string, 'positive' | 'negative'>>({});
+  const [times, setTimes]               = useState({ ist: '', uk: '' });
   const [isCallModalOpen, setIsCallModalOpen] = useState(false);
-  const [callData, setCallData] = useState({
-    handlerId: '', ticketNumber: '', type: 'New' as 'New' | 'Update'
+  const [callData, setCallData]         = useState({ handlerId: '', ticketNumber: '', type: 'New' as 'New' | 'Update' });
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [rowH, setRowH] = useState(28);
+
+  // ── Compute optimal row height so everything fits with zero scroll ──────
+  useEffect(() => {
+    const compute = () => {
+      if (!wrapRef.current) return;
+      const totalH    = wrapRef.current.clientHeight;
+      const topbarH   = 40;  // fixed topbar
+      const colHeadH  = 26;  // column header row
+      const shiftRows = handlerGroups.length;           // one header row per shift
+      const agentRows = activeHandlers.length;
+      const totalRows = shiftRows + agentRows;
+      const available = totalH - topbarH - colHeadH;
+      const h = totalRows > 0 ? Math.max(22, Math.floor(available / totalRows)) : 28;
+      setRowH(h);
+    };
+    compute();
+    window.addEventListener('resize', compute);
+    return () => window.removeEventListener('resize', compute);
   });
-  // Track which shift groups are collapsed (default: all expanded)
-  const [collapsedShifts, setCollapsedShifts] = useState<Set<string>>(new Set());
-  // Shift sort direction in the grid ('asc' | 'desc' | null)
-  const [nameSort, setNameSort] = useState<'asc' | 'desc' | null>(null);
 
-  const toggleShift = (shift: string) => {
-    setCollapsedShifts(prev => {
-      const next = new Set(prev);
-      if (next.has(shift)) next.delete(shift);
-      else next.add(shift);
-      return next;
-    });
-  };
-
+  // ── Clocks ───────────────────────────────────────────────────────────────
   useEffect(() => {
     const update = () => {
       const fmt = (tz: string) => new Intl.DateTimeFormat('en-US', {
@@ -201,9 +164,7 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
       }).format(new Date());
       setTimes({ ist: fmt('Asia/Kolkata'), uk: fmt('Europe/London') });
     };
-    update();
-    const id = setInterval(update, 10000);
-    return () => clearInterval(id);
+    update(); const id = setInterval(update, 10000); return () => clearInterval(id);
   }, []);
 
   useEffect(() => {
@@ -211,11 +172,12 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
     return () => clearInterval(id);
   }, []);
 
+  // ── Socket sync ──────────────────────────────────────────────────────────
   useEffect(() => {
     const onHandlers = (d: Handler[]) => { if (d) { setHandlers(d); localStorage.setItem('handlers', JSON.stringify(d)); } };
-    const onRoster = (d: RosterEntry[]) => { if (d) { setRoster(d); localStorage.setItem('roster', JSON.stringify(d)); } };
-    const onStats = (d: DailyStats[]) => { if (d) { setStats(d); localStorage.setItem('stats', JSON.stringify(d)); } };
-    const onInit = (db: any) => {
+    const onRoster   = (d: RosterEntry[]) => { if (d) { setRoster(d); localStorage.setItem('roster', JSON.stringify(d)); } };
+    const onStats    = (d: DailyStats[]) => { if (d) { setStats(d); localStorage.setItem('stats', JSON.stringify(d)); } };
+    const onInit     = (db: any) => {
       if (!db) return;
       const h = db.handlers || db.agents;
       if (Array.isArray(h)) { setHandlers(h); localStorage.setItem('handlers', JSON.stringify(h)); }
@@ -243,7 +205,7 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
     const todayStr = now.toLocaleDateString('en-CA');
     const mins = now.getHours() * 60 + now.getMinutes();
     if (selectedDate === todayStr) {
-      if (shift === '6AM-3PM' && mins >= 870) return true;
+      if (shift === '6AM-3PM'  && mins >= 870)  return true;
       if (shift === '1PM-10PM' && mins >= 1290) return true;
       if (shift === '2PM-11PM' && mins >= 1350) return true;
       if (shift === '12PM-9PM' && mins >= 1230) return true;
@@ -266,23 +228,18 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
     return {
       handlerId, date: selectedDate,
       incidents: Number(s?.incidents || 0),
-      sctasks: Number(s?.sctasks || 0),
-      calls: Number(s?.calls || 0),
-      comments: s?.comments || ''
+      sctasks:   Number(s?.sctasks   || 0),
+      calls:     Number(s?.calls     || 0),
+      comments:  s?.comments || '',
     };
   };
 
   const activeHandlers = useMemo(() => {
-    const hidden = new Set(['WeekOff', 'Medical Leave', 'Planned Leave', 'Earned Leave', 'Unplanned Leave', 'Complimentary Off', 'MID-LEAVE']);
-    const order: Record<string, number> = {
-      '6AM-3PM': 0, '12PM-9PM': 1, '1PM-10PM': 2, '2PM-11PM': 3, '10PM-7AM': 4
-    };
+    const hidden = new Set(['WeekOff','Medical Leave','Planned Leave','Earned Leave','Unplanned Leave','Complimentary Off','MID-LEAVE']);
+    const order: Record<string, number> = { '6AM-3PM':0,'12PM-9PM':1,'1PM-10PM':2,'2PM-11PM':3,'10PM-7AM':4 };
     return roster
       .filter(r => r.date === selectedDate && !hidden.has(r.shift))
-      .map(r => {
-        const h = handlers.find(a => a.id === r.handlerId);
-        return h ? { ...h, shift: r.shift as ShiftType } : null;
-      })
+      .map(r => { const h = handlers.find(a => a.id === r.handlerId); return h ? { ...h, shift: r.shift as ShiftType } : null; })
       .filter((a): a is Handler & { shift: ShiftType } => a !== null)
       .sort((a, b) => (order[a.shift] ?? 999) - (order[b.shift] ?? 999));
   }, [selectedDate, roster, handlers]);
@@ -290,22 +247,19 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
   const totalStats = useMemo(() =>
     activeHandlers.reduce((acc, h) => {
       const s = getHandlerStats(h.id);
-      acc.incidents += s.incidents;
-      acc.sctasks += s.sctasks;
-      acc.calls += s.calls;
+      acc.incidents += s.incidents; acc.sctasks += s.sctasks; acc.calls += s.calls;
       return acc;
     }, { incidents: 0, sctasks: 0, calls: 0 }),
     [activeHandlers, stats, selectedDate]);
 
   const updateStat = (handlerId: string, field: keyof DailyStats, value: any) => {
-    const handler = handlers.find(a => a.id === handlerId);
+    const handler  = handlers.find(a => a.id === handlerId);
     const existing = stats.find(s => s.handlerId === handlerId && s.date === selectedDate);
-    const final = (field === 'incidents' || field === 'sctasks' || field === 'calls')
-      ? Number(value) || 0 : value;
-    const old = existing ? existing[field] : (field === 'comments' ? '' : 0);
-    const updated = existing
+    const final    = (field === 'incidents' || field === 'sctasks' || field === 'calls') ? Number(value) || 0 : value;
+    const old      = existing ? existing[field] : (field === 'comments' ? '' : 0);
+    const updated  = existing
       ? stats.map(s => (s.handlerId === handlerId && s.date === selectedDate) ? { ...s, [field]: final } : s)
-      : [...stats, { handlerId, date: selectedDate, incidents: 0, sctasks: 0, calls: 0, comments: '', [field]: final }];
+      : [...stats, { handlerId, date: selectedDate, incidents:0, sctasks:0, calls:0, comments:'', [field]: final }];
     saveStats(updated);
     if (field !== 'comments') {
       const type = Number(final) > Number(old) ? 'positive' : Number(final) < Number(old) ? 'negative' : 'neutral';
@@ -346,374 +300,342 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
       if (last && last.shift === h.shift) last.handlers.push(h);
       else groups.push({ shift: h.shift, handlers: [h] });
     });
-    // Sort handlers by name inside each group
-    groups.forEach(g => {
-      g.handlers.sort((a, b) => a.name.localeCompare(b.name));
-    });
-    if (nameSort === 'desc') groups.forEach(g => g.handlers.reverse());
     return groups;
-  }, [activeHandlers, nameSort]);
+  }, [activeHandlers]);
+
+  // grand total row
+  const grandTotal = totalStats.incidents + totalStats.sctasks + totalStats.calls;
+
+  // col widths — fixed, Excel-style
+  const COLS = {
+    sno:      '36px',
+    name:     '1fr',
+    shift:    '80px',
+    timing:   '90px',
+    inc:      '80px',
+    task:     '80px',
+    call:     '80px',
+    notes:    '1fr',
+    total:    '64px',
+  };
+  const gridCols = `${COLS.sno} ${COLS.name} ${COLS.shift} ${COLS.timing} ${COLS.inc} ${COLS.task} ${COLS.call} ${COLS.notes} ${COLS.total}`;
+
+  // border style
+  const BORDER = '1px solid #cbd5e1';
+  const BORDER_DARK = '1px solid #94a3b8';
 
   return (
-    <div className="h-full w-full flex flex-col overflow-hidden bg-white">
+    <div ref={wrapRef} className="h-full w-full flex flex-col overflow-hidden bg-white select-none">
 
-      {/* ── Topbar ─────────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between px-4 py-1 border-b border-slate-400 shrink-0 bg-white">
+      {/* ══ TOPBAR ════════════════════════════════════════════════════════ */}
+      <div style={{ height: 40, borderBottom: BORDER_DARK, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 12px', background: '#f8fafc' }}>
 
-        {/* Left side */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-slate-900 rounded-lg flex items-center justify-center shadow-md">
-              <ShieldCheck size={14} className="text-white" />
+        {/* Left */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ width: 26, height: 26, background: '#0f172a', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <ShieldCheck size={13} color="white" />
             </div>
-            <div>
-              <p className="text-[6.5px] text-slate-400 font-black uppercase tracking-[0.25em] leading-none">Live Board</p>
-              <h1 className="text-[12px] font-black text-slate-900 tracking-tight uppercase leading-none mt-0.5">Productivity</h1>
+            <div style={{ lineHeight: 1 }}>
+              <div style={{ fontSize: 6, color: '#94a3b8', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.2em' }}>Live Board</div>
+              <div style={{ fontSize: 11, color: '#0f172a', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.12em' }}>Productivity Tracker</div>
             </div>
           </div>
 
-          <div className="w-px h-8 bg-slate-200" />
+          <div style={{ width: 1, height: 24, background: '#e2e8f0' }} />
 
           {/* Date nav */}
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={() => navDate(-1)}
-              className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-900 flex items-center justify-center transition-colors"
-            >
-              <ChevronLeft size={14} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <button onClick={() => navDate(-1)} style={{ width: 24, height: 24, border: BORDER, borderRadius: 4, background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <ChevronLeft size={13} color="#64748b" />
             </button>
-            <div className="relative">
-              <div className="px-3 py-1.5 bg-white rounded-lg border border-slate-200 cursor-pointer min-w-[148px] text-center shadow-sm">
-                <span className="text-[11px] font-black text-slate-900 uppercase tracking-widest">{dayLabel}</span>
+            <div style={{ position: 'relative' }}>
+              <div style={{ padding: '3px 10px', background: '#fff', border: BORDER_DARK, borderRadius: 4, fontSize: 11, fontWeight: 900, color: '#0f172a', letterSpacing: '0.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+                {dayLabel}
               </div>
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={e => setSelectedDate(e.target.value)}
-                className="absolute inset-0 opacity-0 cursor-pointer w-full"
-              />
+              <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
+                style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%' }} />
             </div>
-            <button
-              onClick={() => navDate(1)}
-              className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-900 flex items-center justify-center transition-colors"
-            >
-              <ChevronRight size={14} />
+            <button onClick={() => navDate(1)} style={{ width: 24, height: 24, border: BORDER, borderRadius: 4, background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <ChevronRight size={13} color="#64748b" />
             </button>
           </div>
 
           {/* Clocks */}
-          <div className="hidden md:flex items-center gap-0 bg-slate-50 rounded-lg border border-slate-200 overflow-hidden shadow-sm">
-            <div className="flex items-center gap-2 px-3 py-1.5 border-r border-slate-200">
-              <span className="text-[9px] font-black text-[#00ADB5] tracking-widest uppercase">IST</span>
-              <span className="text-[12px] font-black text-slate-800 tabular-nums">{times.ist}</span>
-            </div>
-            <div className="flex items-center gap-2 px-3 py-1.5">
-              <span className="text-[9px] font-black text-slate-400 tracking-widest uppercase">GMT</span>
-              <span className="text-[12px] font-black text-slate-700 tabular-nums">{times.uk}</span>
-            </div>
+          <div style={{ display: 'flex', border: BORDER, borderRadius: 4, overflow: 'hidden', background: '#fff' }}>
+            {[{ label: 'IST', val: times.ist, color: '#00ADB5' }, { label: 'GMT', val: times.uk, color: '#64748b' }].map((c, i) => (
+              <div key={c.label} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '3px 10px', borderLeft: i ? BORDER : 'none' }}>
+                <span style={{ fontSize: 8, fontWeight: 900, color: c.color, textTransform: 'uppercase', letterSpacing: '0.15em' }}>{c.label}</span>
+                <span style={{ fontSize: 11, fontWeight: 900, color: '#0f172a', fontVariantNumeric: 'tabular-nums' }}>{c.val}</span>
+              </div>
+            ))}
           </div>
         </div>
 
         {/* Right — totals */}
-        <div className="flex items-center divide-x divide-slate-300 bg-slate-50 border border-slate-200 rounded-lg overflow-hidden">
+        <div style={{ display: 'flex', border: BORDER_DARK, borderRadius: 4, overflow: 'hidden', background: '#fff' }}>
           {[
-            { label: 'INC', value: totalStats.incidents, color: 'text-sky-600', dot: 'bg-sky-500' },
-            { label: 'TASK', value: totalStats.sctasks, color: 'text-amber-600', dot: 'bg-amber-400' },
-            { label: 'CALLS', value: totalStats.calls, color: 'text-[#00ADB5]', dot: 'bg-[#00ADB5]' },
-          ].map(({ label, value, color, dot }) => (
-            <div key={label} className="px-3 py-1 flex flex-col items-center min-w-[60px]">
-              <div className="flex items-center gap-1">
-                <div className={`w-1 h-1 rounded-full ${dot}`} />
-                <span className={`text-[6.5px] font-black uppercase tracking-wider ${color}`}>{label}</span>
-              </div>
-              <span className="text-[14px] font-black text-slate-900 tabular-nums leading-none">{value}</span>
+            { label: 'INC',   value: totalStats.incidents, color: '#0284c7', bg: '#e0f2fe' },
+            { label: 'TASK',  value: totalStats.sctasks,   color: '#b45309', bg: '#fef9c3' },
+            { label: 'CALLS', value: totalStats.calls,     color: '#00ADB5', bg: '#f0fdfa' },
+            { label: 'TOTAL', value: grandTotal,           color: '#0f172a', bg: '#f1f5f9' },
+          ].map((t, i) => (
+            <div key={t.label} style={{ padding: '2px 12px', borderLeft: i ? BORDER_DARK : 'none', background: t.bg, textAlign: 'center', minWidth: 52 }}>
+              <div style={{ fontSize: 8, fontWeight: 900, color: t.color, textTransform: 'uppercase', letterSpacing: '0.15em' }}>{t.label}</div>
+              <div style={{ fontSize: 16, fontWeight: 900, color: t.color, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>{t.value}</div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* ── Table — no outer scroll, fits viewport ──────────────────────────── */}
-      <div className="flex-1 min-h-0 overflow-hidden bg-white flex flex-col" style={{contain:"strict"}}>
-        {activeHandlers.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full opacity-20">
-            <ShieldCheck size={56} strokeWidth={1} className="text-slate-300 mb-4" />
-            <p className="text-[11px] font-black uppercase tracking-[0.3em] text-slate-400">No Handlers on Shift</p>
-          </div>
-        ) : (
-          <div className="flex flex-col h-full">
+      {/* ══ TABLE ═════════════════════════════════════════════════════════ */}
+      {activeHandlers.length === 0 ? (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', opacity: 0.2 }}>
+          <ShieldCheck size={48} strokeWidth={1} color="#94a3b8" />
+          <div style={{ fontSize: 11, fontWeight: 900, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.3em', marginTop: 12 }}>No Handlers on Shift</div>
+        </div>
+      ) : (
+        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
 
-            {/* Sticky column headers */}
-            <div className="shrink-0 border-b border-slate-400 bg-slate-50">
-              <div className="grid bg-slate-50" style={{ gridTemplateColumns: '28px 18% 10% 9% 1fr 1fr 1fr 18% 7%' }}>
-                {[
-                  { label: '', w: '' },
-                  { label: 'Agent', w: '' },
-                  { label: 'Shift', w: '' },
-                  { label: 'Time', w: '' },
-                  { label: 'INC', w: '' },
-                  { label: 'TASK', w: '' },
-                  { label: 'CALL', w: '' },
-                  { label: 'Status / Notes', w: '' },
-                  { label: 'Total', w: '' },
-                ].map(({ label }, i) => (
-                  <div
-                    key={i}
-                    className={`px-1 py-1 text-center border-r border-slate-300 last:border-r-0 flex items-center justify-center h-[24px] ${i === 1 ? 'cursor-pointer select-none hover:bg-slate-100 transition-colors' : ''}`}
-                    onClick={i === 1 ? () => setNameSort(s => s === 'asc' ? 'desc' : s === 'desc' ? null : 'asc') : undefined}
-                  >
-                    {i === 1 ? (
-                      <button
-                        onClick={e => { e.stopPropagation(); setNameSort(s => s === 'asc' ? 'desc' : s === 'desc' ? null : 'asc'); }}
-                        className="flex items-center gap-1 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-700 transition-colors"
-                      >
-                        {label}
-                        {nameSort === 'asc' ? <ArrowUp size={11} className="text-indigo-600" /> :
-                         nameSort === 'desc' ? <ArrowDown size={11} className="text-indigo-600" /> :
-                         <ArrowUpDown size={11} className="opacity-30" />}
-                      </button>
-                    ) : (
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</span>
-                    )}
-                  </div>
-                ))}
+          {/* Column header */}
+          <div style={{
+            display: 'grid', gridTemplateColumns: gridCols,
+            height: 26, flexShrink: 0,
+            background: '#1e293b', borderBottom: '2px solid #0f172a',
+          }}>
+            {[
+              { label: '#' },
+              { label: 'Agent Name' },
+              { label: 'Shift' },
+              { label: 'Timing' },
+              { label: 'Incidents' },
+              { label: 'SC Tasks' },
+              { label: 'Calls' },
+              { label: 'Status / Notes' },
+              { label: 'Total' },
+            ].map(({ label }, i) => (
+              <div key={i} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                borderRight: i < 8 ? '1px solid #334155' : 'none',
+                fontSize: 9, fontWeight: 900, color: '#94a3b8',
+                textTransform: 'uppercase', letterSpacing: '0.18em',
+              }}>
+                {label}
               </div>
-            </div>
+            ))}
+          </div>
 
-            {/* Shift groups — shrink to content, overall area scrolls if needed */}
-            <div className="flex-1 min-h-0 overflow-y-auto flex flex-col divide-y divide-slate-300">
-              {handlerGroups.map(({ shift, handlers: groupHandlers }) => {
-                const meta = getShiftMeta(shift);
-                const isCollapsed = collapsedShifts.has(shift);
-                const groupTotal = groupHandlers.reduce((acc, h) => {
-                  const s = getHandlerStats(h.id);
-                  return acc + s.incidents + s.sctasks + s.calls;
-                }, 0);
+          {/* Rows */}
+          <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+            {handlerGroups.map(({ shift, handlers: groupHandlers }) => {
+              const st = getStyle(shift);
+              let globalIdx = activeHandlers.findIndex(h => h.id === groupHandlers[0].id);
 
-                return (
-                  <div
-                    key={shift}
-                    className="flex flex-col shrink-0"
-                  >
-                    {/* ── Shift header row (clickable) ── */}
-                    <button
-                      onClick={() => toggleShift(shift)}
-                      className={`
-                        shrink-0 w-full h-[22px] flex items-center gap-2 px-3
-                        border-b transition-colors cursor-pointer
-                        ${meta.headerBg} ${meta.headerBorder}
-                        hover:brightness-[0.97]
-                      `}
-                      style={{ borderColor: `${meta.accentHex}80` }}
-                    >
-                      {/* Colour dot */}
-                      <div className="w-2 h-2 rounded-full shrink-0" style={{ background: meta.accentHex }} />
-
-                      {/* Shift label */}
-                      <span className={`text-[11px] font-black uppercase tracking-widest ${meta.dividerText} flex-1 text-left`}>
-                        {meta.label}
-                        <span className="ml-2 text-[10px] font-semibold opacity-50">{shift}</span>
+              return (
+                <React.Fragment key={shift}>
+                  {/* ── Shift header row ── */}
+                  <div style={{
+                    display: 'grid', gridTemplateColumns: gridCols,
+                    height: rowH,
+                    background: st.headerBg,
+                    borderBottom: `1px solid ${st.headerBorder}`,
+                    borderTop: `2px solid ${st.headerBorder}`,
+                  }}>
+                    {/* Span all cols via absolute positioning trick — use single cell spanning */}
+                    <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', padding: '0 10px', gap: 8 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#fff', opacity: 0.7, flexShrink: 0 }} />
+                      <span style={{ fontSize: 10, fontWeight: 900, color: st.headerText, textTransform: 'uppercase', letterSpacing: '0.2em' }}>
+                        {st.label}
                       </span>
-
-                      {/* Agent count badge */}
-                      <span
-                        className="text-[10px] font-black px-2 py-0.5 rounded-full"
-                        style={{ background: `${meta.accentHex}18`, color: meta.accentHex }}
-                      >
+                      <span style={{ fontSize: 9, color: st.headerText, opacity: 0.6, letterSpacing: '0.1em' }}>{shift}</span>
+                      <span style={{ marginLeft: 6, fontSize: 9, fontWeight: 700, color: st.headerText, opacity: 0.75, background: 'rgba(255,255,255,0.15)', borderRadius: 9, padding: '1px 8px' }}>
                         {groupHandlers.length} agent{groupHandlers.length !== 1 ? 's' : ''}
                       </span>
-
-                      {/* Total for shift (only show when collapsed so it's not lost) */}
-                      {isCollapsed && groupTotal > 0 && (
-                        <span
-                          className="text-[9px] font-black px-2.5 py-0.5 rounded-full tabular-nums"
-                          style={{ background: `${meta.accentHex}22`, color: meta.accentHex }}
-                        >
-                          {groupTotal} total
-                        </span>
-                      )}
-
-                      {/* Chevron */}
-                      <ChevronDown
-                        size={13}
-                        className="transition-transform duration-200 shrink-0"
-                        style={{
-                          color: meta.accentHex,
-                          transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
-                        }}
-                      />
-                    </button>
-
-                    {/* ── Handler rows (hidden when collapsed) ── */}
-                    {!isCollapsed && (
-                      <div className="flex flex-col divide-y divide-slate-300">
-                        {groupHandlers.map(handler => {
-                          const hs = getHandlerStats(handler.id);
-                          const disabled = isShiftNearEnd(handler.shift);
-                          const rowTotal = hs.incidents + hs.sctasks + hs.calls;
-
-                          const flash = (field: string) => {
-                            const f = flashMap[`${handler.id}-${field}`];
-                            return f === 'positive'
-                              ? 'text-emerald-600 bg-emerald-50 rounded px-1 scale-110'
-                              : f === 'negative'
-                              ? 'text-red-600 bg-red-50 rounded px-1 scale-110'
-                              : 'text-slate-800';
-                          };
-
-                          return (
-                            <div
-                              key={handler.id}
-                              className={`
-                                h-[28px] grid items-center transition-colors group
-                                ${meta.rowBg} ${meta.rowHover}
-                                ${disabled ? 'opacity-30 grayscale pointer-events-none' : ''}
-                              `}
-                              style={{ gridTemplateColumns: '28px 18% 10% 9% 1fr 1fr 1fr 18% 7%' }}
-                            >
-                              {/* Collapse toggle spacer */}
-                              <div className="self-stretch border-r border-slate-300" />
-
-                              {/* Name */}
-                              <div className="px-1.5 py-0 border-r border-slate-300 flex items-center justify-center gap-1 h-full">
-                                <span className="text-[14px] font-bold text-slate-800 truncate">{handler.name}</span>
-                                {handler.isQH && (
-                                  <Shield size={10} className="text-amber-500 shrink-0" title="Queue Handler" />
-                                )}
-                              </div>
-
-                              {/* Shift label */}
-                              <div className="px-1 py-0 border-r border-slate-300 flex items-center justify-center h-full">
-                                <span className={`
-                                  inline-flex items-center px-2 py-0.5 rounded
-                                  text-[9px] font-black border leading-none
-                                  ${meta.badgeBg} ${meta.badgeText} ${meta.badgeBorder}
-                                `}>
-                                  {meta.label}
-                                </span>
-                              </div>
-
-                              {/* Shift time */}
-                              <div className="px-1 py-0 border-r border-slate-300 flex items-center justify-center h-full">
-                                <span className={`
-                                  inline-flex items-center px-1.5 py-0.5 rounded
-                                  text-[10px] font-black leading-none
-                                  ${meta.timeBg} ${meta.timeText}
-                                `}>
-                                  {handler.shift}
-                                </span>
-                              </div>
-
-                              {/* INC */}
-                              <div className="px-1.5 py-0 border-r border-slate-300 flex items-center justify-center gap-1 h-full">
-                                <MinusBtn onClick={() => updateStat(handler.id, 'incidents', Math.max(0, hs.incidents - 1))} />
-                                <span className={`w-6 text-center font-black text-[14px] tabular-nums transition-all ${flash('incidents')}`}>
-                                  {hs.incidents}
-                                </span>
-                                <TactileBtn
-                                  onClick={() => updateStat(handler.id, 'incidents', hs.incidents + 1)}
-                                  color={meta.btnPlus}
-                                  glow={meta.glowColor}
-                                >+</TactileBtn>
-                              </div>
-
-                              {/* TASK */}
-                              <div className="px-1.5 py-0 border-r border-slate-300 flex items-center justify-center gap-1 h-full">
-                                <MinusBtn onClick={() => updateStat(handler.id, 'sctasks', Math.max(0, hs.sctasks - 1))} />
-                                <span className={`w-6 text-center font-black text-[14px] tabular-nums transition-all ${flash('sctasks')}`}>
-                                  {hs.sctasks}
-                                </span>
-                                <TactileBtn
-                                  onClick={() => updateStat(handler.id, 'sctasks', hs.sctasks + 1)}
-                                  color={meta.btnPlus}
-                                  glow={meta.glowColor}
-                                >+</TactileBtn>
-                              </div>
-
-                              {/* CALL */}
-                              <div className="px-1.5 py-0 border-r border-slate-300 flex items-center justify-center gap-1 h-full">
-                                <MinusBtn onClick={() => updateStat(handler.id, 'calls', Math.max(0, hs.calls - 1))} />
-                                <span className={`w-6 text-center font-black text-[14px] tabular-nums transition-all ${flash('calls')}`}>
-                                  {hs.calls}
-                                </span>
-                                <TactileBtn
-                                  onClick={() => {
-                                    setCallData({ ...callData, handlerId: handler.id });
-                                    setIsCallModalOpen(true);
-                                  }}
-                                  color="#00ADB5"
-                                  glow="rgba(0,173,181,0.35)"
-                                >+</TactileBtn>
-                              </div>
-
-                              {/* Notes */}
-                              <div className="px-1 py-0 border-r border-slate-300 flex items-center h-full">
-                                <input
-                                  type="text"
-                                  placeholder="Log status…"
-                                  value={hs.comments}
-                                  onChange={e => updateStat(handler.id, 'comments', e.target.value)}
-                                  className="w-full px-2 py-1 text-[11px] text-center text-slate-700 bg-transparent border border-transparent rounded-lg outline-none focus:ring-1 focus:ring-[#00ADB5]/20 focus:border-[#00ADB5]/40 transition-all placeholder:text-slate-200"
-                                />
-                              </div>
-
-                              {/* Total */}
-                              <div className="px-1 py-0 flex items-center justify-center h-full">
-                                <span className={`
-                                  inline-flex items-center justify-center px-2 py-0.5 rounded-md
-                                  font-black text-[14px] tabular-nums
-                                  ${rowTotal > 0 ? `${meta.totalBg} ${meta.totalText}` : 'bg-slate-100 text-slate-400'}
-                                `}>
-                                  {rowTotal}
-                                </span>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
+                      {/* Shift totals */}
+                      {(() => {
+                        const si = groupHandlers.reduce((a, h) => a + getHandlerStats(h.id).incidents, 0);
+                        const st2 = groupHandlers.reduce((a, h) => a + getHandlerStats(h.id).sctasks,  0);
+                        const sc = groupHandlers.reduce((a, h) => a + getHandlerStats(h.id).calls,     0);
+                        const tot = si + st2 + sc;
+                        return tot > 0 ? (
+                          <span style={{ marginLeft: 'auto', fontSize: 9, fontWeight: 900, color: '#fff', opacity: 0.85, background: 'rgba(0,0,0,0.2)', borderRadius: 9, padding: '1px 10px', fontVariantNumeric: 'tabular-nums' }}>
+                            INC {si} · TASK {st2} · CALLS {sc} · {tot} total
+                          </span>
+                        ) : null;
+                      })()}
+                    </div>
                   </div>
-                );
-              })}
+
+                  {/* ── Agent rows ── */}
+                  {groupHandlers.map((handler, rowIdx) => {
+                    const hs       = getHandlerStats(handler.id);
+                    const disabled = isShiftNearEnd(handler.shift);
+                    const rowTotal = hs.incidents + hs.sctasks + hs.calls;
+                    const isAlt    = rowIdx % 2 === 1;
+                    const bg       = isAlt ? st.rowBgAlt : st.rowBg;
+                    const tc       = st.rowText;
+                    const sno      = globalIdx + rowIdx + 1;
+                    const cellBorder = `1px solid ${st.hex}30`;
+
+                    return (
+                      <div
+                        key={handler.id}
+                        style={{
+                          display: 'grid', gridTemplateColumns: gridCols,
+                          height: rowH,
+                          background: disabled ? '#f1f5f9' : bg,
+                          borderBottom: cellBorder,
+                          opacity: disabled ? 0.4 : 1,
+                          pointerEvents: disabled ? 'none' : 'auto',
+                          transition: 'background 0.1s',
+                        }}
+                        onMouseEnter={e => !disabled && (e.currentTarget.style.filter = 'brightness(0.95)')}
+                        onMouseLeave={e => (e.currentTarget.style.filter = '')}
+                      >
+                        {/* S.No */}
+                        <div style={{ display:'flex', alignItems:'center', justifyContent:'center', borderRight: cellBorder, fontSize: 10, fontWeight: 700, color: '#94a3b8', fontVariantNumeric:'tabular-nums' }}>
+                          {sno}
+                        </div>
+
+                        {/* Name */}
+                        <div style={{ display:'flex', alignItems:'center', gap: 5, padding: '0 8px', borderRight: cellBorder, overflow:'hidden' }}>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: tc, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{handler.name}</span>
+                          {handler.isQH && <Shield size={10} color="#f59e0b" title="Queue Handler" style={{ flexShrink:0 }} />}
+                        </div>
+
+                        {/* Shift label */}
+                        <div style={{ display:'flex', alignItems:'center', justifyContent:'center', borderRight: cellBorder }}>
+                          <span style={{ fontSize: 9, fontWeight: 900, color: st.headerBg, background: `${st.hex}20`, border: `1px solid ${st.hex}50`, borderRadius: 4, padding: '1px 6px', textTransform:'uppercase', letterSpacing:'0.1em', whiteSpace:'nowrap' }}>
+                            {st.label}
+                          </span>
+                        </div>
+
+                        {/* Timing */}
+                        <div style={{ display:'flex', alignItems:'center', justifyContent:'center', borderRight: cellBorder }}>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: tc, fontVariantNumeric:'tabular-nums' }}>{handler.shift}</span>
+                        </div>
+
+                        {/* INC */}
+                        <div style={{ borderRight: cellBorder, overflow:'hidden' }}>
+                          <EditCell
+                            value={hs.incidents}
+                            onChange={v => updateStat(handler.id, 'incidents', v)}
+                            flash={flashMap[`${handler.id}-incidents`] ?? null}
+                            textColor={tc}
+                          />
+                        </div>
+
+                        {/* TASK */}
+                        <div style={{ borderRight: cellBorder, overflow:'hidden' }}>
+                          <EditCell
+                            value={hs.sctasks}
+                            onChange={v => updateStat(handler.id, 'sctasks', v)}
+                            flash={flashMap[`${handler.id}-sctasks`] ?? null}
+                            textColor={tc}
+                          />
+                        </div>
+
+                        {/* CALL */}
+                        <div style={{ borderRight: cellBorder, overflow:'hidden' }}>
+                          <EditCell
+                            value={hs.calls}
+                            onChange={v => updateStat(handler.id, 'calls', v)}
+                            flash={flashMap[`${handler.id}-calls`] ?? null}
+                            textColor={tc}
+                            isCall
+                            onCallClick={() => {
+                              setCallData({ ...callData, handlerId: handler.id });
+                              setIsCallModalOpen(true);
+                            }}
+                          />
+                        </div>
+
+                        {/* Notes */}
+                        <div style={{ borderRight: cellBorder, display:'flex', alignItems:'center', padding:'0 4px' }}>
+                          <input
+                            type="text"
+                            placeholder="Add note…"
+                            value={hs.comments}
+                            onChange={e => updateStat(handler.id, 'comments', e.target.value)}
+                            style={{
+                              width:'100%', height:'100%', border:'none', outline:'none',
+                              background:'transparent', fontSize: 11, color: tc,
+                              padding:'0 4px',
+                            }}
+                            onFocus={e => (e.currentTarget.style.background = '#fff')}
+                            onBlur={e => (e.currentTarget.style.background = 'transparent')}
+                          />
+                        </div>
+
+                        {/* Total */}
+                        <div style={{ display:'flex', alignItems:'center', justifyContent:'center' }}>
+                          <span style={{
+                            fontSize: 13, fontWeight: 900, fontVariantNumeric:'tabular-nums',
+                            color: rowTotal > 0 ? st.headerBg : '#cbd5e1',
+                            background: rowTotal > 0 ? `${st.hex}20` : 'transparent',
+                            borderRadius: 4, padding: rowTotal > 0 ? '1px 8px' : '0',
+                          }}>
+                            {rowTotal || '—'}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </React.Fragment>
+              );
+            })}
+
+            {/* ── Grand Total row ── */}
+            <div style={{
+              display: 'grid', gridTemplateColumns: gridCols,
+              height: rowH,
+              background: '#1e293b',
+              borderTop: '2px solid #0f172a',
+            }}>
+              <div style={{ gridColumn: '1 / 5', display:'flex', alignItems:'center', padding:'0 12px' }}>
+                <span style={{ fontSize: 10, fontWeight: 900, color: '#94a3b8', textTransform:'uppercase', letterSpacing:'0.2em' }}>Grand Total</span>
+              </div>
+              {[
+                { v: totalStats.incidents, c: '#38bdf8' },
+                { v: totalStats.sctasks,   c: '#fbbf24' },
+                { v: totalStats.calls,     c: '#2dd4bf' },
+              ].map(({ v, c }, i) => (
+                <div key={i} style={{ display:'flex', alignItems:'center', justifyContent:'center', borderLeft:'1px solid #334155' }}>
+                  <span style={{ fontSize: 15, fontWeight: 900, color: c, fontVariantNumeric:'tabular-nums' }}>{v}</span>
+                </div>
+              ))}
+              <div style={{ borderLeft:'1px solid #334155' }} />
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'center', borderLeft:'1px solid #334155' }}>
+                <span style={{ fontSize: 15, fontWeight: 900, color: '#f8fafc', fontVariantNumeric:'tabular-nums' }}>{grandTotal}</span>
+              </div>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* ── Call Modal ─────────────────────────────────────────────────────── */}
+      {/* ══ CALL MODAL ════════════════════════════════════════════════════ */}
       {isCallModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-black/20 backdrop-blur-sm"
-            onClick={() => setIsCallModalOpen(false)}
-          />
-          <div className="relative bg-white border border-slate-200 rounded-2xl w-[320px] overflow-hidden shadow-2xl shadow-slate-200/80">
-
-            {/* Header */}
-            <div className="px-6 pt-6 pb-4 flex items-center justify-between border-b border-slate-400">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-[#00ADB5]/10 border border-[#00ADB5]/20 flex items-center justify-center">
-                  <PhoneCall size={16} className="text-[#00ADB5]" />
+        <div style={{ position:'fixed', inset:0, zIndex:50, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
+          <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.25)', backdropFilter:'blur(4px)' }} onClick={() => setIsCallModalOpen(false)} />
+          <div style={{ position:'relative', background:'#fff', border:'1px solid #e2e8f0', borderRadius:16, width:320, overflow:'hidden', boxShadow:'0 20px 60px rgba(0,0,0,0.15)' }}>
+            <div style={{ padding:'20px 24px 16px', borderBottom:'1px solid #e2e8f0', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                <div style={{ width:36, height:36, borderRadius:10, background:'#f0fdfa', border:'1px solid #99f6e4', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  <PhoneCall size={15} color="#00ADB5" />
                 </div>
                 <div>
-                  <h3 className="text-[11px] font-black text-slate-900 uppercase tracking-widest leading-none">Call Record</h3>
-                  <p className="text-[8px] text-slate-400 uppercase tracking-widest mt-0.5">Log productivity entry</p>
+                  <div style={{ fontSize:11, fontWeight:900, color:'#0f172a', textTransform:'uppercase', letterSpacing:'0.2em', lineHeight:1 }}>Log Call</div>
+                  <div style={{ fontSize:8, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'0.2em', marginTop:2 }}>Productivity entry</div>
                 </div>
               </div>
-              <button
-                onClick={() => setIsCallModalOpen(false)}
-                className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all"
-              >
-                <X size={16} />
+              <button onClick={() => setIsCallModalOpen(false)} style={{ width:32, height:32, border:'none', background:'transparent', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', borderRadius:8 }}>
+                <X size={16} color="#94a3b8" />
               </button>
             </div>
 
-            <div className="px-6 py-5 space-y-4">
-              {/* Ticket input */}
+            <div style={{ padding:'20px 24px', display:'flex', flexDirection:'column', gap:14 }}>
               <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Ticket Number</label>
-                  <span className="text-[8px] font-black text-[#00ADB5] bg-[#00ADB5]/10 px-2 py-0.5 rounded-full">Required</span>
-                </div>
+                <div style={{ fontSize:9, fontWeight:900, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'0.2em', marginBottom:6 }}>Ticket Number</div>
                 <input
                   autoFocus
                   type="text"
@@ -721,43 +643,41 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
                   value={callData.ticketNumber}
                   onChange={e => setCallData({ ...callData, ticketNumber: e.target.value.toUpperCase() })}
                   onKeyDown={e => e.key === 'Enter' && handleCallSubmit()}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 font-bold text-sm placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-[#00ADB5]/20 focus:border-[#00ADB5]/40 transition-all uppercase tracking-widest"
+                  style={{ width:'100%', padding:'10px 14px', border:'2px solid #e2e8f0', borderRadius:10, fontSize:13, fontWeight:700, color:'#0f172a', outline:'none', letterSpacing:'0.15em', textTransform:'uppercase', boxSizing:'border-box' }}
+                  onFocus={e => (e.currentTarget.style.borderColor = '#00ADB5')}
+                  onBlur={e => (e.currentTarget.style.borderColor = '#e2e8f0')}
                 />
               </div>
 
-              {/* Type toggle */}
               <div>
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Call Type</label>
-                <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200">
-                  {(['New', 'Update'] as const).map(t => (
-                    <button
-                      key={t}
-                      onClick={() => setCallData({ ...callData, type: t })}
-                      className={`py-2.5 rounded-lg font-black text-[10px] uppercase tracking-widest transition-all ${
-                        callData.type === t
-                          ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
-                          : 'text-slate-400 hover:text-slate-600'
-                      }`}
-                    >
+                <div style={{ fontSize:9, fontWeight:900, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'0.2em', marginBottom:6 }}>Call Type</div>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, padding:4, background:'#f1f5f9', borderRadius:10 }}>
+                  {(['New','Update'] as const).map(t => (
+                    <button key={t} onClick={() => setCallData({ ...callData, type: t })} style={{
+                      padding:'10px 0', borderRadius:8, border: callData.type === t ? '1px solid #e2e8f0' : 'none',
+                      background: callData.type === t ? '#fff' : 'transparent',
+                      fontSize:10, fontWeight:900, color: callData.type === t ? '#0f172a' : '#94a3b8',
+                      cursor:'pointer', textTransform:'uppercase', letterSpacing:'0.15em', transition:'all 0.15s',
+                    }}>
                       {t}
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Submit */}
-              <button
-                onClick={handleCallSubmit}
-                style={{
-                  background: 'linear-gradient(145deg, #1e293b, #0f172a)',
-                  boxShadow: '0 5px 0 0 #020617, 0 8px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)',
-                }}
-                className="w-full text-white py-3 rounded-xl font-black text-[11px] uppercase tracking-widest
-                  transition-all duration-100 active:translate-y-[4px] active:shadow-none
-                  flex items-center justify-center gap-2"
+              <button onClick={handleCallSubmit} style={{
+                width:'100%', padding:'12px 0', borderRadius:10, border:'none', cursor:'pointer',
+                background:'linear-gradient(145deg,#1e293b,#0f172a)',
+                boxShadow:'0 4px 0 #020617, 0 6px 16px rgba(0,0,0,0.25)',
+                fontSize:11, fontWeight:900, color:'#fff', textTransform:'uppercase', letterSpacing:'0.2em',
+                display:'flex', alignItems:'center', justifyContent:'center', gap:8,
+                transition:'all 0.1s',
+              }}
+                onMouseDown={e => { e.currentTarget.style.transform='translateY(3px)'; e.currentTarget.style.boxShadow='0 1px 0 #020617'; }}
+                onMouseUp={e => { e.currentTarget.style.transform=''; e.currentTarget.style.boxShadow='0 4px 0 #020617, 0 6px 16px rgba(0,0,0,0.25)'; }}
               >
-                <Check size={15} strokeWidth={3} />
-                Submit Record
+                <Check size={14} strokeWidth={3} />
+                Submit
               </button>
             </div>
           </div>
