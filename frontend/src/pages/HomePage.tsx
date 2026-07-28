@@ -34,13 +34,13 @@ type FilterMode = 'day' | 'month' | 'year';
 const LEAVE_TYPES = new Set(['WeekOff','Medical Leave','Planned Leave','Earned Leave','Unplanned Leave','Complimentary Off','MID-LEAVE']);
 
 // ── KPI Card ──────────────────────────────────────────────────────────────────
-const KpiCard: React.FC<{ label: string; value: number | string; sub?: string; icon: React.ReactNode; color: string; bg: string; border: string; trend?: number }> =
-  ({ label, value, sub, icon, color, bg, border, trend }) => (
+const KpiCard: React.FC<{ label: string; value: number | string; sub?: string; Icon: React.FC<{size?:number;color?:string}>; color: string; bg: string; border: string; trend?: number }> =
+  ({ label, value, sub, Icon, color, bg, border, trend }) => (
   <div style={{ background:'#fff', border:`1px solid ${border}`, borderRadius:12, padding:'14px 18px', display:'flex', flexDirection:'column', gap:8, boxShadow:'0 1px 3px rgba(0,0,0,0.05)' }}>
     <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
       <span style={{ fontSize:9, fontWeight:900, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'0.2em' }}>{label}</span>
       <div style={{ width:30, height:30, borderRadius:8, background:bg, display:'flex', alignItems:'center', justifyContent:'center' }}>
-        {React.cloneElement(icon as React.ReactElement, { size:14, color })}
+        <Icon size={14} color={color} />
       </div>
     </div>
     <div style={{ display:'flex', alignItems:'flex-end', gap:8 }}>
@@ -283,12 +283,12 @@ const HomePage: React.FC = () => {
 
         {/* Row 1 — KPI cards */}
         <div style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:10}}>
-          <KpiCard label="Active Handlers" value={activeHandlerCount} sub={mode==='day'?'on shift today':'unique handlers'} icon={<Users/>} color="#0f172a" bg="#f1f5f9" border="#e2e8f0"/>
-          <KpiCard label="Total Handlers"  value={handlers.length}    sub="registered"      icon={<Users/>}     color="#475569" bg="#f8fafc"   border="#e2e8f0"/>
-          <KpiCard label="Incidents"        value={totalInc}           sub="logged"          icon={<FileText/>}  color="#2563eb" bg="#dbeafe"   border="#bfdbfe"/>
-          <KpiCard label="SC Tasks"         value={totalTask}          sub="completed"       icon={<Activity/>}  color="#b45309" bg="#fef9c3"   border="#fde68a"/>
-          <KpiCard label="Calls"            value={totalCalls}         sub="handled"         icon={<PhoneCall/>} color="#00ADB5" bg="#f0fdfa"   border="#99f6e4"/>
-          <KpiCard label="Avg per Agent"    value={activeHandlerCount?Math.round(grandTotal/activeHandlerCount):0} sub="tickets+calls" icon={<TrendingUp/>} color="#7c3aed" bg="#ede9fe" border="#c4b5fd"/>
+          <KpiCard label="Active Handlers" value={activeHandlerCount} sub={mode==='day'?'on shift today':'unique handlers'} Icon={Users} color="#0f172a" bg="#f1f5f9" border="#e2e8f0"/>
+          <KpiCard label="Total Handlers"  value={handlers.length}    sub="registered"      Icon={Users} color="#475569" bg="#f8fafc"   border="#e2e8f0"/>
+          <KpiCard label="Incidents"        value={totalInc}           sub="logged"          Icon={FileText} color="#2563eb" bg="#dbeafe"   border="#bfdbfe"/>
+          <KpiCard label="SC Tasks"         value={totalTask}          sub="completed"       Icon={Activity} color="#b45309" bg="#fef9c3"   border="#fde68a"/>
+          <KpiCard label="Calls"            value={totalCalls}         sub="handled"         Icon={PhoneCall} color="#00ADB5" bg="#f0fdfa"   border="#99f6e4"/>
+          <KpiCard label="Avg per Agent"    value={activeHandlerCount?Math.round(grandTotal/activeHandlerCount):0} sub="tickets+calls" Icon={TrendingUp} color="#7c3aed" bg="#ede9fe" border="#c4b5fd"/>
         </div>
 
         {/* Row 2 — Main bar chart + Shift donut */}
