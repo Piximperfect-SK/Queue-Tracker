@@ -89,11 +89,19 @@ const SettingsPage: React.FC = () => {
     addLog('System', `${handler?.name}: ${handler?.isQH ? 'Queue Handler (QH) -> Standard' : 'Standard -> Queue Handler (QH)'}`, !handler?.isQH ? 'positive' : 'neutral');
   };
 
+  const toggleVoice = (id: string) => {
+    const handler = handlers.find(a => a.id === id);
+    const updated = handlers.map(a => a.id === id ? { ...a, isVoice: !a.isVoice } : a);
+    saveHandlers(updated);
+    addLog('System', `${handler?.name}: ${handler?.isVoice ? 'Voice -> Non-Voice' : 'Non-Voice -> Voice'}`, 'neutral');
+  };
+
   const addHandler = () => {
     const newHandler: Handler = {
       id: Date.now().toString(),
       name: 'New Handler',
-      isQH: false
+      isQH: false,
+      isVoice: false
     };
     saveHandlers([...handlers, newHandler]);
     addLog('Add Handler', `Added new handler: ${newHandler.name}`, 'positive');
@@ -128,7 +136,6 @@ const SettingsPage: React.FC = () => {
   };
 
   const qhCount = handlers.filter(h => h.isQH).length;
-  const standardCount = handlers.length - qhCount;
 
   return (
     <div className="h-full flex flex-col overflow-hidden p-3">
@@ -182,7 +189,7 @@ const SettingsPage: React.FC = () => {
       </div>
 
       {/* ── Stats Cards ── */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3 shrink-0">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mb-3 shrink-0">
         <div className="bg-slate-50 rounded-lg border border-slate-200 p-2.5 flex items-center gap-2">
           <div className="w-8 h-8 bg-blue-50 rounded flex items-center justify-center text-blue-600 shrink-0">
             <Users size={16} />
@@ -202,12 +209,21 @@ const SettingsPage: React.FC = () => {
           </div>
         </div>
         <div className="bg-slate-50 rounded-lg border border-slate-200 p-2.5 flex items-center gap-2">
+          <div className="w-8 h-8 bg-sky-50 rounded flex items-center justify-center text-sky-600 shrink-0">
+            <PhoneCall size={16} />
+          </div>
+          <div>
+            <p className="text-base font-bold text-slate-900">{handlers.filter(h => h.isVoice).length}</p>
+            <p className="text-[9px] font-medium text-slate-500 uppercase tracking-wide">Voice</p>
+          </div>
+        </div>
+        <div className="bg-slate-50 rounded-lg border border-slate-200 p-2.5 flex items-center gap-2">
           <div className="w-8 h-8 bg-amber-50 rounded flex items-center justify-center text-amber-600 shrink-0">
             <Server size={16} />
           </div>
           <div>
-            <p className="text-base font-bold text-slate-900">{standardCount}</p>
-            <p className="text-[9px] font-medium text-slate-500 uppercase tracking-wide">Standard</p>
+            <p className="text-base font-bold text-slate-900">{handlers.filter(h => !h.isVoice).length}</p>
+            <p className="text-[9px] font-medium text-slate-500 uppercase tracking-wide">Non-Voice</p>
           </div>
         </div>
       </div>
@@ -247,6 +263,20 @@ const SettingsPage: React.FC = () => {
                     title={isPrivileged ? (handler.isQH ? 'Queue Handler (QH)' : 'Assign as QH') : 'View only'}
                   >
                     <ShieldCheck size={14} strokeWidth={handler.isQH ? 2.5 : 2} />
+                  </button>
+
+                  {/* Voice / Non-Voice toggle */}
+                  <button
+                    onClick={() => isPrivileged && toggleVoice(handler.id)}
+                    disabled={!isPrivileged}
+                    className={`w-8 h-8 rounded flex items-center justify-center transition-all shrink-0 border ${
+                      handler.isVoice
+                        ? 'bg-sky-500 border-sky-500 text-white shadow-sm shadow-sky-500/20'
+                        : 'bg-white border-slate-200 text-slate-400 hover:border-sky-400 hover:text-sky-500'
+                    } ${!isPrivileged ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    title={isPrivileged ? (handler.isVoice ? 'Voice Agent' : 'Non-Voice Agent') : 'View only'}
+                  >
+                    <PhoneCall size={14} strokeWidth={handler.isVoice ? 2.5 : 2} />
                   </button>
 
                   <div className="flex-1 min-w-0">
@@ -296,6 +326,13 @@ const SettingsPage: React.FC = () => {
                           : 'bg-slate-100 text-slate-500 border-slate-200'
                       }`}>
                         {handler.isQH ? 'QH' : 'STD'}
+                      </span>
+                      <span className={`text-[8px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded border ${
+                        handler.isVoice
+                          ? 'bg-sky-50 text-sky-700 border-sky-200'
+                          : 'bg-amber-50 text-amber-700 border-amber-200'
+                      }`}>
+                        {handler.isVoice ? 'Voice' : 'Non-Voice'}
                       </span>
                       <span className="text-[8px] text-slate-400 font-mono">ID: {handler.id.slice(0, 8)}</span>
                     </div>
