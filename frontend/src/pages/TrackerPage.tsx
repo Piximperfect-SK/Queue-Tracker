@@ -294,24 +294,11 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
   });
 
   const handlerGroups = useMemo(() => {
-    type NestedGroup = {
-      shift: ShiftType;
-      voice: (Handler & { shift: ShiftType })[];
-      nonVoice: (Handler & { shift: ShiftType })[];
-    };
-    const groups: NestedGroup[] = [];
+    const groups: { shift: ShiftType; handlers: (Handler & { shift: ShiftType })[] }[] = [];
     activeHandlers.forEach(h => {
       const last = groups[groups.length - 1];
-      if (last && last.shift === h.shift) {
-        if (h.isVoice) last.voice.push(h);
-        else last.nonVoice.push(h);
-      } else {
-        groups.push({
-          shift: h.shift,
-          voice: h.isVoice ? [h] : [],
-          nonVoice: h.isVoice ? [] : [h],
-        });
-      }
+      if (last && last.shift === h.shift) last.handlers.push(h);
+      else groups.push({ shift: h.shift, handlers: [h] });
     });
     return groups;
   }, [activeHandlers]);
@@ -440,12 +427,9 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
 
           {/* Rows */}
           <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-            {handlerGroups.map(({ shift, voice, nonVoice }) => {
-              const groupHandlers = [...voice, ...nonVoice];
+            {handlerGroups.map(({ shift, handlers: groupHandlers }) => {
               const st = getStyle(shift);
               let globalIdx = activeHandlers.findIndex(h => h.id === groupHandlers[0].id);
-              const voiceCount = voice.length;
-              const nonVoiceCount = nonVoice.length;
 
               return (
                 <React.Fragment key={shift}>
@@ -467,11 +451,6 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
                       <span style={{ marginLeft: 6, fontSize: 9, fontWeight: 700, color: st.headerText, opacity: 0.75, background: 'rgba(255,255,255,0.15)', borderRadius: 9, padding: '1px 8px' }}>
                         {groupHandlers.length} agent{groupHandlers.length !== 1 ? 's' : ''}
                       </span>
-                      {voiceCount > 0 && nonVoiceCount > 0 && (
-                        <span style={{ fontSize: 8, fontWeight: 700, color: st.headerText, opacity: 0.6, letterSpacing: '0.1em' }}>
-                          ({voiceCount} voice · {nonVoiceCount} non-voice)
-                        </span>
-                      )}
                       {/* Shift totals */}
                       {(() => {
                         const si = groupHandlers.reduce((a, h) => a + getHandlerStats(h.id).incidents, 0);
@@ -487,28 +466,8 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
                     </div>
                   </div>
 
-                  {/* ── Voice sub-group header ── */}
-                  {voice.length > 0 && (
-                    <div style={{
-                      display: 'grid', gridTemplateColumns: gridCols,
-                      height: 22,
-                      background: `${st.rowBg}`,
-                      borderBottom: `1px solid ${st.hex}30`,
-                    }}>
-                      <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', padding: '0 10px 0 30px', gap: 6 }}>
-                        <PhoneCall size={11} color={st.hex} strokeWidth={2.5} />
-                        <span style={{ fontSize: 9, fontWeight: 900, color: st.headerBg, textTransform: 'uppercase', letterSpacing: '0.15em', opacity: 0.8 }}>
-                          Voice Agents
-                        </span>
-                        <span style={{ fontSize: 8, fontWeight: 700, color: st.headerBg, opacity: 0.5, background: `${st.hex}20`, borderRadius: 7, padding: '0 6px' }}>
-                          {voice.length}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* ── Voice agent rows ── */}
-                  {voice.map((handler, rowIdx) => {
+                  {/* ── Agent rows ── */}
+                  {groupHandlers.map((handler, rowIdx) => {
                     const hs       = getHandlerStats(handler.id);
                     const disabled = isShiftNearEnd(handler.shift);
                     const rowTotal = hs.incidents + hs.sctasks + hs.calls;
@@ -540,7 +499,6 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
 
                         {/* Name */}
                         <div style={{ display:'flex', alignItems:'center', gap: 5, padding: '0 8px', borderRight: cellBorder, overflow:'hidden' }}>
-                          <PhoneCall size={10} color="#0ea5e9" title="Voice Agent" style={{ flexShrink:0 }} />
                           <span style={{ fontSize: 13, fontWeight: 700, color: tc, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{handler.name}</span>
                           {handler.isQH && <Shield size={10} color="#f59e0b" title="Queue Handler" style={{ flexShrink:0 }} />}
                         </div>
@@ -623,98 +581,6 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
                       </div>
                     );
                   })}
-                  {/* ── Non-Voice sub-group header ── */}
-                  {nonVoice.length > 0 && (
-                    <div style={{
-                      display: 'grid', gridTemplateColumns: gridCols,
-                      height: 22,
-                      background: `${st.rowBg}`,
-                      borderBottom: `1px solid ${st.hex}30`,
-                    }}>
-                      <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', padding: '0 10px 0 30px', gap: 6 }}>
-                        <div style={{ width: 11, height: 11, borderRadius: '50%', border: `2px solid ${st.hex}`, opacity: 0.7, flexShrink: 0 }} />
-                        <span style={{ fontSize: 9, fontWeight: 900, color: st.headerBg, textTransform: 'uppercase', letterSpacing: '0.15em', opacity: 0.8 }}>
-                          Non-Voice Agents
-                        </span>
-                        <span style={{ fontSize: 8, fontWeight: 700, color: st.headerBg, opacity: 0.5, background: `${st.hex}20`, borderRadius: 7, padding: '0 6px' }}>
-                          {nonVoice.length}
-                        </span>
-                  {/* ── Non-Voice agent rows ── */}
-                  {nonVoice.map((handler, rowIdx) => {
-                    const hs       = getHandlerStats(handler.id);
-                    const disabled = isShiftNearEnd(handler.shift);
-                    const rowTotal = hs.incidents + hs.sctasks + hs.calls;
-                    const isAlt    = (voice.length + rowIdx) % 2 === 1;
-                    const bg       = isAlt ? st.rowBgAlt : st.rowBg;
-                    const tc       = st.rowText;
-                    const sno      = globalIdx + voice.length + rowIdx + 1;
-                    const cellBorder = `1px solid ${st.hex}30`;
-
-                    return (
-                      <div
-                        key={handler.id}
-                        style={{
-                          display: 'grid', gridTemplateColumns: gridCols,
-                          height: rowH,
-                          background: disabled ? '#f1f5f9' : bg,
-                          borderBottom: cellBorder,
-                          opacity: disabled ? 0.4 : 1,
-                          pointerEvents: disabled ? 'none' : 'auto',
-                          transition: 'background 0.1s',
-                        }}
-                        onMouseEnter={e => !disabled && (e.currentTarget.style.filter = 'brightness(0.95)')}
-                        onMouseLeave={e => (e.currentTarget.style.filter = '')}
-                      >
-                        <div style={{ display:'flex', alignItems:'center', justifyContent:'center', borderRight: cellBorder, fontSize: 10, fontWeight: 700, color: '#94a3b8', fontVariantNumeric:'tabular-nums' }}>
-                          {sno}
-                        </div>
-
-                        <div style={{ display:'flex', alignItems:'center', gap: 5, padding: '0 8px', borderRight: cellBorder, overflow:'hidden' }}>
-                          <div style={{ width: 10, height: 10, borderRadius: '50%', border: '2px solid #94a3b8', opacity: 0.5, flexShrink: 0 }} />
-                          <span style={{ fontSize: 13, fontWeight: 700, color: tc, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{handler.name}</span>
-                          {handler.isQH && <Shield size={10} color="#f59e0b" title="Queue Handler" style={{ flexShrink:0 }} />}
-                        </div>
-
-                        <div style={{ display:'flex', alignItems:'center', justifyContent:'center', borderRight: cellBorder }}>
-                          <span style={{ fontSize: 9, fontWeight: 900, color: st.headerBg, background: `${st.hex}20`, border: `1px solid ${st.hex}50`, borderRadius: 4, padding: '1px 6px', textTransform:'uppercase', letterSpacing:'0.1em', whiteSpace:'nowrap' }}>
-                            {st.label}
-                          </span>
-                        </div>
-
-                        <div style={{ display:'flex', alignItems:'center', justifyContent:'center', borderRight: cellBorder }}>
-                          <span style={{ fontSize: 10, fontWeight: 700, color: tc, fontVariantNumeric:'tabular-nums' }}>{handler.shift}</span>
-                        </div>
-
-                        <div style={{ borderRight: cellBorder, overflow:'hidden' }}>
-                          <EditCell value={hs.incidents} onChange={v => updateStat(handler.id, 'incidents', v)} flash={flashMap[`${handler.id}-incidents`] ?? null} textColor={tc} />
-                        </div>
-
-                        <div style={{ borderRight: cellBorder, overflow:'hidden' }}>
-                          <EditCell value={hs.sctasks} onChange={v => updateStat(handler.id, 'sctasks', v)} flash={flashMap[`${handler.id}-sctasks`] ?? null} textColor={tc} />
-                        </div>
-
-                        <div style={{ borderRight: cellBorder, overflow:'hidden' }}>
-                          <EditCell value={hs.calls} onChange={v => updateStat(handler.id, 'calls', v)} flash={flashMap[`${handler.id}-calls`] ?? null} textColor={tc} isCall onCallClick={() => { setCallData({ ...callData, handlerId: handler.id }); setIsCallModalOpen(true); }} />
-                        </div>
-
-                        <div style={{ borderRight: cellBorder, display:'flex', alignItems:'center', padding:'0 4px' }}>
-                          <input type="text" placeholder="Add note…" value={hs.comments} onChange={e => updateStat(handler.id, 'comments', e.target.value)} style={{ width:'100%', height:'100%', border:'none', outline:'none', background:'transparent', fontSize: 11, color: tc, padding:'0 4px' }} onFocus={e => (e.currentTarget.style.background = '#fff')} onBlur={e => (e.currentTarget.style.background = 'transparent')} />
-                        </div>
-
-                        <div style={{ display:'flex', alignItems:'center', justifyContent:'center' }}>
-                          <span style={{ fontSize: 13, fontWeight: 900, fontVariantNumeric:'tabular-nums', color: rowTotal > 0 ? st.headerBg : '#cbd5e1', background: rowTotal > 0 ? `${st.hex}20` : 'transparent', borderRadius: 4, padding: rowTotal > 0 ? '1px 8px' : '0' }}>
-                            {rowTotal || '—'}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-
-                      </div>
-                    </div>
-                  )}
-
-
                 </React.Fragment>
               );
             })}

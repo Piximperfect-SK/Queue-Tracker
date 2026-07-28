@@ -26,7 +26,6 @@ export interface Handler {
   id: string;
   name: string;
   isQH: boolean;
-  isVoice: boolean;
 }
 
 export interface RosterEntry {
