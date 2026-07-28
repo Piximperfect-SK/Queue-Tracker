@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Calendar, BarChart2, Settings, LogOut, Activity, Shield, Moon, Sun } from 'lucide-react';
+import { Calendar, BarChart2, Settings, LogOut, Activity, Shield, Moon, Sun, LayoutDashboard } from 'lucide-react';
 import { socket } from '../utils/socket';
 import { useTheme } from '../theme/ThemeContext';
 import { useRole } from '../auth/RoleContext';

@@ -14,6 +14,7 @@ import { setToken, clearToken, authHeaders } from './utils/authToken';
 import { RoleProvider, useRole } from './auth/RoleContext';
 import { ThemeProvider } from './theme/ThemeContext';
 import AdminPage from './pages/AdminPage';
+import HomePage from './pages/HomePage';
 import PageGuard from './components/PageGuard';
 
 const BACKEND = (import.meta.env.VITE_BACKEND_URL || '').replace(/\/$/, '');
@@ -599,9 +600,10 @@ const AppFrame: React.FC<{
 
       <div className="relative z-10 flex flex-col h-full">
         <Navbar currentUser={currentUser} onLogout={onLogout} onlineUsers={onlineUsers} />
-        <main className={`flex-1 w-full max-w-full mx-auto overflow-hidden ${isTracker ? 'px-0 py-0' : 'px-3 py-2'}`}>
+        <main className={`flex-1 w-full max-w-full mx-auto overflow-hidden ${isTracker || location.pathname==='/home' ? 'px-0 py-0' : 'px-3 py-2'}`}>
           <Routes>
             <Route path="/" element={<PageGuard page="roster"><RosterPage selectedDate={selectedDate} setSelectedDate={setSelectedDate} /></PageGuard>} />
+            <Route path="/home" element={<PageGuard page="admin"><HomePage /></PageGuard>} />
             <Route path="/tracker" element={<PageGuard page="stats"><TrackerPage selectedDate={selectedDate} setSelectedDate={setSelectedDate} /></PageGuard>} />
             <Route path="/settings" element={<PageGuard page="settings"><SettingsPage /></PageGuard>} />
             <Route path="/logs" element={<PageGuard page="logMonitor"><LogMonitorPage /></PageGuard>} />
