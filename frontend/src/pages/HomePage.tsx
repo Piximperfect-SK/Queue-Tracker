@@ -1,104 +1,14 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useRole } from '../auth/RoleContext';
 import type { Handler, RosterEntry, DailyStats } from '../types';
-import { TrendingUp } from 'lucide-react';
-import { Users } from 'lucide-react';
-import { PhoneCall } from 'lucide-react';
-import { FileText } from 'lucide-react';
-import { Activity } from 'lucide-react';
-import { ChevronLeft } from 'lucide-react';
-import { ChevronRight } from 'lucide-react';
-import { BarChart2 } from 'lucide-react';
-import { Award } from 'lucide-react';
-
-// ── amCharts 5 — sequential script loader ────────────────────────────────────
-const AM_SCRIPTS = [
-  'https://cdn.amcharts.com/lib/5/index.js',
-  'https://cdn.amcharts.com/lib/5/xy.js',
-  'https://cdn.amcharts.com/lib/5/percent.js',
-  'https://cdn.amcharts.com/lib/5/themes/Animated.js',
-];
-
-function loadAmCharts(): Promise<void> {
-  return new Promise((resolve) => {
-    // All already loaded
-    if ((window as any).am5 && (window as any).am5xy && (window as any).am5percent && (window as any).am5themes_Animated) {
-      resolve(); return;
-    }
-    const missing = AM_SCRIPTS.filter(src => !document.querySelector(`script[src="${src}"]`));
-    if (missing.length === 0) {
-      // Scripts in DOM but maybe not ready yet — poll
-      const poll = setInterval(() => {
-        if ((window as any).am5 && (window as any).am5xy && (window as any).am5percent && (window as any).am5themes_Animated) {
-          clearInterval(poll); resolve();
-        }
-      }, 50);
-      return;
-    }
-    let idx = 0;
-    const next = () => {
-      if (idx >= missing.length) {
-        resolve(); return;
-      }
-      const s = document.createElement('script');
-      s.src = missing[idx++];
-      s.onload = next;
-      s.onerror = next; // skip on error, chart will just not render
-      document.head.appendChild(s);
-    };
-    next();
-  });
-}
-
-// ── Chart container ───────────────────────────────────────────────────────────
-const AmChart: React.FC<{
-  id: string;
-  makeChart: (am5: any, am5xy: any, am5pct: any, am5th: any, root: any) => void;
-  data: any[];
-  style?: React.CSSProperties;
-}> = ({ id, makeChart, data, style }) => {
-  const mountedRef = useRef(false);
-  const disposeRef = useRef<(() => void) | null>(null);
-  const dataRef    = useRef(data);
-  dataRef.current  = data;
-
-  useEffect(() => {
-    mountedRef.current = true;
-    let disposed = false;
-
-    loadAmCharts().then(() => {
-      if (!mountedRef.current || disposed) return;
-      const el = document.getElementById(id);
-      if (!el) return;
-
-      // Dispose old root if any
-      if (disposeRef.current) { try { disposeRef.current(); } catch {} disposeRef.current = null; }
-
-      const am5   = (window as any).am5;
-      const am5xy = (window as any).am5xy;
-      const am5pct= (window as any).am5percent;
-      const am5th = (window as any).am5themes_Animated;
-      if (!am5 || !am5xy || !am5pct || !am5th) return;
-
-      try {
-        const root = am5.Root.new(id);
-        disposeRef.current = () => { try { root.dispose(); } catch {} };
-        makeChart(am5, am5xy, am5pct, am5th, root);
-      } catch (e) {
-        console.warn('amChart init error:', e);
-      }
-    });
-
-    return () => {
-      disposed = true;
-      mountedRef.current = false;
-      if (disposeRef.current) { try { disposeRef.current(); } catch {} disposeRef.current = null; }
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, data.length > 0, JSON.stringify(data.slice(0,3))]);
-
-  return <div id={id} style={{ width: '100%', height: '100%', ...style }} />;
-};
+import {
+  TrendingUp, Users, PhoneCall, FileText, Activity,
+  ChevronLeft, ChevronRight, BarChart2, Award,
+} from 'lucide-react';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, AreaChart, Area,
+} from 'recharts';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type FilterMode = 'day' | 'month' | 'year';
@@ -411,45 +321,17 @@ const HomePage: React.FC = () => {
             <div style={{flex:1,minHeight:0,padding:'4px 8px 8px'}}>
               {barData.length === 0
                 ? <NoData/>
-                : <AmChart
-                    id="chart-bar"
-                    data={barData}
-                    makeChart={(am5, am5xy, _pct, am5th, root) => {
-                      root.setThemes([am5th.default.new(root)]);
-                      const chart = root.container.children.push(am5xy.XYChart.new(root,{
-                        panX:false, panY:false, wheelX:'none', wheelY:'none',
-                      }));
-                      chart.set('paddingLeft',0); chart.set('paddingRight',8); chart.set('paddingTop',4); chart.set('paddingBottom',0);
-
-                      const xAxis = chart.xAxes.push(am5xy.CategoryAxis.new(root,{
-                        maxDeviation:0.1, categoryField:'label',
-                        renderer: am5xy.AxisRendererX.new(root,{minGridDistance:20,cellStartLocation:0.1,cellEndLocation:0.9}),
-                      }));
-                      const yAxis = chart.yAxes.push(am5xy.ValueAxis.new(root,{
-                        min:0, renderer:am5xy.AxisRendererY.new(root,{}),
-                      }));
-                      xAxis.get('renderer').labels.template.setAll({fontSize:10,fill:am5.color('#64748b'),fontWeight:'700'});
-                      yAxis.get('renderer').labels.template.setAll({fontSize:9,fill:am5.color('#94a3b8')});
-                      xAxis.get('renderer').grid.template.setAll({strokeOpacity:0});
-                      yAxis.get('renderer').grid.template.setAll({stroke:am5.color('#e2e8f0'),strokeOpacity:1});
-
-                      const mkSeries = (field:string, name:string, color:string) => {
-                        const s = chart.series.push(am5xy.ColumnSeries.new(root,{
-                          name, stacked:true, xAxis, yAxis,
-                          valueYField:field, categoryXField:'label',
-                          tooltip:am5.Tooltip.new(root,{labelText:'{name}: {valueY}'}),
-                        }));
-                        s.columns.template.setAll({fill:am5.color(color),stroke:am5.color(color),width:am5.percent(65)});
-                        return s;
-                      };
-                      const s1=mkSeries('inc','Incidents',INC_C);
-                      const s2=mkSeries('task','SC Tasks',TASK_C);
-                      const s3=mkSeries('calls','Calls',CALL_C);
-                      xAxis.data.setAll(barData);
-                      s1.data.setAll(barData); s2.data.setAll(barData); s3.data.setAll(barData);
-                      s1.appear(800); s2.appear(800); s3.appear(800); chart.appear(800,50);
-                    }}
-                  />
+                : <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={barData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                      <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#64748b', fontWeight: 700 }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                      <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e2e8f0' }} />
+                      <Bar dataKey="inc" name="Incidents" fill={INC_C} stackId="a" radius={[2,2,0,0]} />
+                      <Bar dataKey="task" name="SC Tasks" fill={TASK_C} stackId="a" radius={[2,2,0,0]} />
+                      <Bar dataKey="calls" name="Calls" fill={CALL_C} stackId="a" radius={[2,2,0,0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
               }
             </div>
           </div>
@@ -463,26 +345,28 @@ const HomePage: React.FC = () => {
             <div style={{flex:1,minHeight:0}}>
               {shiftDist.length === 0
                 ? <NoData msg="No roster data"/>
-                : <AmChart
-                    id="chart-donut"
-                    data={shiftDist}
-                    makeChart={(am5, _xy, am5pct, am5th, root) => {
-                      root.setThemes([am5th.default.new(root)]);
-                      const chart = root.container.children.push(am5pct.PieChart.new(root,{
-                        layout:root.verticalLayout, innerRadius:am5.percent(55),
-                        paddingTop:8, paddingBottom:8,
-                      }));
-                      const series = chart.series.push(am5pct.PieSeries.new(root,{
-                        valueField:'value', categoryField:'shift', alignLabels:false,
-                      }));
-                      series.labels.template.setAll({fontSize:9,text:'{category}',radius:4,fill:am5.color('#374151'),fontWeight:'700'});
-                      series.ticks.template.setAll({strokeOpacity:0.3});
-                      series.slices.template.setAll({strokeWidth:2,stroke:am5.color('#fff'),cornerRadius:3});
-                      series.set('colors', am5.ColorSet.new(root,{colors:SHIFT_PALETTE.map(c=>am5.color(c))}));
-                      series.data.setAll(shiftDist);
-                      series.appear(800); chart.appear(800,50);
-                    }}
-                  />
+                : <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={shiftDist}
+                        cx="50%" cy="50%"
+                        innerRadius={55}
+                        outerRadius={85}
+                        dataKey="value"
+                        nameKey="shift"
+                        paddingAngle={2}
+                        strokeWidth={2}
+                        stroke="#fff"
+                        label={({ shift }) => `${shift}`}
+                        labelLine={false}
+                      >
+                        {shiftDist.map((entry, i) => (
+                          <Cell key={entry.shift} fill={SHIFT_PALETTE[i % SHIFT_PALETTE.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e2e8f0' }} />
+                    </PieChart>
+                  </ResponsiveContainer>
               }
             </div>
           </div>
@@ -539,49 +423,26 @@ const HomePage: React.FC = () => {
             <div style={{flex:1,minHeight:0,padding:'4px 8px 8px'}}>
               {barData.length < 2
                 ? <NoData msg="Need 2+ data points"/>
-                : <AmChart
-                    id="chart-line"
-                    data={barData}
-                    makeChart={(am5, am5xy, _pct, am5th, root) => {
-                      root.setThemes([am5th.default.new(root)]);
-                      const chart = root.container.children.push(am5xy.XYChart.new(root,{
-                        panX:true, panY:false, wheelX:'panX', wheelY:'zoomX',
-                        cursor:am5xy.XYCursor.new(root,{behavior:'none'}),
-                      }));
-                      chart.set('paddingLeft',0); chart.set('paddingRight',8); chart.set('paddingTop',4); chart.set('paddingBottom',0);
-
-                      const xAxis = chart.xAxes.push(am5xy.CategoryAxis.new(root,{
-                        maxDeviation:0.2, categoryField:'label',
-                        renderer:am5xy.AxisRendererX.new(root,{minGridDistance:30}),
-                      }));
-                      const yAxis = chart.yAxes.push(am5xy.ValueAxis.new(root,{
-                        min:0, renderer:am5xy.AxisRendererY.new(root,{}),
-                      }));
-                      xAxis.get('renderer').labels.template.setAll({fontSize:10,fill:am5.color('#64748b'),fontWeight:'700'});
-                      yAxis.get('renderer').labels.template.setAll({fontSize:9,fill:am5.color('#94a3b8')});
-                      yAxis.get('renderer').grid.template.setAll({stroke:am5.color('#e2e8f0'),strokeOpacity:1});
-                      xAxis.get('renderer').grid.template.setAll({strokeOpacity:0});
-
-                      const mkLine = (field:string, name:string, color:string) => {
-                        const s = chart.series.push(am5xy.SmoothedXLineSeries.new(root,{
-                          name, xAxis, yAxis, valueYField:field, categoryXField:'label',
-                          tooltip:am5.Tooltip.new(root,{labelText:'{name}: {valueY}'}),
-                        }));
-                        s.set('stroke', am5.color(color));
-                        s.set('fill',   am5.color(color));
-                        s.strokes.template.setAll({strokeWidth:2});
-                        const grad = am5.LinearGradient.new(root,{stops:[{color:am5.color(color),opacity:0.25},{color:am5.color(color),opacity:0.02}],rotation:90});
-                        s.fills.template.setAll({fillGradient:grad,visible:true});
-                        s.bullets.push(()=>am5.Bullet.new(root,{sprite:am5.Circle.new(root,{radius:3,fill:am5.color(color),stroke:am5.color('#fff'),strokeWidth:1.5})}));
-                        return s;
-                      };
-                      const sl = mkLine('inc','Incidents',INC_C);
-                      const sc = mkLine('calls','Calls',CALL_C);
-                      xAxis.data.setAll(barData);
-                      sl.data.setAll(barData); sc.data.setAll(barData);
-                      sl.appear(800); sc.appear(800); chart.appear(800,50);
-                    }}
-                  />
+                : <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={barData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="colorInc" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor={INC_C} stopOpacity={0.25}/>
+                          <stop offset="95%" stopColor={INC_C} stopOpacity={0.02}/>
+                        </linearGradient>
+                        <linearGradient id="colorCalls" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor={CALL_C} stopOpacity={0.25}/>
+                          <stop offset="95%" stopColor={CALL_C} stopOpacity={0.02}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                      <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#64748b', fontWeight: 700 }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                      <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e2e8f0' }} />
+                      <Area type="monotone" dataKey="inc" name="Incidents" stroke={INC_C} fill="url(#colorInc)" strokeWidth={2} dot={{ r: 3, fill: INC_C, stroke: '#fff', strokeWidth: 1.5 }} />
+                      <Area type="monotone" dataKey="calls" name="Calls" stroke={CALL_C} fill="url(#colorCalls)" strokeWidth={2} dot={{ r: 3, fill: CALL_C, stroke: '#fff', strokeWidth: 1.5 }} />
+                    </AreaChart>
+                  </ResponsiveContainer>
               }
             </div>
           </div>
