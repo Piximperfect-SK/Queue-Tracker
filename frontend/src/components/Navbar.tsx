@@ -76,6 +76,12 @@ const Navbar: React.FC<NavbarProps> = ({ currentUser, onLogout, onlineUsers }) =
             </div>
 
             <div className="flex space-x-0.5">
+              {pages.admin && (
+                <Link to="/home" className="nav-item px-3 py-1.5 rounded-xl text-[10.5px] font-black uppercase tracking-widest text-white/80 hover:text-white hover:bg-[#393E46] transition-all flex items-center space-x-2">
+                  <LayoutDashboard size={14} />
+                  <span>Home</span>
+                </Link>
+              )}
               {pages.roster && (
                 <Link to="/" className="nav-item px-3 py-1.5 rounded-xl text-[10.5px] font-black uppercase tracking-widest text-white/80 hover:text-white hover:bg-[#393E46] transition-all flex items-center space-x-2">
                   <Calendar size={14} />
