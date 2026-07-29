@@ -77,8 +77,8 @@ const HomePage: React.FC = () => {
     return () => clearInterval(id);
   }, []);
 
-  // ── Handler lookup map — keyed by id for O(1) lookup ─────────────────────
-  const handlerMap = useMemo(() => {
+  // ── Agent lookup map — keyed by id for O(1) lookup ──────────────────────
+  const agentMap = useMemo(() => {
     const m = new Map<string, string>();
     handlers.forEach(h => m.set(h.id, h.name));
     return m;
@@ -96,8 +96,8 @@ const HomePage: React.FC = () => {
   const totalCalls = filteredStats.reduce((a,s) => a + Number(s.calls    ||0), 0);
   const grandTotal = totalInc + totalTask + totalCalls;
 
-  // ── Active handler count — unique handlers with non-leave shift in period ──
-  const activeHandlerCount = useMemo(() => {
+  // ── Active agent count — unique agents with non-leave shift in period ──
+  const activeAgentCount = useMemo(() => {
     if (mode === 'day') {
       return new Set(
         roster.filter(r => r.date === selectedDay && !LEAVE_TYPES.has(r.shift)).map(r => r.handlerId)
@@ -120,8 +120,8 @@ const HomePage: React.FC = () => {
     return Object.entries(map)
       .sort((a,b) => b[1]-a[1])
       .slice(0,5)
-      .map(([id,total]) => ({ name: handlerMap.get(id) || `ID:${id.slice(0,6)}`, total }));
-  }, [filteredStats, handlerMap]);
+      .map(([id,total]) => ({ name: agentMap.get(id) || `ID:${id.slice(0,6)}`, total }));
+  }, [filteredStats, agentMap]);
 
   // ── Bar chart data ────────────────────────────────────────────────────────
   const barData = useMemo(() => {
@@ -129,7 +129,7 @@ const HomePage: React.FC = () => {
       // Per agent for the selected day
       return filteredStats
         .map(s => ({
-          label: (handlerMap.get(s.handlerId) || '').split(' ')[0] || `?${s.handlerId.slice(0,4)}`,
+          label: (agentMap.get(s.handlerId) || '').split(' ')[0] || `?${s.handlerId.slice(0,4)}`,
           inc:   Number(s.incidents||0),
           task:  Number(s.sctasks  ||0),
           calls: Number(s.calls    ||0),
@@ -162,7 +162,7 @@ const HomePage: React.FC = () => {
     return Object.entries(months)
       .sort(([a],[b]) => a.localeCompare(b))
       .map(([m,v]) => ({ label: MONTH_NAMES[parseInt(m.slice(5))-1], ...v }));
-  }, [filteredStats, stats, handlerMap, mode, selectedMonth, selectedYear]);
+  }, [filteredStats, stats, agentMap, mode, selectedMonth, selectedYear]);
 
   // ── Shift distribution ────────────────────────────────────────────────────
   const shiftDist = useMemo(() => {
@@ -290,12 +290,12 @@ const HomePage: React.FC = () => {
 
         {/* Row 1 — KPI cards */}
         <div style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:10}}>
-          <KpiCard label="Active Handlers" value={activeHandlerCount} sub={mode==='day'?'on shift today':'unique in period'} Icon={Users}      color="#0f172a" bg="#f1f5f9" border="#e2e8f0"/>
-          <KpiCard label="Total Handlers"  value={handlers.length}   sub="registered"                                      Icon={Users}      color="#475569" bg="#f8fafc" border="#e2e8f0"/>
+          <KpiCard label="Active Agents" value={activeAgentCount} sub={mode==='day'?'on shift today':'unique in period'} Icon={Users}      color="#0f172a" bg="#f1f5f9" border="#e2e8f0"/>
+          <KpiCard label="Total Agents"  value={handlers.length}   sub="registered"                                      Icon={Users}      color="#475569" bg="#f8fafc" border="#e2e8f0"/>
           <KpiCard label="Incidents"       value={totalInc}          sub="logged"                                          Icon={FileText}   color="#2563eb" bg="#dbeafe" border="#bfdbfe"/>
           <KpiCard label="SC Tasks"        value={totalTask}         sub="completed"                                       Icon={Activity}   color="#b45309" bg="#fef9c3" border="#fde68a"/>
           <KpiCard label="Calls"           value={totalCalls}        sub="handled"                                         Icon={PhoneCall}  color="#00ADB5" bg="#f0fdfa" border="#99f6e4"/>
-          <KpiCard label="Avg per Agent"   value={activeHandlerCount?+(grandTotal/activeHandlerCount).toFixed(1):0} sub="tickets+calls" Icon={TrendingUp} color="#7c3aed" bg="#ede9fe" border="#c4b5fd"/>
+          <KpiCard label="Avg per Agent"   value={activeAgentCount?+(grandTotal/activeAgentCount).toFixed(1):0} sub="tickets+calls" Icon={TrendingUp} color="#7c3aed" bg="#ede9fe" border="#c4b5fd"/>
         </div>
 
         {/* Row 2 — Stacked bar + Donut */}
