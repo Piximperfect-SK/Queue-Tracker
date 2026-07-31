@@ -511,6 +511,7 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
       const rowErrors: string[] = [];
       const lookup = new Map<string, string>();
       let statsImportedCount = 0;
+      let pendingStats: DailyStats[] | null = null;
       handlers.forEach(h => lookup.set(h.name.trim().toLowerCase(), h.id));
 
       if (dateColumnIndices.length > 0) {
@@ -596,24 +597,46 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
           const existingStats: DailyStats[] = JSON.parse(localStorage.getItem('stats') || '[]');
           const mergedStats = mergeStatsEntries(existingStats, parsedStats);
           localStorage.setItem('stats', JSON.stringify(mergedStats));
-          syncData.updateStats(mergedStats);
+          pendingStats = mergedStats;
         }
         statsImportedCount = parsedStats.length;
       }
 
       if (!parsedEntries.length) { setImportStatus({ message: 'No valid entries found.', tone: 'error' }); return; }
 
+      // Wrap each syncData call in a promise so we can tell whether the
+      // write actually reached MongoDB (permission failures, payload
+      // rejects, etc. no longer look identical to success).
+      const ackErrors: string[] = [];
+      const withAck = (label: string, fn: (cb: (res: { ok: boolean; error?: string }) => void) => void) =>
+        new Promise<void>(resolve => {
+          const timer = setTimeout(() => { ackErrors.push(`${label}: no response from server (timed out)`); resolve(); }, 8000);
+          fn(res => {
+            clearTimeout(timer);
+            if (!res?.ok) ackErrors.push(`${label}: ${res?.error || 'failed'}`);
+            resolve();
+          });
+        });
+
       const merged = mergeRosterEntries(roster, parsedEntries);
-      setRoster(merged); localStorage.setItem('roster', JSON.stringify(merged)); syncData.updateRoster(merged);
+      setRoster(merged); localStorage.setItem('roster', JSON.stringify(merged));
+      await withAck('Roster', cb => syncData.updateRoster(merged, cb));
+
       if (newHandlers.length) {
         const uh = [...handlers, ...newHandlers];
-        setHandlers(uh); localStorage.setItem('handlers', JSON.stringify(uh)); syncData.updateHandlers(uh);
+        setHandlers(uh); localStorage.setItem('handlers', JSON.stringify(uh));
+        await withAck('Handlers', cb => syncData.updateHandlers(uh, cb));
       }
+      if (pendingStats) {
+        await withAck('Stats', cb => syncData.updateStats(pendingStats!, cb));
+      }
+
       const dates = parsedEntries.map(e => e.date).sort();
       if (dates.length) setSelectedDate(dates[0]);
-      const tone: ImportFeedback['tone'] = rowErrors.length ? 'warning' : 'success';
-      setImportStatus({ message: `Imported ${parsedEntries.length} roster entries${statsImportedCount ? ` + ${statsImportedCount} stats rows` : ''}.${newHandlers.length?` +${newHandlers.length} new agent(s).`:''}${rowErrors.length?` (${rowErrors.length} skipped)`:''}`, tone });
-      addLog('Import Roster', `Imported ${parsedEntries.length} roster entries + ${statsImportedCount} stats rows from ${file.name}`, 'positive');
+      const tone: ImportFeedback['tone'] = ackErrors.length ? 'error' : rowErrors.length ? 'warning' : 'success';
+      const savedMsg = ackErrors.length ? ` NOT saved to server — ${ackErrors.join('; ')}` : ' Saved to server.';
+      setImportStatus({ message: `Imported ${parsedEntries.length} roster entries${statsImportedCount ? ` + ${statsImportedCount} stats rows` : ''}.${newHandlers.length?` +${newHandlers.length} new agent(s).`:''}${rowErrors.length?` (${rowErrors.length} skipped)`:''}${savedMsg}`, tone });
+      addLog('Import Roster', `Imported ${parsedEntries.length} roster entries + ${statsImportedCount} stats rows from ${file.name}${ackErrors.length ? ` — SYNC FAILED: ${ackErrors.join('; ')}` : ''}`, ackErrors.length ? 'negative' : 'positive');
     } catch (err) {
       setImportStatus({ message: `Import failed: ${err instanceof Error ? err.message : 'Unknown'}`, tone: 'error' });
     } finally { setIsImportingRoster(false); }

@@ -238,7 +238,10 @@ app.use('/api', twoFactorRouter);
 
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: corsOptions
+  cors: corsOptions,
+  // Default is 1MB — a several-thousand-row roster/stats import can get
+  // close to that in a single emit. Give it headroom.
+  maxHttpBufferSize: 8e6,
 });
 setIo(io);
 
@@ -445,32 +448,56 @@ io.on('connection', async (socket) => {
     console.log(`${cleanName} joined. Online:`, Array.from(onlineUsers.values()));
   });
 
-  socket.on('update_handlers', async (handlers) => {
-    if (!(await checkSocketAction(socket, 'editHandlers'))) return;
-    // Sanitize handler names
-    const cleanHandlers = handlers.map(a => ({ ...a, name: sanitize(a.name) }));
-    await State.updateOne({ key: 'global' }, { $set: { handlers: cleanHandlers } });
-    socket.broadcast.emit('handlers_updated', cleanHandlers);
+  socket.on('update_handlers', async (handlers, cb) => {
+    if (!(await checkSocketAction(socket, 'editHandlers'))) { if (typeof cb === 'function') cb({ ok: false, error: 'Forbidden: missing permission editHandlers' }); return; }
+    try {
+      // Sanitize handler names
+      const cleanHandlers = handlers.map(a => ({ ...a, name: sanitize(a.name) }));
+      await State.updateOne({ key: 'global' }, { $set: { handlers: cleanHandlers } });
+      socket.broadcast.emit('handlers_updated', cleanHandlers);
+      if (typeof cb === 'function') cb({ ok: true });
+    } catch (err) {
+      console.error('update_handlers failed:', err);
+      if (typeof cb === 'function') cb({ ok: false, error: err.message });
+    }
   });
 
   // Legacy support for old 'update_agents' event
-  socket.on('update_agents', async (agents) => {
-    if (!(await checkSocketAction(socket, 'editHandlers'))) return;
-    const cleanAgents = agents.map(a => ({ ...a, name: sanitize(a.name) }));
-    await State.updateOne({ key: 'global' }, { $set: { handlers: cleanAgents } });
-    socket.broadcast.emit('handlers_updated', cleanAgents);
+  socket.on('update_agents', async (agents, cb) => {
+    if (!(await checkSocketAction(socket, 'editHandlers'))) { if (typeof cb === 'function') cb({ ok: false, error: 'Forbidden: missing permission editHandlers' }); return; }
+    try {
+      const cleanAgents = agents.map(a => ({ ...a, name: sanitize(a.name) }));
+      await State.updateOne({ key: 'global' }, { $set: { handlers: cleanAgents } });
+      socket.broadcast.emit('handlers_updated', cleanAgents);
+      if (typeof cb === 'function') cb({ ok: true });
+    } catch (err) {
+      console.error('update_agents failed:', err);
+      if (typeof cb === 'function') cb({ ok: false, error: err.message });
+    }
   });
 
-  socket.on('update_roster', async (roster) => {
-    if (!(await checkSocketAction(socket, 'editRoster'))) return;
-    await State.updateOne({ key: 'global' }, { $set: { roster: roster } });
-    socket.broadcast.emit('roster_updated', roster);
+  socket.on('update_roster', async (roster, cb) => {
+    if (!(await checkSocketAction(socket, 'editRoster'))) { if (typeof cb === 'function') cb({ ok: false, error: 'Forbidden: missing permission editRoster' }); return; }
+    try {
+      await State.updateOne({ key: 'global' }, { $set: { roster: roster } });
+      socket.broadcast.emit('roster_updated', roster);
+      if (typeof cb === 'function') cb({ ok: true });
+    } catch (err) {
+      console.error('update_roster failed:', err);
+      if (typeof cb === 'function') cb({ ok: false, error: err.message });
+    }
   });
 
-  socket.on('update_stats', async (stats) => {
-    if (!(await checkSocketAction(socket, 'editRoster'))) return;
-    await State.updateOne({ key: 'global' }, { $set: { stats: stats } });
-    socket.broadcast.emit('stats_updated', stats);
+  socket.on('update_stats', async (stats, cb) => {
+    if (!(await checkSocketAction(socket, 'editRoster'))) { if (typeof cb === 'function') cb({ ok: false, error: 'Forbidden: missing permission editRoster' }); return; }
+    try {
+      await State.updateOne({ key: 'global' }, { $set: { stats: stats } });
+      socket.broadcast.emit('stats_updated', stats);
+      if (typeof cb === 'function') cb({ ok: true });
+    } catch (err) {
+      console.error('update_stats failed:', err);
+      if (typeof cb === 'function') cb({ ok: false, error: err.message });
+    }
   });
 
   socket.on('add_log', async (logEntry) => {

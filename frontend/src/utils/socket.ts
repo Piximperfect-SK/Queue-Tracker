@@ -22,10 +22,12 @@ export const socket = io(SOCKET_URL, {
   auth: (cb) => cb({ token: getToken() }),
 });
 
+type Ack = (res: { ok: boolean; error?: string }) => void;
+
 export const syncData = {
   join: (username: string) => socket.emit('join', { username }),
-  updateHandlers: (handlers: Handler[]) => socket.emit('update_handlers', handlers),
-  updateRoster: (roster: RosterEntry[]) => socket.emit('update_roster', roster),
-  updateStats: (stats: DailyStats[]) => socket.emit('update_stats', stats),
+  updateHandlers: (handlers: Handler[], cb?: Ack) => socket.emit('update_handlers', handlers, cb),
+  updateRoster: (roster: RosterEntry[], cb?: Ack) => socket.emit('update_roster', roster, cb),
+  updateStats: (stats: DailyStats[], cb?: Ack) => socket.emit('update_stats', stats, cb),
   addLog: (logEntry: LogEntry) => socket.emit('add_log', logEntry),
 };
