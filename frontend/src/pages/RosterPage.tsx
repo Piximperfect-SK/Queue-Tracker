@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { MOCK_HANDLERS, SHIFTS, MOCK_ROSTER } from '../data/mockData';
 import { GripVertical, Plus, X, Trash2, AlertCircle, Upload, ChevronLeft, ChevronRight, Shield, Lock } from 'lucide-react';
-import type { Handler, RosterEntry, ShiftType } from '../types';
+import type { Handler, RosterEntry, ShiftType, DailyStats } from '../types';
 import { addLog, saveLogsFromServer, saveSingleLogFromServer } from '../utils/logger';
 import { socket, syncData } from '../utils/socket';
 import { addLogForDate } from '../utils/logger';
@@ -144,6 +144,14 @@ const mergeRosterEntries = (base: RosterEntry[], additions: RosterEntry[]) => {
   const merged = [...base];
   additions.forEach(e => {
     const idx = merged.findIndex(r => r.handlerId === e.handlerId && r.date === e.date);
+    if (idx > -1) merged[idx] = e; else merged.push(e);
+  });
+  return merged;
+};
+const mergeStatsEntries = (base: DailyStats[], additions: DailyStats[]) => {
+  const merged = [...base];
+  additions.forEach(e => {
+    const idx = merged.findIndex(s => s.handlerId === e.handlerId && s.date === e.date);
     if (idx > -1) merged[idx] = e; else merged.push(e);
   });
   return merged;
@@ -478,7 +486,8 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
     try {
       const ab = await file.arrayBuffer();
       const wb = XLSX.read(ab, { type: 'array' });
-      const ws = wb.Sheets[wb.SheetNames[0]];
+      const preferredSheetName = wb.SheetNames.find(n => n.trim().toLowerCase() === 'import ready');
+      const ws = wb.Sheets[preferredSheetName ?? wb.SheetNames[0]];
       if (!ws) { setImportStatus({ message: 'No sheets found.', tone: 'error' }); return; }
       
       // Get raw data to detect format
@@ -501,6 +510,7 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
       const parsedEntries: RosterEntry[] = [];
       const rowErrors: string[] = [];
       const lookup = new Map<string, string>();
+      let statsImportedCount = 0;
       handlers.forEach(h => lookup.set(h.name.trim().toLowerCase(), h.id));
 
       if (dateColumnIndices.length > 0) {
@@ -539,28 +549,56 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
           return req.every(t => k.includes(t)) && !forb.some(t => k.includes(t));
         };
 
+        const parsedStats: DailyStats[] = [];
+
         rows.forEach((row, ri) => {
           const entries = Object.entries(row);
           if (entries.every(([, v]) => normalizeCellValue(v) === '')) return;
-          const hCell = entries.find(([k]) => matchKey(k,['agent'])) ?? entries.find(([k]) => matchKey(k,['handler'])) ?? entries.find(([k]) => matchKey(k,['name'],['shift']));
-          const sCell = entries.find(([k]) => matchKey(k,['shift'])) ?? entries.find(([k]) => matchKey(k,['status']));
+          const hCell = entries.find(([k]) => matchKey(k,['agent'])) ?? entries.find(([k]) => matchKey(k,['handler'])) ?? entries.find(([k]) => matchKey(k,['employee'])) ?? entries.find(([k]) => matchKey(k,['name'],['shift']));
+          const sCell = entries.find(([k]) => matchKey(k,['shift'],['timing'])) ?? entries.find(([k]) => matchKey(k,['status']));
+          const tCell = entries.find(([k]) => matchKey(k,['timing']));
           const dCell = entries.find(([k]) => matchKey(k,['date'])) ?? entries.find(([k]) => matchKey(k,['day']));
+          const incCell  = entries.find(([k]) => matchKey(k,['incident']));
+          const reqCell  = entries.find(([k]) => matchKey(k,['request']) || matchKey(k,['sctask']));
+          const callCell = entries.find(([k]) => matchKey(k,['call']));
 
           const name = normalizeCellValue(hCell?.[1]);
           const rawShift = normalizeCellValue(sCell?.[1]);
+          const rawTiming = normalizeCellValue(tCell?.[1]);
           const date = parseExcelDate(dCell?.[1]);
           const label = `Row ${ri+2}`;
 
           if (!name)    { rowErrors.push(`${label}: name missing`);  return; }
           if (!date)    { rowErrors.push(`${label}: invalid date`);   return; }
-          if (!rawShift){ rowErrors.push(`${label}: shift missing`);  return; }
+          if (!rawShift && !rawTiming) { rowErrors.push(`${label}: shift missing`);  return; }
 
-          const shift = parseShiftFromText(rawShift);
+          // Shift Timing (e.g. "06:00 AM to 03:00 PM") is more precise than
+          // the free-text Shift label when both are present.
+          const shift = parseShiftFromText(rawTiming || rawShift);
           const key = name.toLowerCase();
           let hid = lookup.get(key);
           if (!hid) { hid = createAgentId(); lookup.set(key, hid); newHandlers.push({ id: hid, name, isQH: false }); }
           parsedEntries.push({ handlerId: hid, date, shift });
+
+          if (incCell || reqCell || callCell) {
+            parsedStats.push({
+              handlerId: hid,
+              date,
+              incidents: Number(normalizeCellValue(incCell?.[1])) || 0,
+              sctasks: Number(normalizeCellValue(reqCell?.[1])) || 0,
+              calls: Number(normalizeCellValue(callCell?.[1])) || 0,
+              comments: '',
+            });
+          }
         });
+
+        if (parsedStats.length) {
+          const existingStats: DailyStats[] = JSON.parse(localStorage.getItem('stats') || '[]');
+          const mergedStats = mergeStatsEntries(existingStats, parsedStats);
+          localStorage.setItem('stats', JSON.stringify(mergedStats));
+          syncData.updateStats(mergedStats);
+        }
+        statsImportedCount = parsedStats.length;
       }
 
       if (!parsedEntries.length) { setImportStatus({ message: 'No valid entries found.', tone: 'error' }); return; }
@@ -574,8 +612,8 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
       const dates = parsedEntries.map(e => e.date).sort();
       if (dates.length) setSelectedDate(dates[0]);
       const tone: ImportFeedback['tone'] = rowErrors.length ? 'warning' : 'success';
-      setImportStatus({ message: `Imported ${parsedEntries.length} entries.${newHandlers.length?` +${newHandlers.length} new.`:''}${rowErrors.length?` (${rowErrors.length} skipped)`:''}`, tone });
-      addLog('Import Roster', `Imported ${parsedEntries.length} from ${file.name}`, 'positive');
+      setImportStatus({ message: `Imported ${parsedEntries.length} roster entries${statsImportedCount ? ` + ${statsImportedCount} stats rows` : ''}.${newHandlers.length?` +${newHandlers.length} new agent(s).`:''}${rowErrors.length?` (${rowErrors.length} skipped)`:''}`, tone });
+      addLog('Import Roster', `Imported ${parsedEntries.length} roster entries + ${statsImportedCount} stats rows from ${file.name}`, 'positive');
     } catch (err) {
       setImportStatus({ message: `Import failed: ${err instanceof Error ? err.message : 'Unknown'}`, tone: 'error' });
     } finally { setIsImportingRoster(false); }
@@ -610,21 +648,39 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
     [/2.?00\s*[Pp][Mm].*11.?00\s*[Pp][Mm]/, '2PM-11PM'],
     [/10.?00\s*[Pp][Mm].*7.?00\s*[Aa][Mm]/, '10PM-7AM'],
     [/9.?00\s*[Pp][Mm].*6.?00\s*[Aa][Mm]/,  '10PM-7AM'],
+    // Extra windows seen in historical exports that aren't one of the 5
+    // standard shifts — kept as their own custom ShiftType codes (the app
+    // supports arbitrary strings) rather than forced into the nearest one.
+    [/10.?00\s*[Aa][Mm].*7.?00\s*[Pp][Mm]/, '10AM-7PM'],
+    [/4.?00\s*[Pp][Mm].*1.?00\s*[Aa][Mm]/,  '4PM-1AM'],
+    [/6.?00\s*[Pp][Mm].*3.?00\s*[Aa][Mm]/,  '6PM-3AM'],
   ];
 
   const parseShiftFromText = (text: string): ShiftType => {
     const t = text.trim().toUpperCase();
-    if (!t || t === 'WO' || t === 'WEEK OFF' || t === 'WEEKOFF') return 'WeekOff';
+    if (!t) return 'WeekOff';
+    if (t === 'WO' || t === 'WEEK OFF' || t === 'WEEKOFF' || t === 'WEEKOFF ') return 'WeekOff';
     if (t === 'PL' || t === 'PRIVILEGE LEAVE' || t === 'PLANNED LEAVE') return 'Planned Leave';
-    if (t === 'ML' || t === 'MEDICAL LEAVE')   return 'Medical Leave';
+    if (t === 'ML' || t === 'MEDICAL LEAVE' || t === 'SICK LEAVE')   return 'Medical Leave';
     if (t === 'EL' || t === 'EMERGENCY LEAVE' || t === 'EARNED LEAVE') return 'Earned Leave';
     if (t === 'UL' || t === 'UNPAID LEAVE' || t === 'UNPLANNED LEAVE')    return 'Unplanned Leave';
     if (t === 'CO' || t === 'COMP OFF' || t === 'COMPENSATORY' || t === 'COMPLIMENTARY OFF') return 'Complimentary Off';
     if (t === 'MID-LEAVE' || t === 'MID LEAVE') return 'MID-LEAVE';
+    // Time ranges (e.g. "06:00 AM to 03:00 PM") are the most reliable signal
+    // when present — check these before the coarse shift-name synonyms below.
     for (const [regex, shift] of TIME_TO_SHIFT) {
       if (regex.test(text)) return shift;
     }
-    return 'WeekOff';
+    // Coarse shift-name synonyms for rows with no explicit time range.
+    // "Afternoon" alone is ambiguous between 3 different standard shifts in
+    // this org's data, so it — and anything else unrecognized (Noon Night,
+    // Half Day, OJT, bare "Leave", etc.) — is preserved as its own custom
+    // ShiftType instead of being guessed. Guessing wrong here would
+    // misclassify a worked shift as a day off, which is worse than an
+    // unmapped label the person can reconcile in the Roster view.
+    if (t === 'MORNING' || t === 'MORNING SHIFT' || t === 'MS') return '6AM-3PM';
+    if (t === 'NIGHT' || t === 'NIGHT SHIFT' || t === 'NS') return '10PM-7AM';
+    return text.trim();
   };
 
   const parseScreenshotWithAI = async () => {
