@@ -1,4 +1,5 @@
 import express from 'express';
+import rateLimit from 'express-rate-limit';
 import { authenticator } from 'otplib';
 import qrcode from 'qrcode';
 import crypto from 'crypto';
@@ -17,8 +18,20 @@ import { getIo } from '../realtime.js';
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_jwt_secret';
 
-// Encryption key for pending user secrets (use environment variable in production)
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || crypto.randomBytes(32).toString('hex').slice(0, 32);
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many attempts. Try again later.' },
+});
+
+// Encryption key for pending user secrets. In production this must be set,
+// otherwise anyone who can restart the service would effectively rotate the
+// key and invalidate all pending setup secrets.
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || (process.env.NODE_ENV === 'production'
+  ? (() => { throw new Error('ENCRYPTION_KEY must be set in production'); })()
+  : crypto.randomBytes(32).toString('hex').slice(0, 32));
 const IV_LENGTH = 16;
 
 function encrypt(text) {
@@ -71,7 +84,7 @@ async function issueSession(res, fullName, role) {
 }
 
 // 1. Check if user exists
-router.post('/lookup', async (req, res) => {
+router.post('/lookup', authLimiter, async (req, res) => {
   try {
     const { fullName } = req.body;
     if (!fullName || !fullName.trim()) {
@@ -101,7 +114,7 @@ router.post('/lookup', async (req, res) => {
 });
 
 // 2. Existing user login with TOTP
-router.post('/login/totp', async (req, res) => {
+router.post('/login/totp', authLimiter, async (req, res) => {
   try {
     const { fullName, code } = req.body;
     if (!fullName || !code) {
@@ -166,7 +179,7 @@ router.post('/login/totp', async (req, res) => {
 });
 
 // 3. New user: start 2FA setup
-router.post('/register/setup', async (req, res) => {
+router.post('/register/setup', authLimiter, async (req, res) => {
   try {
     const { fullName } = req.body;
     if (!fullName || !fullName.trim()) {
@@ -211,7 +224,7 @@ router.post('/register/setup', async (req, res) => {
 });
 
 // 4. New user: confirm 2FA setup
-router.post('/register/confirm', async (req, res) => {
+router.post('/register/confirm', authLimiter, async (req, res) => {
   try {
     const { fullName, code } = req.body;
     if (!fullName || !code) {

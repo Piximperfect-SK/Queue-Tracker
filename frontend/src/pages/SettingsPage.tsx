@@ -3,6 +3,7 @@ import { Trash2, ShieldCheck, FileText, Database, Settings as SettingsIcon, Aler
 import type { Handler } from '../types';
 import { addLog, downloadLogsForDate, downloadAllLogs, saveLogsFromServer, saveSingleLogFromServer } from '../utils/logger';
 import { socket, syncData } from '../utils/socket';
+import { getCachedInitialData } from '../utils/pageCache';
 import ConfirmModal from '../components/ConfirmModal';
 import { useRole } from '../auth/RoleContext';
 import { Link } from 'react-router-dom';
@@ -55,7 +56,21 @@ const SettingsPage: React.FC = () => {
       }
     });
 
-    if (socket.connected) socket.emit('get_initial_data');
+    const cached = getCachedInitialData();
+    if (cached) {
+      if (Array.isArray(cached.handlers || cached.agents)) {
+        const data = cached.handlers || cached.agents;
+        setHandlers(data.map(normalizeHandler));
+      }
+      if (Array.isArray(cached.customShifts)) {
+        setCustomShifts(cached.customShifts);
+      }
+      if (cached.logs) {
+        saveLogsFromServer(cached.logs);
+      }
+    } else if (socket.connected) {
+      socket.emit('get_initial_data');
+    }
 
     return () => {
       socket.off('handlers_updated', handleHandlers);

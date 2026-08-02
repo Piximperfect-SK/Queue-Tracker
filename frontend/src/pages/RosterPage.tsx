@@ -5,6 +5,7 @@ import { GripVertical, Plus, X, Trash2, AlertCircle, Upload, ChevronLeft, Chevro
 import type { Handler, RosterEntry, ShiftType } from '../types';
 import { addLog, saveLogsFromServer, saveSingleLogFromServer } from '../utils/logger';
 import { socket, syncData } from '../utils/socket';
+import { getCachedInitialData } from '../utils/pageCache';
 import { addLogForDate } from '../utils/logger';
 import { useRole } from '../auth/RoleContext';
 import {
@@ -382,7 +383,12 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
     socket.on('shift_qh_updated', onShiftQH);
     socket.on('log_added', ({ dateStr, logEntry }) => saveSingleLogFromServer(dateStr, logEntry));
     socket.on('init', onInit);
-    if (socket.connected) socket.emit('get_initial_data');
+    const cached = getCachedInitialData();
+    if (cached) {
+      onInit(cached);
+    } else if (socket.connected) {
+      socket.emit('get_initial_data');
+    }
     return () => {
       socket.off('handlers_updated', onHandlers);
       socket.off('roster_updated', onRoster);

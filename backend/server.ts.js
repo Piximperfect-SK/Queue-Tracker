@@ -13,7 +13,8 @@ import { fileURLToPath } from 'url';
 import { randomBytes } from 'crypto';
 import { seedAdmin } from './scripts/seedAdmin.js';
 import { seedAccessCodes } from './scripts/seedAccessCodes.js';
-import { checkSocketAction } from './middleware/permissions.js';
+import { checkSocketAction, requireAction } from './middleware/permissions.js';
+import { requireAuth } from './middleware/auth.js';
 import { setIo, registerSocketSession, unregisterSocketSession } from './realtime.js';
 import Session from './models/Session.js';
 
@@ -21,6 +22,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+app.disable('x-powered-by');
 
 // Trust proxy so we can get client IPs behind Render/Netlify proxies for accurate rate limiting
 app.set('trust proxy', 1);
@@ -363,13 +365,14 @@ const getFullState = async () => {
 };
 
 const enforceLogAuth = process.env.ENFORCE_LOG_DOWNLOAD_AUTH === 'true';
+const requireLogAccess = [requireAuth, requireAction('downloadLogs')];
 
-app.get('/download-logs/:date', async (req, res) => {
-  if (enforceLogAuth && (!req.user || req.user.role !== 'admin')) {
-    return res.status(403).send('Forbidden');
+app.get('/download-logs/:date', ...requireLogAccess, async (req, res) => {
+  const { date } = req.params;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return res.status(400).send('Invalid date');
   }
 
-  const { date } = req.params;
   const logs = await Log.find({ dateStr: date }).sort({ timestamp: 1 });
   
   if (logs.length === 0) {
@@ -382,8 +385,8 @@ app.get('/download-logs/:date', async (req, res) => {
   res.send(content);
 });
 
-app.get('/download-all-logs', async (req, res) => {
-  if (enforceLogAuth && (!req.user || req.user.role !== 'admin')) {
+app.get('/download-all-logs', ...requireLogAccess, async (req, res) => {
+  if (enforceLogAuth && req.user?.role !== 'admin') {
     return res.status(403).send('Forbidden');
   }
 

@@ -2,6 +2,7 @@ import { io } from 'socket.io-client';
 import type { Handler, RosterEntry, DailyStats } from '../types';
 import type { LogEntry } from '../types';
 import { getToken } from './authToken';
+import { getCachedInitialData, setCachedInitialData } from './pageCache';
 
 const SOCKET_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
 
@@ -17,6 +18,51 @@ export const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000,
   withCredentials: true,
   auth: (cb) => cb({ token: getToken() }),
+});
+
+socket.on('init', (db) => {
+  setCachedInitialData(db);
+});
+
+socket.on('handlers_updated', (handlers) => {
+  const cached = getCachedInitialData();
+  if (cached) {
+    cached.handlers = handlers;
+    cached.agents = handlers;
+    setCachedInitialData(cached);
+  }
+});
+
+socket.on('roster_updated', (roster) => {
+  const cached = getCachedInitialData();
+  if (cached) {
+    cached.roster = roster;
+    setCachedInitialData(cached);
+  }
+});
+
+socket.on('stats_updated', (stats) => {
+  const cached = getCachedInitialData();
+  if (cached) {
+    cached.stats = stats;
+    setCachedInitialData(cached);
+  }
+});
+
+socket.on('custom_shifts_updated', (customShifts) => {
+  const cached = getCachedInitialData();
+  if (cached) {
+    cached.customShifts = customShifts;
+    setCachedInitialData(cached);
+  }
+});
+
+socket.on('shift_qh_updated', (shiftQH) => {
+  const cached = getCachedInitialData();
+  if (cached) {
+    cached.shiftQH = shiftQH;
+    setCachedInitialData(cached);
+  }
 });
 
 type Ack = (res: { ok: boolean; error?: string; total?: number; handlers?: number; roster?: number }) => void;

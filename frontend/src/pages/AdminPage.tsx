@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
 import { authHeaders } from '../utils/authToken';
+import { getCachedAdminData, setCachedAdminData } from '../utils/pageCache';
 import type { PagePermissions, ActionPermissions } from '../auth/RoleContext';
 import { useRole } from '../auth/RoleContext';
 
@@ -147,30 +148,58 @@ const AdminPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const loadAll = useCallback(async () => {
+  const applyAdminData = useCallback((data: any) => {
+    if (!data) return;
+    if (data.codes) setCodes(data.codes);
+    if (data.perms) setPerms(data.perms);
+    if (data.sessions) setSessions(data.sessions);
+    if (data.twoFactorRecords) setTwoFactorRecords(data.twoFactorRecords);
+    if (data.pendingUsers) setPendingUsers(data.pendingUsers);
+    if (data.users) setUsers(data.users);
+    setUserRoleChanges({});
+    setDirty({});
+  }, []);
+
+  const fetchAdminData = useCallback(async () => {
+    const [codesRes, qhRes, assocRes, sessionsRes, twoFactorRes, pendingRes, usersRes] = await Promise.all([
+      api('/api/access/codes'),
+      api('/api/access/permissions/queue_handler'),
+      api('/api/access/permissions/associate'),
+      api('/api/access/sessions'),
+      api('/api/access/2fa/list'),
+      api('/api/access/pending'),
+      api('/api/roles'),
+    ]);
+
+    const nextState = {
+      codes: codesRes.codes,
+      perms: {
+        queue_handler: { pages: qhRes.pages, actions: qhRes.actions },
+        associate: { pages: assocRes.pages, actions: assocRes.actions },
+      },
+      sessions: sessionsRes.sessions || [],
+      twoFactorRecords: twoFactorRes.records || [],
+      pendingUsers: pendingRes || [],
+      users: usersRes.users || [],
+    };
+
+    applyAdminData(nextState);
+    setCachedAdminData(nextState);
+  }, [applyAdminData]);
+
+  const loadAll = useCallback(async ({ preferCache = false }: { preferCache?: boolean } = {}) => {
+    const cached = preferCache ? getCachedAdminData() : null;
+    if (cached) {
+      applyAdminData(cached);
+      setLoading(false);
+      void fetchAdminData().catch(() => {});
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
-      const [codesRes, qhRes, assocRes, sessionsRes, twoFactorRes, pendingRes, usersRes] = await Promise.all([
-        api('/api/access/codes'),
-        api('/api/access/permissions/queue_handler'),
-        api('/api/access/permissions/associate'),
-        api('/api/access/sessions'),
-        api('/api/access/2fa/list'),
-        api('/api/access/pending'),
-        api('/api/roles'),
-      ]);
-      setCodes(codesRes.codes);
-      setPerms({
-        queue_handler: { pages: qhRes.pages, actions: qhRes.actions },
-        associate: { pages: assocRes.pages, actions: assocRes.actions },
-      });
-      setSessions(sessionsRes.sessions || []);
-      setTwoFactorRecords(twoFactorRes.records || []);
-      setPendingUsers(pendingRes || []);
-      setUsers(usersRes.users || []);
-      setUserRoleChanges({});
-      setDirty({});
+      await fetchAdminData();
     } catch (err: any) {
       const isNetworkError = err instanceof TypeError || err?.message === 'Failed to fetch';
       setError(
@@ -181,9 +210,9 @@ const AdminPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [applyAdminData, fetchAdminData]);
 
-  useEffect(() => { loadAll(); }, [loadAll]);
+  useEffect(() => { loadAll({ preferCache: true }); }, [loadAll]);
 
   // Check and restrict tab access based on permissions
   useEffect(() => {
@@ -393,7 +422,7 @@ const AdminPage: React.FC = () => {
 
   const handleDeleteUser = async () => {
     if (!deleteTarget) return;
-    const { _id, fullName } = deleteTarget;
+    const { _id } = deleteTarget;
     setDeleteTarget(null);
     setDeletingUser(_id);
     setError(null);
@@ -422,7 +451,7 @@ const AdminPage: React.FC = () => {
           </div>
         </div>
         <button
-          onClick={loadAll}
+          onClick={() => loadAll({ preferCache: false })}
           disabled={loading}
           className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-all shadow-sm active:scale-95 disabled:opacity-50"
         >

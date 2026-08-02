@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useRole } from '../auth/RoleContext';
 import type { Handler, RosterEntry, DailyStats } from '../types';
 import { syncData, socket } from '../utils/socket';
+import { getCachedInitialData } from '../utils/pageCache';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, AreaChart, Area,
@@ -413,7 +414,12 @@ const HomePage: React.FC = () => {
     socket.on('roster_updated', onRoster);
     socket.on('stats_updated', onStats);
     socket.on('init', onInit);
-    if (socket.connected) socket.emit('get_initial_data');
+    const cached = getCachedInitialData();
+    if (cached) {
+      applyState(cached);
+    } else if (socket.connected) {
+      socket.emit('get_initial_data');
+    }
 
     return () => {
       socket.off('handlers_updated', onHandlers);
