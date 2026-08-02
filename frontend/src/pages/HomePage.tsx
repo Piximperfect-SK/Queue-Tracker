@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRole } from '../auth/RoleContext';
 import type { Handler, RosterEntry, DailyStats } from '../types';
+import { syncData } from '../utils/socket';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, AreaChart, Area,
@@ -9,7 +10,7 @@ import * as XLSX from 'xlsx';
 import {
   Users, Activity, ChevronLeft, ChevronRight,
   BarChart2, Shield, Calendar, ArrowUp, ArrowDown, Download,
-  Search, ChevronUp, ChevronDown, Minus,
+  Search, ChevronUp, ChevronDown, Minus, Upload, Lock, X,
 } from 'lucide-react';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -37,6 +38,130 @@ const yearOf  = (d: string) => d.slice(0,4);
 const fmt     = (n: number) => n.toLocaleString();
 const pct     = (a: number, b: number) => b > 0 ? Math.round((a/b)*100) : 0;
 const pctChange = (curr: number, prev: number) => prev > 0 ? Math.round(((curr-prev)/prev)*100) : (curr > 0 ? 100 : 0);
+
+type ImportFeedback = { message: string; tone: 'success' | 'warning' | 'error' };
+type RefinedAnalyticsRow = {
+  agentName: string;
+  date: string;
+  shift: string;
+  shiftTiming: string;
+  incidents: number;
+  sctasks: number;
+  calls: number;
+  p1p2vip: number;
+  comments: string;
+  totalHandled: number;
+  endorsementTickets: number;
+  grandTotal: number;
+  sourceSheet: string;
+  sourceRow: number;
+  importStatus: 'Ready';
+  dataQualityNotes: string;
+};
+
+const normalizeCellValue = (value: unknown) => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value.trim();
+  return String(value).trim();
+};
+
+const parseExcelDate = (value: unknown) => {
+  if (typeof value === 'number') {
+    const parseDateCode = (XLSX as any).SSF?.parse_date_code;
+    if (typeof parseDateCode === 'function') {
+      const decoded = parseDateCode(value);
+      if (decoded?.y && decoded?.m && decoded?.d) {
+        return `${decoded.y}-${String(decoded.m).padStart(2, '0')}-${String(decoded.d).padStart(2, '0')}`;
+      }
+    }
+  }
+  const formatted = normalizeCellValue(value);
+  if (!formatted) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(formatted)) return formatted;
+  const parsed = new Date(formatted);
+  if (!Number.isNaN(parsed.getTime())) {
+    return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`;
+  }
+  return null;
+};
+
+const mergeStatsEntries = (base: DailyStats[], additions: DailyStats[]) => {
+  const merged = [...base];
+  additions.forEach((entry) => {
+    const idx = merged.findIndex((s) => s.handlerId === entry.handlerId && s.date === entry.date);
+    if (idx > -1) merged[idx] = entry;
+    else merged.push(entry);
+  });
+  return merged;
+};
+
+const createAgentId = () => {
+  if (typeof crypto !== 'undefined' && typeof (crypto as Crypto).randomUUID === 'function') {
+    return (crypto as Crypto).randomUUID();
+  }
+  return `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+};
+
+const parseNumberCell = (value: unknown) => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  const str = normalizeCellValue(value).replace(/,/g, '');
+  if (!str) return 0;
+  const n = Number(str);
+  return Number.isFinite(n) ? n : 0;
+};
+
+const isLikelyNameText = (value: unknown) => {
+  const v = normalizeCellValue(value);
+  if (!v) return false;
+  if (parseExcelDate(v)) return false;
+  if (!/[A-Za-z]/.test(v)) return false;
+  if (/^(inc|incident|task|request|call|date|day|shift)$/i.test(v)) return false;
+  return true;
+};
+
+const findColumnIndex = (headers: string[], keywords: string[]) =>
+  headers.findIndex((h) => keywords.some((k) => h.includes(k)));
+
+const parseDateFromSheetName = (sheetName: string, fallbackYear: number) => {
+  const raw = normalizeCellValue(sheetName);
+  if (!raw) return null;
+
+  const direct = parseExcelDate(raw);
+  if (direct) return direct;
+
+  const cleaned = raw
+    .replace(/,/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const withYearMatch = cleaned.match(/(\d{1,2})(?:st|nd|rd|th)?[\s\-]+([A-Za-z]{3,9})[\s\-]+(\d{4})/i);
+  const noYearMatch = cleaned.match(/(\d{1,2})(?:st|nd|rd|th)?[\s\-]+([A-Za-z]{3,9})/i);
+
+  const months: Record<string, number> = {
+    jan: 1, january: 1,
+    feb: 2, february: 2,
+    mar: 3, march: 3,
+    apr: 4, april: 4,
+    may: 5,
+    jun: 6, june: 6,
+    jul: 7, july: 7,
+    aug: 8, august: 8,
+    sep: 9, sept: 9, september: 9,
+    oct: 10, october: 10,
+    nov: 11, november: 11,
+    dec: 12, december: 12,
+  };
+
+  const day = Number((withYearMatch ?? noYearMatch)?.[1] ?? NaN);
+  const monthToken = ((withYearMatch ?? noYearMatch)?.[2] ?? '').toLowerCase();
+  const month = months[monthToken];
+  const year = withYearMatch ? Number(withYearMatch[3]) : fallbackYear;
+
+  if (!Number.isFinite(day) || !month || !Number.isFinite(year)) return null;
+  if (day < 1 || day > 31) return null;
+
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+};
 
 // ── KPI Card ──────────────────────────────────────────────────────────────────
 const KpiCard: React.FC<{
@@ -129,7 +254,7 @@ const Badge: React.FC<{label:string;color:string;bg:string;border:string}> = ({l
 
 // ══════════════════════════════════════════════════════════════════════════════
 const HomePage: React.FC = () => {
-  const { role } = useRole();
+  const { role, actions } = useRole();
   const today = useMemo(() => new Date().toLocaleDateString('en-CA'), []);
 
   const [mode,          setMode]          = useState<FilterMode>('month');
@@ -144,6 +269,14 @@ const HomePage: React.FC = () => {
   const [handlers, setHandlers] = useState<Handler[]>([]);
   const [roster,   setRoster]   = useState<RosterEntry[]>([]);
   const [stats,    setStats]    = useState<DailyStats[]>([]);
+  const [importStatus, setImportStatus] = useState<ImportFeedback | null>(null);
+  const [isImportingAnalytics, setIsImportingAnalytics] = useState(false);
+  const [isRefineModalOpen, setIsRefineModalOpen] = useState(false);
+  const [isRefiningAnalytics, setIsRefiningAnalytics] = useState(false);
+  const [refinedRows, setRefinedRows] = useState<RefinedAnalyticsRow[]>([]);
+  const [refineWarnings, setRefineWarnings] = useState<string[]>([]);
+  const [refineSourceName, setRefineSourceName] = useState('');
+  const analyticsFileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const load = () => {
@@ -371,6 +504,343 @@ const HomePage: React.FC = () => {
     grandTotal, prevGrandTotal, handlers.length, qhCount, agentRows, shiftAnalysis, leaveDist,
   ]);
 
+  const closeRefineModal = () => {
+    setIsRefineModalOpen(false);
+    setRefinedRows([]);
+    setRefineWarnings([]);
+    setRefineSourceName('');
+    if (analyticsFileInputRef.current) analyticsFileInputRef.current.value = '';
+  };
+
+  const refineAnalyticsRowsFromSheet = (rows: unknown[][], sheetName: string, fallbackYear: number) => {
+    const warnings: string[] = [];
+    const refined: RefinedAnalyticsRow[] = [];
+
+    if (!rows.length) return { refined, warnings };
+
+    const sheetDate = parseDateFromSheetName(sheetName, fallbackYear);
+
+    const scanLimit = Math.min(rows.length, 30);
+    let headerIdx = -1;
+    let bestScore = -1;
+
+    for (let i = 0; i < scanLimit; i++) {
+      const headers = (rows[i] ?? []).map((c) => normalizeCellValue(c).toLowerCase());
+      const hasName = findColumnIndex(headers, ['agent', 'handler', 'employee', 'name']) > -1;
+      const hasDate = findColumnIndex(headers, ['date', 'day']) > -1 || !!sheetDate;
+      const hasInc = findColumnIndex(headers, ['incident', 'inc']) > -1;
+      const hasTask = findColumnIndex(headers, ['sctask', 'sc task', 'request', 'task']) > -1;
+      const hasCall = findColumnIndex(headers, ['call']) > -1;
+      const score = [hasName, hasDate, hasInc, hasTask, hasCall].filter(Boolean).length;
+      if (score > bestScore) {
+        bestScore = score;
+        headerIdx = i;
+      }
+    }
+
+    const hasHeader = headerIdx > -1 && bestScore >= 2;
+
+    if (hasHeader) {
+      const header = (rows[headerIdx] ?? []).map((c) => normalizeCellValue(c).toLowerCase());
+      const nameCol = findColumnIndex(header, ['agent', 'handler', 'employee', 'name']);
+      const dateCol = findColumnIndex(header, ['date', 'day']);
+      const incCol = findColumnIndex(header, ['incident', 'inc']);
+      const taskCol = findColumnIndex(header, ['sctask', 'sc task', 'request', 'task']);
+      const callCol = findColumnIndex(header, ['call']);
+      const shiftCol = findColumnIndex(header, ['shift']);
+      const shiftTimingCol = findColumnIndex(header, ['shift timing', 'timing']);
+      const p1Col = findColumnIndex(header, ['p1/p2/vip', 'p1', 'vip']);
+      const commentsCol = findColumnIndex(header, ['comment']);
+      const totalHandledCol = findColumnIndex(header, ['total handled', 'total']);
+      const endorsementCol = findColumnIndex(header, ['endorsement']);
+      const grandTotalCol = findColumnIndex(header, ['grand total', 'grant total']);
+
+      for (let i = headerIdx + 1; i < rows.length; i++) {
+        const row = rows[i] ?? [];
+        if (row.every((c) => normalizeCellValue(c) === '')) continue;
+
+        const name = nameCol > -1 ? normalizeCellValue(row[nameCol]) : '';
+        const date = dateCol > -1 ? (parseExcelDate(row[dateCol]) ?? sheetDate) : sheetDate;
+        const shift = shiftCol > -1 ? normalizeCellValue(row[shiftCol]) : '';
+        if (!name || !date) {
+          warnings.push(`${sheetName} row ${i + 1}: skipped (missing name/date)`);
+          continue;
+        }
+
+        if (/[+]/.test(name) || /assistance/i.test(name)) {
+          warnings.push(`${sheetName} row ${i + 1}: skipped queue-pair/non-employee row`);
+          continue;
+        }
+
+        const incidents = incCol > -1 ? parseNumberCell(row[incCol]) : 0;
+        const sctasks = taskCol > -1 ? parseNumberCell(row[taskCol]) : 0;
+        const calls = callCol > -1 ? parseNumberCell(row[callCol]) : 0;
+        const totalHandled = totalHandledCol > -1
+          ? parseNumberCell(row[totalHandledCol])
+          : incidents + sctasks + calls;
+        const endorsementTickets = endorsementCol > -1 ? parseNumberCell(row[endorsementCol]) : 0;
+        const grandTotal = grandTotalCol > -1 ? parseNumberCell(row[grandTotalCol]) : totalHandled + endorsementTickets;
+
+        if (!incidents && !sctasks && !calls && !totalHandled && /leave|weekoff|wo|pl|ml|el|ul/i.test(shift)) {
+          warnings.push(`${sheetName} row ${i + 1}: skipped leave-only row`);
+          continue;
+        }
+
+        const notes: string[] = [];
+        if (dateCol < 0 && sheetDate) notes.push('Date inferred from sheet name');
+        if (callCol < 0) notes.push('Calls missing in source');
+
+        refined.push({
+          agentName: name,
+          date,
+          shift,
+          shiftTiming: shiftTimingCol > -1 ? normalizeCellValue(row[shiftTimingCol]) : '',
+          incidents,
+          sctasks,
+          calls,
+          p1p2vip: p1Col > -1 ? parseNumberCell(row[p1Col]) : 0,
+          comments: commentsCol > -1 ? normalizeCellValue(row[commentsCol]) : '',
+          totalHandled,
+          endorsementTickets,
+          grandTotal,
+          sourceSheet: sheetName,
+          sourceRow: i + 1,
+          importStatus: 'Ready',
+          dataQualityNotes: notes.join('; '),
+        });
+      }
+    } else {
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i] ?? [];
+        if (row.every((c) => normalizeCellValue(c) === '')) continue;
+
+        const dateCell = row.find((c) => parseExcelDate(c));
+        const date = (dateCell ? parseExcelDate(dateCell) : null) ?? sheetDate;
+        const nameCell = row.find((c) => isLikelyNameText(c));
+        const name = nameCell ? normalizeCellValue(nameCell) : '';
+        const nums = row.map((c) => parseNumberCell(c)).filter((n) => Number.isFinite(n) && n > 0);
+
+        if (!name || !date) {
+          warnings.push(`${sheetName} row ${i + 1}: skipped (unable to infer name/date)`);
+          continue;
+        }
+
+        if (/[+]/.test(name) || /assistance/i.test(name)) {
+          warnings.push(`${sheetName} row ${i + 1}: skipped queue-pair/non-employee row`);
+          continue;
+        }
+
+        const incidents = nums[0] ?? 0;
+        const sctasks = nums[1] ?? 0;
+        const calls = nums[2] ?? 0;
+        const totalHandled = incidents + sctasks + calls;
+
+        refined.push({
+          agentName: name,
+          date,
+          shift: '',
+          shiftTiming: '',
+          incidents,
+          sctasks,
+          calls,
+          p1p2vip: 0,
+          comments: '',
+          totalHandled,
+          endorsementTickets: 0,
+          grandTotal: totalHandled,
+          sourceSheet: sheetName,
+          sourceRow: i + 1,
+          importStatus: 'Ready',
+          dataQualityNotes: 'Inferred from unstructured row',
+        });
+      }
+    }
+
+    return { refined, warnings };
+  };
+
+  const handleAnalyticsFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsRefiningAnalytics(true);
+    setRefinedRows([]);
+    setRefineWarnings([]);
+    setRefineSourceName(file.name);
+
+    try {
+      const ab = await file.arrayBuffer();
+      const wb = XLSX.read(ab, { type: 'array' });
+      if (!wb.SheetNames.length) {
+        setImportStatus({ message: 'No sheets found in uploaded file.', tone: 'error' });
+        return;
+      }
+
+      const inferredYearFromName = file.name.match(/(20\d{2})/)?.[1];
+      const fallbackYear = inferredYearFromName ? Number(inferredYearFromName) : new Date().getFullYear();
+      const workbookWarnings: string[] = [];
+      const workbookRefined: RefinedAnalyticsRow[] = [];
+
+      wb.SheetNames.forEach((sheetName) => {
+        const ws = wb.Sheets[sheetName];
+        if (!ws) return;
+        const rawRows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' });
+        if (!rawRows.length) return;
+
+        const { refined, warnings } = refineAnalyticsRowsFromSheet(rawRows, sheetName, fallbackYear);
+        workbookRefined.push(...refined);
+        workbookWarnings.push(...warnings);
+      });
+
+      // De-duplicate by employee + date while summing metrics, which is safer
+      // for workbooks containing repeated or corrected sheets for the same date.
+      const dedup = new Map<string, RefinedAnalyticsRow>();
+      workbookRefined.forEach((row) => {
+        const key = `${row.date}__${row.agentName.toLowerCase()}`;
+        const existing = dedup.get(key);
+        if (!existing) {
+          dedup.set(key, row);
+          return;
+        }
+        dedup.set(key, {
+          ...existing,
+          incidents: existing.incidents + row.incidents,
+          sctasks: existing.sctasks + row.sctasks,
+          calls: existing.calls + row.calls,
+          p1p2vip: existing.p1p2vip + row.p1p2vip,
+          totalHandled: existing.totalHandled + row.totalHandled,
+          endorsementTickets: existing.endorsementTickets + row.endorsementTickets,
+          grandTotal: existing.grandTotal + row.grandTotal,
+          dataQualityNotes: [existing.dataQualityNotes, 'Merged duplicate employee/date rows'].filter(Boolean).join('; '),
+        });
+      });
+
+      const refined = Array.from(dedup.values()).sort((a, b) =>
+        a.date.localeCompare(b.date) || a.agentName.localeCompare(b.agentName)
+      );
+      const warnings = workbookWarnings;
+
+      if (!refined.length) {
+        setImportStatus({ message: 'Unable to refine file into import-ready analytics rows.', tone: 'error' });
+        return;
+      }
+
+      setRefinedRows(refined);
+      setRefineWarnings(warnings);
+    } catch (err) {
+      setImportStatus({
+        message: `Refine failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
+        tone: 'error',
+      });
+    } finally {
+      setIsRefiningAnalytics(false);
+    }
+  };
+
+  const downloadRefinedCopy = () => {
+    if (!refinedRows.length) return;
+    const wb = XLSX.utils.book_new();
+    const rows = refinedRows.map((r) => ({
+      'Date (YYYY-MM-DD)': r.date,
+      'Employee Name': r.agentName,
+      'Shift': r.shift,
+      'Shift Timing': r.shiftTiming,
+      'Incidents': r.incidents,
+      'Requests / SCTASK': r.sctasks,
+      'Calls': r.calls,
+      'P1/P2/VIP': r.p1p2vip,
+      'Additional Comments': r.comments,
+      'Total Handled': r.totalHandled,
+      'Endorsement Tickets': r.endorsementTickets,
+      'Grand Total': r.grandTotal,
+      'Source Sheet': r.sourceSheet,
+      'Source Row': r.sourceRow,
+      'Import Status': r.importStatus,
+      'Data Quality Notes': r.dataQualityNotes,
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb, ws, 'Import Ready');
+    const baseName = refineSourceName ? refineSourceName.replace(/\.[^/.]+$/, '') : 'analytics';
+    XLSX.writeFile(wb, `${baseName}-import-ready.xlsx`);
+  };
+
+  const importRefinedRows = async () => {
+    if (!refinedRows.length) return;
+    setImportStatus(null);
+    setIsImportingAnalytics(true);
+    try {
+      const lookup = new Map<string, string>();
+      handlers.forEach((h) => lookup.set(h.name.trim().toLowerCase(), h.id));
+
+      const parsedStats: DailyStats[] = [];
+      const newHandlers: Handler[] = [];
+
+      refinedRows.forEach((row) => {
+        const key = row.agentName.toLowerCase();
+        let hid = lookup.get(key);
+        if (!hid) {
+          hid = createAgentId();
+          lookup.set(key, hid);
+          newHandlers.push({ id: hid, name: row.agentName, isQH: false });
+        }
+        parsedStats.push({
+          handlerId: hid,
+          date: row.date,
+          incidents: row.incidents,
+          sctasks: row.sctasks,
+          calls: row.calls,
+          comments: '',
+        });
+      });
+
+      const ackErrors: string[] = [];
+      const withAck = (label: string, fn: (cb: (res: { ok: boolean; error?: string }) => void) => void) =>
+        new Promise<void>((resolve) => {
+          const timer = setTimeout(() => {
+            ackErrors.push(`${label}: no response from server (timed out)`);
+            resolve();
+          }, 8000);
+          fn((res) => {
+            clearTimeout(timer);
+            if (!res?.ok) ackErrors.push(`${label}: ${res?.error || 'failed'}`);
+            resolve();
+          });
+        });
+
+      const mergedStats = mergeStatsEntries(stats, parsedStats);
+      setStats(mergedStats);
+      localStorage.setItem('stats', JSON.stringify(mergedStats));
+      await withAck('Stats', (cb) => syncData.updateStats(mergedStats, cb));
+
+      if (newHandlers.length) {
+        const mergedHandlers = [...handlers, ...newHandlers];
+        setHandlers(mergedHandlers);
+        localStorage.setItem('handlers', JSON.stringify(mergedHandlers));
+        await withAck('Handlers', (cb) => syncData.updateHandlers(mergedHandlers, cb));
+      }
+
+      const tone: ImportFeedback['tone'] = ackErrors.length ? 'error' : refineWarnings.length ? 'warning' : 'success';
+      const savedMsg = ackErrors.length ? ` NOT saved to server — ${ackErrors.join('; ')}` : ' Saved to server.';
+      setImportStatus({
+        message: `Imported ${parsedStats.length} analytics row(s).${newHandlers.length ? ` +${newHandlers.length} new agent(s).` : ''}${refineWarnings.length ? ` (${refineWarnings.length} skipped while refining)` : ''}${savedMsg}`,
+        tone,
+      });
+      closeRefineModal();
+    } catch (err) {
+      setImportStatus({
+        message: `Import failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
+        tone: 'error',
+      });
+    } finally {
+      setIsImportingAnalytics(false);
+    }
+  };
+
+  const importAndDownloadRefined = async () => {
+    downloadRefinedCopy();
+    await importRefinedRows();
+  };
+
   if (role && role!=='admin') return (
     <div style={{height:'100%',display:'flex',alignItems:'center',justifyContent:'center',gap:16,opacity:0.35}}>
       <Shield size={48} strokeWidth={1} color="#94a3b8"/>
@@ -507,8 +977,33 @@ const HomePage: React.FC = () => {
           <button onClick={exportReport} style={{display:'flex',alignItems:'center',gap:6,height:32,padding:'0 12px',border:'1px solid #cbd5e1',borderRadius:6,background:'#fff',cursor:'pointer',fontSize:11,fontWeight:700,color:'#0f172a'}}>
             <Download size={12}/> Export
           </button>
+          {!actions.importRoster ? (
+            <div title="Access Restricted" style={{display:'flex',alignItems:'center',gap:6,height:32,padding:'0 12px',border:'1px solid #fecaca',borderRadius:6,background:'#fff1f2',fontSize:11,fontWeight:700,color:'#be123c',opacity:0.6,cursor:'not-allowed'}}>
+              <Lock size={12}/> Import Analytics
+            </div>
+          ) : (
+            <button
+              onClick={() => setIsRefineModalOpen(true)}
+              disabled={isImportingAnalytics}
+              style={{display:'flex',alignItems:'center',gap:6,height:32,padding:'0 12px',border:'1px solid #cbd5e1',borderRadius:6,background:'#fff',cursor:'pointer',fontSize:11,fontWeight:700,color:'#0f172a',opacity:isImportingAnalytics?0.6:1}}
+            >
+              <Upload size={12}/> {isImportingAnalytics ? 'Importing…' : 'Refine + Import Analytics'}
+            </button>
+          )}
+          <input ref={analyticsFileInputRef} type="file" onChange={handleAnalyticsFileChange} accept=".xlsx,.xls,.csv" className="hidden" />
         </div>
       </div>
+
+      {importStatus && (
+        <div style={{flexShrink:0,padding:'8px 16px 0'}}>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,padding:'8px 10px',borderRadius:8,border:`1px solid ${importStatus.tone==='success' ? '#bbf7d0' : importStatus.tone==='warning' ? '#fde68a' : '#fecaca'}`,background:importStatus.tone==='success' ? '#f0fdf4' : importStatus.tone==='warning' ? '#fffbeb' : '#fef2f2',color:importStatus.tone==='success' ? '#166534' : importStatus.tone==='warning' ? '#92400e' : '#991b1b',fontSize:11,fontWeight:700}}>
+            <span>{importStatus.message}</span>
+            <button onClick={() => setImportStatus(null)} style={{border:'none',background:'transparent',cursor:'pointer',color:'inherit',opacity:0.65,display:'flex',alignItems:'center',justifyContent:'center'}}>
+              <X size={14}/>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ══ SIDEBAR + CONTENT ═══════════════════════════════════════════════ */}
       <div style={{flex:1,minHeight:0,display:'flex',overflow:'hidden'}}>
@@ -949,6 +1444,125 @@ const HomePage: React.FC = () => {
 
         </div>
       </div>
+
+      {isRefineModalOpen && (
+        <div style={{position:'fixed',inset:0,zIndex:70,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
+          <div style={{position:'absolute',inset:0,background:'rgba(15,23,42,0.35)'}} onClick={closeRefineModal} />
+          <div style={{position:'relative',width:'min(900px,95vw)',maxHeight:'90vh',overflow:'hidden',background:'#fff',border:'1px solid #e2e8f0',borderRadius:12,display:'flex',flexDirection:'column'}}>
+            <div style={{padding:'12px 14px',borderBottom:'1px solid #e2e8f0',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+              <div>
+                <div style={{fontSize:9,fontWeight:900,color:'#94a3b8',textTransform:'uppercase',letterSpacing:'0.16em'}}>Analytics Refiner</div>
+                <div style={{fontSize:13,fontWeight:900,color:'#0f172a',marginTop:2}}>Unstructured to Import Ready</div>
+              </div>
+              <button onClick={closeRefineModal} style={{border:'none',background:'transparent',cursor:'pointer',color:'#64748b',display:'flex',alignItems:'center'}}>
+                <X size={16}/>
+              </button>
+            </div>
+
+            <div style={{padding:14,display:'flex',flexDirection:'column',gap:10,overflow:'auto'}}>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap'}}>
+                <button
+                  onClick={() => analyticsFileInputRef.current?.click()}
+                  disabled={isRefiningAnalytics}
+                  style={{display:'flex',alignItems:'center',gap:8,padding:'8px 12px',border:'1px solid #cbd5e1',borderRadius:8,background:'#fff',cursor:'pointer',fontSize:11,fontWeight:800,color:'#0f172a',opacity:isRefiningAnalytics?0.6:1}}
+                >
+                  <Upload size={13}/> {isRefiningAnalytics ? 'Refining…' : 'Choose Unstructured File'}
+                </button>
+                <span style={{fontSize:10,fontWeight:700,color:'#64748b'}}>
+                  {refineSourceName ? `Source: ${refineSourceName}` : 'Upload your raw analytics workbook'}
+                </span>
+              </div>
+
+              <div style={{display:'grid',gridTemplateColumns:'repeat(3,minmax(0,1fr))',gap:8}}>
+                <div style={{padding:'8px 10px',border:'1px solid #e2e8f0',borderRadius:8,background:'#f8fafc'}}>
+                  <div style={{fontSize:8,fontWeight:900,color:'#94a3b8',textTransform:'uppercase',letterSpacing:'0.14em'}}>Ready Rows</div>
+                  <div style={{fontSize:18,fontWeight:900,color:'#0f172a',marginTop:2}}>{refinedRows.length}</div>
+                </div>
+                <div style={{padding:'8px 10px',border:'1px solid #e2e8f0',borderRadius:8,background:'#f8fafc'}}>
+                  <div style={{fontSize:8,fontWeight:900,color:'#94a3b8',textTransform:'uppercase',letterSpacing:'0.14em'}}>Warnings</div>
+                  <div style={{fontSize:18,fontWeight:900,color:'#b45309',marginTop:2}}>{refineWarnings.length}</div>
+                </div>
+                <div style={{padding:'8px 10px',border:'1px solid #e2e8f0',borderRadius:8,background:'#f8fafc'}}>
+                  <div style={{fontSize:8,fontWeight:900,color:'#94a3b8',textTransform:'uppercase',letterSpacing:'0.14em'}}>Status</div>
+                  <div style={{fontSize:11,fontWeight:900,color:isRefiningAnalytics ? '#2563eb' : refinedRows.length ? '#166534' : '#64748b',marginTop:6}}>
+                    {isRefiningAnalytics ? 'Refining workbook…' : refinedRows.length ? 'Ready for action' : 'Waiting for file'}
+                  </div>
+                </div>
+              </div>
+
+              {refineWarnings.length > 0 && (
+                <div style={{border:'1px solid #fde68a',background:'#fffbeb',borderRadius:8,padding:'8px 10px'}}>
+                  <div style={{fontSize:9,fontWeight:900,color:'#92400e',textTransform:'uppercase',letterSpacing:'0.12em',marginBottom:4}}>Refine Notes (first 12)</div>
+                  <ul style={{margin:0,paddingLeft:16,maxHeight:110,overflow:'auto'}}>
+                    {refineWarnings.slice(0, 12).map((w, idx) => (
+                      <li key={idx} style={{fontSize:10,color:'#92400e',lineHeight:1.4}}>{w}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              <div style={{border:'1px solid #e2e8f0',borderRadius:8,overflow:'hidden'}}>
+                <div style={{padding:'6px 10px',background:'#f8fafc',borderBottom:'1px solid #e2e8f0',fontSize:9,fontWeight:900,color:'#64748b',textTransform:'uppercase',letterSpacing:'0.12em'}}>Refined Preview</div>
+                <div style={{maxHeight:260,overflow:'auto'}}>
+                  <table style={{width:'100%',borderCollapse:'collapse'}}>
+                    <thead>
+                      <tr>
+                        {['Date','Employee Name','Incidents','Requests / SCTASK','Calls','Source Sheet'].map((h) => (
+                          <th key={h} style={{padding:'6px 8px',fontSize:8,fontWeight:900,color:'#94a3b8',textTransform:'uppercase',letterSpacing:'0.12em',textAlign:'left',borderBottom:'1px solid #e2e8f0'}}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {refinedRows.slice(0, 50).map((r, idx) => (
+                        <tr key={`${r.date}-${r.agentName}-${idx}`}>
+                          <td style={{padding:'6px 8px',fontSize:11,color:'#0f172a',borderBottom:'1px solid #f1f5f9'}}>{r.date}</td>
+                          <td style={{padding:'6px 8px',fontSize:11,color:'#0f172a',borderBottom:'1px solid #f1f5f9'}}>{r.agentName}</td>
+                          <td style={{padding:'6px 8px',fontSize:11,color:'#2563eb',borderBottom:'1px solid #f1f5f9'}}>{r.incidents}</td>
+                          <td style={{padding:'6px 8px',fontSize:11,color:'#b45309',borderBottom:'1px solid #f1f5f9'}}>{r.sctasks}</td>
+                          <td style={{padding:'6px 8px',fontSize:11,color:'#0f766e',borderBottom:'1px solid #f1f5f9'}}>{r.calls}</td>
+                          <td style={{padding:'6px 8px',fontSize:10,color:'#64748b',borderBottom:'1px solid #f1f5f9'}}>{r.sourceSheet}</td>
+                        </tr>
+                      ))}
+                      {!refinedRows.length && !isRefiningAnalytics && (
+                        <tr>
+                          <td colSpan={6} style={{padding:16,textAlign:'center',fontSize:11,color:'#94a3b8'}}>No refined rows yet</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div style={{padding:'10px 14px',borderTop:'1px solid #e2e8f0',display:'flex',alignItems:'center',justifyContent:'space-between',gap:10,flexWrap:'wrap'}}>
+              <button onClick={closeRefineModal} style={{border:'none',background:'transparent',cursor:'pointer',fontSize:11,fontWeight:800,color:'#64748b'}}>Cancel</button>
+              <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+                <button
+                  onClick={downloadRefinedCopy}
+                  disabled={!refinedRows.length || isImportingAnalytics || isRefiningAnalytics}
+                  style={{padding:'7px 12px',border:'1px solid #cbd5e1',borderRadius:8,background:'#fff',cursor:'pointer',fontSize:11,fontWeight:800,color:'#0f172a',opacity:(!refinedRows.length || isImportingAnalytics || isRefiningAnalytics) ? 0.5 : 1}}
+                >
+                  Download Refined Copy
+                </button>
+                <button
+                  onClick={importRefinedRows}
+                  disabled={!refinedRows.length || isImportingAnalytics || isRefiningAnalytics}
+                  style={{padding:'7px 12px',border:'1px solid #cbd5e1',borderRadius:8,background:'#0f172a',cursor:'pointer',fontSize:11,fontWeight:800,color:'#fff',opacity:(!refinedRows.length || isImportingAnalytics || isRefiningAnalytics) ? 0.5 : 1}}
+                >
+                  Import Now
+                </button>
+                <button
+                  onClick={importAndDownloadRefined}
+                  disabled={!refinedRows.length || isImportingAnalytics || isRefiningAnalytics}
+                  style={{padding:'7px 12px',border:'1px solid #0369a1',borderRadius:8,background:'#0284c7',cursor:'pointer',fontSize:11,fontWeight:800,color:'#fff',opacity:(!refinedRows.length || isImportingAnalytics || isRefiningAnalytics) ? 0.5 : 1}}
+                >
+                  Download + Import
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

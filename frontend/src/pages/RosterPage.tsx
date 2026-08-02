@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { MOCK_HANDLERS, SHIFTS, MOCK_ROSTER } from '../data/mockData';
 import { GripVertical, Plus, X, Trash2, AlertCircle, Upload, ChevronLeft, ChevronRight, Shield, Lock } from 'lucide-react';
-import type { Handler, RosterEntry, ShiftType, DailyStats } from '../types';
+import type { Handler, RosterEntry, ShiftType } from '../types';
 import { addLog, saveLogsFromServer, saveSingleLogFromServer } from '../utils/logger';
 import { socket, syncData } from '../utils/socket';
 import { addLogForDate } from '../utils/logger';
@@ -144,14 +144,6 @@ const mergeRosterEntries = (base: RosterEntry[], additions: RosterEntry[]) => {
   const merged = [...base];
   additions.forEach(e => {
     const idx = merged.findIndex(r => r.handlerId === e.handlerId && r.date === e.date);
-    if (idx > -1) merged[idx] = e; else merged.push(e);
-  });
-  return merged;
-};
-const mergeStatsEntries = (base: DailyStats[], additions: DailyStats[]) => {
-  const merged = [...base];
-  additions.forEach(e => {
-    const idx = merged.findIndex(s => s.handlerId === e.handlerId && s.date === e.date);
     if (idx > -1) merged[idx] = e; else merged.push(e);
   });
   return merged;
@@ -510,8 +502,6 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
       const parsedEntries: RosterEntry[] = [];
       const rowErrors: string[] = [];
       const lookup = new Map<string, string>();
-      let statsImportedCount = 0;
-      let pendingStats: DailyStats[] | null = null;
       handlers.forEach(h => lookup.set(h.name.trim().toLowerCase(), h.id));
 
       if (dateColumnIndices.length > 0) {
@@ -550,8 +540,6 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
           return req.every(t => k.includes(t)) && !forb.some(t => k.includes(t));
         };
 
-        const parsedStats: DailyStats[] = [];
-
         rows.forEach((row, ri) => {
           const entries = Object.entries(row);
           if (entries.every(([, v]) => normalizeCellValue(v) === '')) return;
@@ -559,9 +547,6 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
           const sCell = entries.find(([k]) => matchKey(k,['shift'],['timing'])) ?? entries.find(([k]) => matchKey(k,['status']));
           const tCell = entries.find(([k]) => matchKey(k,['timing']));
           const dCell = entries.find(([k]) => matchKey(k,['date'])) ?? entries.find(([k]) => matchKey(k,['day']));
-          const incCell  = entries.find(([k]) => matchKey(k,['incident']));
-          const reqCell  = entries.find(([k]) => matchKey(k,['request']) || matchKey(k,['sctask']));
-          const callCell = entries.find(([k]) => matchKey(k,['call']));
 
           const name = normalizeCellValue(hCell?.[1]);
           const rawShift = normalizeCellValue(sCell?.[1]);
@@ -580,26 +565,7 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
           let hid = lookup.get(key);
           if (!hid) { hid = createAgentId(); lookup.set(key, hid); newHandlers.push({ id: hid, name, isQH: false }); }
           parsedEntries.push({ handlerId: hid, date, shift });
-
-          if (incCell || reqCell || callCell) {
-            parsedStats.push({
-              handlerId: hid,
-              date,
-              incidents: Number(normalizeCellValue(incCell?.[1])) || 0,
-              sctasks: Number(normalizeCellValue(reqCell?.[1])) || 0,
-              calls: Number(normalizeCellValue(callCell?.[1])) || 0,
-              comments: '',
-            });
-          }
         });
-
-        if (parsedStats.length) {
-          const existingStats: DailyStats[] = JSON.parse(localStorage.getItem('stats') || '[]');
-          const mergedStats = mergeStatsEntries(existingStats, parsedStats);
-          localStorage.setItem('stats', JSON.stringify(mergedStats));
-          pendingStats = mergedStats;
-        }
-        statsImportedCount = parsedStats.length;
       }
 
       if (!parsedEntries.length) { setImportStatus({ message: 'No valid entries found.', tone: 'error' }); return; }
@@ -627,16 +593,12 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
         setHandlers(uh); localStorage.setItem('handlers', JSON.stringify(uh));
         await withAck('Handlers', cb => syncData.updateHandlers(uh, cb));
       }
-      if (pendingStats) {
-        await withAck('Stats', cb => syncData.updateStats(pendingStats!, cb));
-      }
-
       const dates = parsedEntries.map(e => e.date).sort();
       if (dates.length) setSelectedDate(dates[0]);
       const tone: ImportFeedback['tone'] = ackErrors.length ? 'error' : rowErrors.length ? 'warning' : 'success';
       const savedMsg = ackErrors.length ? ` NOT saved to server — ${ackErrors.join('; ')}` : ' Saved to server.';
-      setImportStatus({ message: `Imported ${parsedEntries.length} roster entries${statsImportedCount ? ` + ${statsImportedCount} stats rows` : ''}.${newHandlers.length?` +${newHandlers.length} new agent(s).`:''}${rowErrors.length?` (${rowErrors.length} skipped)`:''}${savedMsg}`, tone });
-      addLog('Import Roster', `Imported ${parsedEntries.length} roster entries + ${statsImportedCount} stats rows from ${file.name}${ackErrors.length ? ` — SYNC FAILED: ${ackErrors.join('; ')}` : ''}`, ackErrors.length ? 'negative' : 'positive');
+      setImportStatus({ message: `Imported ${parsedEntries.length} roster entries.${newHandlers.length?` +${newHandlers.length} new agent(s).`:''}${rowErrors.length?` (${rowErrors.length} skipped)`:''}${savedMsg}`, tone });
+      addLog('Import Roster', `Imported ${parsedEntries.length} roster entries from ${file.name}${ackErrors.length ? ` — SYNC FAILED: ${ackErrors.join('; ')}` : ''}`, ackErrors.length ? 'negative' : 'positive');
     } catch (err) {
       setImportStatus({ message: `Import failed: ${err instanceof Error ? err.message : 'Unknown'}`, tone: 'error' });
     } finally { setIsImportingRoster(false); }
