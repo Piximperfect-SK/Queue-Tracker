@@ -1,1 +1,585 @@
-import './server.ts.js';
+import express from 'express';
+import http from 'http';
+import { Server } from 'socket.io';
+import cors from 'cors';
+import cookieParser from 'cookie-parser';
+import { rateLimit } from 'express-rate-limit';
+import mongoose from 'mongoose';
+import path from 'path';
+import csurf from 'csurf';
+import jwt from 'jsonwebtoken';
+import 'dotenv/config';
+import { fileURLToPath } from 'url';
+import { randomBytes } from 'crypto';
+import { seedAdmin } from './scripts/seedAdmin.js';
+import { seedAccessCodes } from './scripts/seedAccessCodes.js';
+import { checkSocketAction } from './middleware/permissions.js';
+import { setIo, registerSocketSession, unregisterSocketSession } from './realtime.js';
+import Session from './models/Session.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const app = express();
+
+// Trust proxy so we can get client IPs behind Render/Netlify proxies for accurate rate limiting
+app.set('trust proxy', 1);
+
+// MongoDB Connection
+const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/queue_tracker";
+mongoose.connect(MONGODB_URI)
+  .then(async () => {
+    console.log('Successfully connected to MongoDB');
+    await seedAdmin();
+    await seedAccessCodes();
+  })
+  .catch(err => console.error('MongoDB connection error:', err));
+
+// Define Schema
+const stateSchema = new mongoose.Schema({
+  key: { type: String, default: 'global', unique: true },
+  handlers: { type: Array, default: [] },
+  roster: { type: Array, default: [] },
+  stats: { type: Array, default: [] }
+});
+
+const logSchema = new mongoose.Schema({
+  dateStr: { type: String, index: true },
+  timestamp: String,
+  user: String,
+  action: String,
+  details: String
+});
+
+const State = mongoose.model('State', stateSchema);
+const Log = mongoose.model('Log', logSchema);
+
+// Migration logic: Only runs once to move data from data.json to MongoDB
+const migrateData = async () => {
+  try {
+    const DATA_FILE = path.join(__dirname, 'data.json');
+    const fs = await import('fs');
+    if (fs.existsSync(DATA_FILE)) {
+      console.log('--- MIGRATION DETECTED: data.json found ---');
+      const dbFile = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+      
+      // Migrate State
+      const existingState = await State.findOne({ key: 'global' });
+      if (!existingState) {
+        await State.create({
+          key: 'global',
+          handlers: dbFile.agents || dbFile.handlers || [],
+          roster: dbFile.roster || [],
+          stats: dbFile.stats || []
+        });
+        console.log('Global state migrated.');
+      }
+
+      // Migrate Logs
+      const logCount = await Log.countDocuments();
+      if (logCount === 0 && dbFile.logs) {
+        const logsToInsert = [];
+        Object.entries(dbFile.logs).forEach(([dateStr, logs]) => {
+          logs.forEach(l => {
+            logsToInsert.push({ ...l, dateStr });
+          });
+        });
+        if (logsToInsert.length > 0) {
+          await Log.insertMany(logsToInsert);
+          console.log(`${logsToInsert.length} logs migrated.`);
+        }
+      }
+      
+      // Rename file once migrated to prevent re-migration
+      fs.renameSync(DATA_FILE, DATA_FILE + '.migrated');
+      console.log('Migration complete. data.json renamed to data.json.migrated');
+    }
+  } catch (err) {
+    console.warn('Migration skipped or failed (likely no data.json or already migrated):', err.message);
+  }
+};
+
+migrateData();
+
+// Security: Rate limiting for HTTP requests
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per window
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => req.path.startsWith('/socket.io/'), // Don't rate limit socket handshake
+});
+app.use(limiter);
+
+const FRONTEND_URL = (process.env.FRONTEND_URL || "http://localhost:5173").replace(/\/$/, "");
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || process.env.FRONTEND_URL || "").split(',').map(s => s.trim()).filter(Boolean);
+
+// STRICT CORS: Allow localhost and any origin listed in ALLOWED_ORIGINS (comma-separated),
+// or fall back to FRONTEND_URL. In emergencies set ALLOWED_ORIGINS='*' to allow all origins.
+const corsOptions = {
+  origin: (origin, callback) => {
+    const cleanOrigin = origin ? origin.replace(/\/$/, "") : null;
+    const isLocalhost = cleanOrigin && (cleanOrigin.includes('localhost') || cleanOrigin.includes('127.0.0.1'));
+
+    if (!origin || isLocalhost) return callback(null, true);
+
+    // Allow if '*' present
+    if (ALLOWED_ORIGINS.includes('*')) return callback(null, true);
+
+    // Allow if exact match against allowed origins or FRONTEND_URL
+    if (cleanOrigin && (ALLOWED_ORIGINS.includes(cleanOrigin) || cleanOrigin === FRONTEND_URL)) {
+      return callback(null, true);
+    }
+
+    console.warn(`BLOCKED CORS connection from: ${origin}. Allowed: ${ALLOWED_ORIGINS.length ? ALLOWED_ORIGINS.join(', ') : FRONTEND_URL}`);
+    callback(new Error('Not allowed by CORS'));
+  },
+  methods: ["GET", "POST", "PUT"],
+  credentials: true
+};
+
+app.use(cors({
+  origin: (origin, callback) => corsOptions.origin(origin, callback),
+  methods: corsOptions.methods,
+  credentials: true
+}));
+app.use(cookieParser());
+
+// === CORS-PROTECTED ROUTES MOVED HERE ===
+// Root route for verification
+app.get('/', (req, res) => res.status(200).send('Queue Tracker API is Live!'));
+// Add health check endpoint
+app.get('/health', (req, res) => res.status(200).send('Backend is running'));
+
+// Enforce secure JWT_SECRET in production
+if (process.env.NODE_ENV === 'production' && (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32)) {
+  console.error('FATAL: JWT_SECRET must be set and at least 32 characters in production. Exiting.');
+  process.exit(1);
+}
+
+app.use(express.json());
+
+// CSRF protection for /api routes (double-submit via cookie)
+// Exempt the csrf-token endpoint, GET requests, and /api/access/* from CSRF.
+//
+// /api/access/* is exempt because those routes authenticate via a Bearer
+// token (see routes/access.js + frontend utils/authToken.ts), not an
+// automatically-attached cookie. CSRF protection exists specifically to stop
+// forged cross-site requests that ride on ambient browser credentials — a
+// malicious page cannot read another origin's sessionStorage to forge the
+// Authorization header, so there's nothing for CSRF to protect against here.
+// Routing them through csurf anyway means depending on ANOTHER cross-site
+// cookie (csurf's own secret cookie), which hits the exact same third-party
+// cookie blocking that broke the JWT cookie earlier — just on a different
+// cookie, causing intermittent 403s depending on browser cookie policy.
+const isProd = process.env.NODE_ENV === 'production';
+const csrfProtection = csurf({ cookie: { httpOnly: true, sameSite: isProd ? 'none' : 'lax', secure: isProd } });
+app.use('/api', (req, res, next) => {
+  if (
+    req.method === 'GET' ||
+    req.method === 'HEAD' ||
+    req.method === 'OPTIONS' ||
+    req.path === '/csrf-token' ||
+    req.path === '/logout' ||
+    req.path.startsWith('/access/')
+  ) {
+    return next();
+  }
+  csrfProtection(req, res, next);
+});
+// Provide CSRF token endpoint for SPA to fetch and include in request headers.
+// This route is routed THROUGH csrfProtection (safe, since GET requests are
+// never validated by csurf) so that req.csrfToken() returns a token that is
+// cryptographically bound to the secret stored in csurf's own cookie. The
+// previous version generated an unrelated random string here, which meant
+// every subsequent POST/PUT from the frontend was rejected with a 403 no
+// matter what — this is the actual fix, not a workaround.
+app.get('/api/csrf-token', csrfProtection, (req, res) => {
+  const token = req.csrfToken();
+  res.cookie('csrf-token', token, { httpOnly: false, secure: isProd, sameSite: isProd ? 'none' : 'lax' });
+  res.json({ csrfToken: token });
+});
+
+app.use(async (req, res, next) => {
+  // Attach user object if token present (non-blocking)
+  try {
+    const { optionalAuth } = await import('./middleware/auth.js');
+    await new Promise((resolve) => optionalAuth(req, resolve));
+  } catch (err) {
+    // ignore
+  }
+  return next();
+});
+
+// Auth routes
+import authRouter from './routes/auth.js';
+app.use('/api', authRouter);
+
+// Role management routes
+import rolesRouter from './routes/roles.js';
+app.use('/api', rolesRouter);
+
+// NOTE: the old '/api/get-role-by-name' lookup (routes/userLookup.js) has been
+// retired. It let anyone self-declare a role by supplying any full name, with
+// no authentication at all. Role is now always derived server-side from the
+// access code used at login (see routes/access.js). The file is left on disk
+// but intentionally not mounted here — safe to delete in a follow-up cleanup.
+
+// Access-code login, and Admin-managed codes/permissions
+import accessRouter from './routes/access.js';
+app.use('/api', accessRouter);
+
+// New 2FA-first authentication flow
+import access2Router from './routes/access2.js';
+app.use('/api/access', access2Router);
+
+import twoFactorRouter from './routes/twoFactor.js';
+app.use('/api', twoFactorRouter);
+
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: corsOptions
+});
+setIo(io);
+
+// Security: Simple sanitizer to prevent HTML/Script injection
+const sanitize = (text) => {
+  if (typeof text !== 'string') return text;
+  return text.replace(/<[^>]*>/g, '').trim();
+};
+
+const TEAM_ACCESS_KEY = (process.env.TEAM_ACCESS_KEY || "").trim(); // Ensure no sneaky spaces
+console.log('--- SECURITY CONFIG ---');
+console.log('Team Access Key:', TEAM_ACCESS_KEY ? 'PROTECTED (Key set)' : 'UNPROTECTED (No key set)');
+console.log('Frontend URL:', FRONTEND_URL);
+console.log('-----------------------');
+
+// Socket Throttling Helper
+const eventCounts = new Map();
+const socketRateLimit = (socket, next) => {
+  const socketId = socket.id;
+  const now = Date.now();
+  
+  if (!eventCounts.has(socketId)) {
+    eventCounts.set(socketId, { count: 0, lastReset: now });
+  }
+  
+  const stats = eventCounts.get(socketId);
+  if (now - stats.lastReset > 1000) { // Reset every second
+    stats.count = 0;
+    stats.lastReset = now;
+  }
+  
+  stats.count++;
+  if (stats.count > 20) { // Max 20 events per second per socket
+    console.warn(`Socket ${socketId} exceeded rate limit`);
+    return false; // Stop processing
+  }
+  return true;
+};
+
+const DATA_FILE = path.join(__dirname, 'data.json');
+
+// Load initial data
+let db = {
+  agents: [],
+  roster: [],
+  stats: [],
+  logs: {}
+};
+
+let onlineUsers = new Map(); // socket.id -> username
+
+// Helper to get full state
+const getFullState = async () => {
+  let state = await State.findOne({ key: 'global' });
+  if (!state) {
+    state = await State.create({ key: 'global' });
+  }
+  return state;
+};
+
+const enforceLogAuth = process.env.ENFORCE_LOG_DOWNLOAD_AUTH === 'true';
+
+app.get('/download-logs/:date', async (req, res) => {
+  if (enforceLogAuth && (!req.user || req.user.role !== 'admin')) {
+    return res.status(403).send('Forbidden');
+  }
+
+  const { date } = req.params;
+  const logs = await Log.find({ dateStr: date }).sort({ timestamp: 1 });
+  
+  if (logs.length === 0) {
+    return res.status(404).send('No logs found for this date');
+  }
+
+  const content = logs.map(l => `[${l.timestamp}] ${l.user.toUpperCase()} - ${l.action.toUpperCase()}: ${l.details}`).join('\n');
+  res.setHeader('Content-Type', 'text/plain');
+  res.setHeader('Content-Disposition', `attachment; filename=QueueTracker_Logs_${date}.txt`);
+  res.send(content);
+});
+
+app.get('/download-all-logs', async (req, res) => {
+  if (enforceLogAuth && (!req.user || req.user.role !== 'admin')) {
+    return res.status(403).send('Forbidden');
+  }
+
+  let content = '=== QUEUE TRACKER FULL AUDIT LOG ===\n';
+  content += `Export Date: ${new Date().toLocaleString()}\n\n`;
+  
+  const logs = await Log.find().sort({ dateStr: -1, timestamp: 1 });
+  
+  let currentDate = "";
+  logs.forEach(l => {
+    if (l.dateStr !== currentDate) {
+      currentDate = l.dateStr;
+      content += `\nDATE: ${currentDate}\n`;
+    }
+    content += `  [${l.timestamp}] ${l.user.toUpperCase()} - ${l.action.toUpperCase()}: ${l.details}\n`;
+  });
+
+  res.setHeader('Content-Type', 'text/plain');
+  res.setHeader('Content-Disposition', `attachment; filename=QueueTracker_FullHistory.txt`);
+  res.send(content);
+});
+
+// Socket-level auth: attach user from JWT — either the handshake auth
+// payload (Bearer token, set by the frontend right after /api/access/login)
+// or, as a fallback, the cookie.
+//
+// BUG FIX: this previously did `const jwt = await import('jsonwebtoken')`
+// inside the handler and called `jwt.verify(...)` directly on the result.
+// jsonwebtoken is a CommonJS package — a dynamic import() of it in ESM
+// returns a module namespace object, NOT the package's exports directly.
+// The real functions live at `jwt.default.verify`, not `jwt.verify`. So
+// `jwt.verify` was `undefined`, every call threw a TypeError, and the
+// catch block below silently swallowed it — meaning socket.user was NEVER
+// set, for ANY token, valid or not. This is why every join kept failing
+// with "no valid session" even after login succeeded and returned a good
+// token: authentication was never actually being checked, just always
+// silently failing. Using the static top-level `import jwt from
+// 'jsonwebtoken'` (which correctly unwraps the CJS default export) fixes it.
+io.use(async (socket, next) => {
+  try {
+    const token = (socket.handshake && socket.handshake.auth && socket.handshake.auth.token) ||
+      (socket.handshake && socket.handshake.headers && (socket.handshake.headers.cookie && (socket.handshake.headers.cookie.match(/token=([^;]+)/) || [])[1]));
+
+    if (token) {
+      try {
+        const payload = jwt.verify(token, process.env.JWT_SECRET || 'dev_jwt_secret');
+
+        // Access-code-issued tokens carry a jti — check it hasn't been
+        // revoked (Admin "kick" support). Legacy account tokens have no
+        // jti and skip this check.
+        if (payload.jti) {
+          const session = await Session.findOne({ jti: payload.jti });
+          if (!session || session.revoked) {
+            return next(); // proceed unauthenticated — same as an invalid token
+          }
+          session.lastSeenAt = new Date();
+          session.save().catch(() => {});
+          registerSocketSession(payload.jti, socket.id);
+        }
+
+        socket.user = payload; // minimal payload (fullName, role, jti)
+      } catch (err) {
+        // token present but invalid/expired — proceed unauthenticated
+      }
+    }
+  } catch (err) {
+    // ignore
+  }
+  return next();
+});
+
+io.on('connection', async (socket) => {
+  console.log('User connected:', socket.id, 'auth:', !!socket.user);
+
+  // Apply rate limiting to all incoming socket events
+  socket.use(([event, ...args], next) => {
+    if (socketRateLimit(socket)) {
+      next();
+    } else {
+      socket.emit('error_message', 'Slow down! Too many requests.');
+    }
+  });
+
+  // IMMEDIATELY broadcast current online users to EVERYONE
+  // This ensures new tabs see everyone and everyone sees the new connection attempt
+  const broadcastPresence = () => {
+    io.emit('presence_updated', Array.from(onlineUsers.values()));
+  };
+
+  const sendSyncData = async () => {
+    const state = await getFullState();
+    socket.emit('init', state);
+  };
+
+  broadcastPresence();
+
+  socket.on('get_presence', () => {
+    socket.emit('presence_updated', Array.from(onlineUsers.values()));
+  });
+
+  socket.on('get_initial_data', async () => {
+    await sendSyncData();
+  });
+
+  socket.on('join', async ({ username }) => {
+    // Role/access is no longer decided by a client-supplied key here — the
+    // socket must already carry a valid JWT (from POST /api/access/login,
+    // where the access code determined the role). This closes the old gap
+    // where anyone typing a name plus the one shared key could claim any role.
+    if (!socket.user) {
+      console.warn(`Unauthorized join attempt from ${sanitize(username)}: no valid session`);
+      return socket.emit('error_message', 'Please log in with your access code first.');
+    }
+
+    const cleanName = sanitize(username || socket.user.fullName);
+    onlineUsers.set(socket.id, cleanName);
+    broadcastPresence();
+    
+    // Send full data again upon successful join to ensure sync
+    await sendSyncData();
+    
+    console.log(`${cleanName} joined. Online:`, Array.from(onlineUsers.values()));
+  });
+
+  socket.on('update_handlers', async (handlers) => {
+    if (!(await checkSocketAction(socket, 'editHandlers'))) return;
+    // Sanitize handler names
+    const cleanHandlers = handlers.map(a => ({ ...a, name: sanitize(a.name) }));
+    await State.updateOne({ key: 'global' }, { $set: { handlers: cleanHandlers } });
+    socket.broadcast.emit('handlers_updated', cleanHandlers);
+  });
+
+  // Legacy support for old 'update_agents' event
+  socket.on('update_agents', async (agents) => {
+    if (!(await checkSocketAction(socket, 'editHandlers'))) return;
+    const cleanAgents = agents.map(a => ({ ...a, name: sanitize(a.name) }));
+    await State.updateOne({ key: 'global' }, { $set: { handlers: cleanAgents } });
+    socket.broadcast.emit('handlers_updated', cleanAgents);
+  });
+
+  socket.on('update_roster', async (roster) => {
+    if (!(await checkSocketAction(socket, 'editRoster'))) return;
+    await State.updateOne({ key: 'global' }, { $set: { roster: roster } });
+    socket.broadcast.emit('roster_updated', roster);
+  });
+
+  socket.on('update_stats', async (stats) => {
+    if (!(await checkSocketAction(socket, 'editRoster'))) return;
+    await State.updateOne({ key: 'global' }, { $set: { stats: stats } });
+    socket.broadcast.emit('stats_updated', stats);
+  });
+
+  // Bulk history import — merges stats by handlerId+date instead of full replace
+  socket.on('update_stats_import', async ({ rows, replaceByDate }, ack) => {
+    if (!(await checkSocketAction(socket, 'editRoster'))) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Unauthorized' });
+      return;
+    }
+    try {
+      const state = await State.findOne({ key: 'global' });
+      const existing = Array.isArray(state?.stats) ? [...state.stats] : [];
+
+      // Build a map of existing entries keyed by handlerId::date
+      const map = new Map();
+      existing.forEach(s => map.set(`${s.handlerId}::${s.date}`, s));
+
+      // Merge incoming rows — prefer higher values
+      for (const row of rows) {
+        const key = `${row.handlerId}::${row.date}`;
+        const ex  = map.get(key);
+        if (ex) {
+          map.set(key, {
+            ...ex,
+            incidents: Math.max(Number(ex.incidents)||0, Number(row.incidents)||0),
+            sctasks:   Math.max(Number(ex.sctasks)  ||0, Number(row.sctasks)  ||0),
+            calls:     Math.max(Number(ex.calls)     ||0, Number(row.calls)    ||0),
+          });
+        } else {
+          map.set(key, row);
+        }
+      }
+
+      const merged = Array.from(map.values());
+      await State.updateOne({ key: 'global' }, { $set: { stats: merged } });
+      socket.broadcast.emit('stats_updated', merged);
+      if (typeof ack === 'function') ack({ ok: true, total: merged.length });
+      console.log(`Stats import: merged ${rows.length} rows → ${merged.length} total`);
+    } catch (err) {
+      console.error('update_stats_import error:', err);
+      if (typeof ack === 'function') ack({ ok: false, error: String(err) });
+    }
+  });
+
+  // Bulk handlers+roster import
+  socket.on('update_handlers_import', async ({ handlers, roster }, ack) => {
+    if (!(await checkSocketAction(socket, 'editHandlers'))) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Unauthorized' });
+      return;
+    }
+    try {
+      const state = await State.findOne({ key: 'global' });
+
+      // Merge handlers by id
+      const handlerMap = new Map((state?.handlers || []).map((h) => [h.id, h]));
+      for (const h of handlers) {
+        if (!handlerMap.has(h.id)) handlerMap.set(h.id, h);
+      }
+      const mergedHandlers = Array.from(handlerMap.values());
+
+      // Merge roster by handlerId+date
+      const rosterMap = new Map((state?.roster || []).map((r) => [`${r.handlerId}::${r.date}`, r]));
+      for (const r of roster) {
+        rosterMap.set(`${r.handlerId}::${r.date}`, r);
+      }
+      const mergedRoster = Array.from(rosterMap.values());
+
+      await State.updateOne({ key: 'global' }, { $set: { handlers: mergedHandlers, roster: mergedRoster } });
+      socket.broadcast.emit('handlers_updated', mergedHandlers);
+      socket.broadcast.emit('roster_updated', mergedRoster);
+      if (typeof ack === 'function') ack({ ok: true, handlers: mergedHandlers.length, roster: mergedRoster.length });
+      console.log(`Handlers+Roster import: ${mergedHandlers.length} handlers, ${mergedRoster.length} roster entries`);
+    } catch (err) {
+      console.error('update_handlers_import error:', err);
+      if (typeof ack === 'function') ack({ ok: false, error: String(err) });
+    }
+  });
+
+  socket.on('add_log', async (logEntry) => {
+    // Any authenticated role may add a log entry (this is the audit trail
+    // itself), but an unauthenticated socket still can't write.
+    if (!socket.user) {
+      socket.emit('error', { message: 'Unauthorized: no active session' });
+      return;
+    }
+    const cleanEntry = {
+      ...logEntry,
+      user: sanitize(logEntry.user),
+      details: sanitize(logEntry.details),
+      dateStr: new Date().toISOString().split('T')[0]
+    };
+    await Log.create(cleanEntry);
+    socket.broadcast.emit('log_added', { dateStr: cleanEntry.dateStr, logEntry: cleanEntry });
+  });
+
+  socket.on('disconnect', () => {
+    const username = onlineUsers.get(socket.id);
+    eventCounts.delete(socket.id); // Clean up rate limit tracking
+    if (socket.user && socket.user.jti) {
+      unregisterSocketSession(socket.user.jti, socket.id);
+    }
+    if (username) {
+      onlineUsers.delete(socket.id);
+      io.emit('presence_updated', Array.from(onlineUsers.values()));
+      console.log(`User ${username} (${socket.id}) disconnected.`);
+    }
+  });
+});
+
+const PORT = process.env.PORT || 3001;
+server.listen(PORT, () => {
+  console.log(`Real-time server running on port ${PORT}`);
+});
