@@ -317,14 +317,14 @@ html, body, #root {
 
 /* Light surface contrast guard: if a card/dialog uses a light surface but a nested
    element still carries a white text utility, pull it back to readable app text. */
-[data-theme="light"] .app-shell :is(.bg-white, .bg-white\/60, .bg-white\/70, .bg-white\/80, .bg-white\/90, .bg-slate-50, .bg-slate-100) .text-white,
-[data-theme="light"] .app-shell :is(.bg-white, .bg-white\/60, .bg-white\/70, .bg-white\/80, .bg-white\/90, .bg-slate-50, .bg-slate-100) .text-white\/55,
-[data-theme="light"] .app-shell :is(.bg-white, .bg-white\/60, .bg-white\/70, .bg-white\/80, .bg-white\/90, .bg-slate-50, .bg-slate-100) .text-white\/42,
-[data-theme="light"] .app-shell :is(.bg-white, .bg-white\/60, .bg-white\/70, .bg-white\/80, .bg-white\/90, .bg-slate-50, .bg-slate-100) .text-white\/82,
-[data-theme="light"] .app-shell :is(.bg-white, .bg-white\/60, .bg-white\/70, .bg-white\/80, .bg-white\/90, .bg-slate-50, .bg-slate-100) .text-white\/65,
-[data-theme="light"] .app-shell :is(.bg-white, .bg-white\/60, .bg-white\/70, .bg-white\/80, .bg-white\/90, .bg-slate-50, .bg-slate-100) .text-white\/60,
-[data-theme="light"] .app-shell :is(.bg-white, .bg-white\/60, .bg-white\/70, .bg-white\/80, .bg-white\/90, .bg-slate-50, .bg-slate-100) .text-white\/40,
-[data-theme="light"] .app-shell :is(.bg-white, .bg-white\/60, .bg-white\/70, .bg-white\/80, .bg-white\/90, .bg-slate-50, .bg-slate-100) .text-white\/68 {
+[data-theme="light"] .app-shell :is(.bg-white, .bg-white\/60, .bg-white\/70, .bg-white\/80, .bg-white\/90, .bg-slate-50, .bg-slate-100) .text-white:not(.bg-slate-900):not(.bg-slate-800):not(.bg-slate-700):not(.bg-black):not(.bg-neutral-900),
+[data-theme="light"] .app-shell :is(.bg-white, .bg-white\/60, .bg-white\/70, .bg-white\/80, .bg-white\/90, .bg-slate-50, .bg-slate-100) .text-white\/55:not(.bg-slate-900):not(.bg-slate-800):not(.bg-slate-700):not(.bg-black):not(.bg-neutral-900),
+[data-theme="light"] .app-shell :is(.bg-white, .bg-white\/60, .bg-white\/70, .bg-white\/80, .bg-white\/90, .bg-slate-50, .bg-slate-100) .text-white\/42:not(.bg-slate-900):not(.bg-slate-800):not(.bg-slate-700):not(.bg-black):not(.bg-neutral-900),
+[data-theme="light"] .app-shell :is(.bg-white, .bg-white\/60, .bg-white\/70, .bg-white\/80, .bg-white\/90, .bg-slate-50, .bg-slate-100) .text-white\/82:not(.bg-slate-900):not(.bg-slate-800):not(.bg-slate-700):not(.bg-black):not(.bg-neutral-900),
+[data-theme="light"] .app-shell :is(.bg-white, .bg-white\/60, .bg-white\/70, .bg-white\/80, .bg-white\/90, .bg-slate-50, .bg-slate-100) .text-white\/65:not(.bg-slate-900):not(.bg-slate-800):not(.bg-slate-700):not(.bg-black):not(.bg-neutral-900),
+[data-theme="light"] .app-shell :is(.bg-white, .bg-white\/60, .bg-white\/70, .bg-white\/80, .bg-white\/90, .bg-slate-50, .bg-slate-100) .text-white\/60:not(.bg-slate-900):not(.bg-slate-800):not(.bg-slate-700):not(.bg-black):not(.bg-neutral-900),
+[data-theme="light"] .app-shell :is(.bg-white, .bg-white\/60, .bg-white\/70, .bg-white\/80, .bg-white\/90, .bg-slate-50, .bg-slate-100) .text-white\/40:not(.bg-slate-900):not(.bg-slate-800):not(.bg-slate-700):not(.bg-black):not(.bg-neutral-900),
+[data-theme="light"] .app-shell :is(.bg-white, .bg-white\/60, .bg-white\/70, .bg-white\/80, .bg-white\/90, .bg-slate-50, .bg-slate-100) .text-white\/68:not(.bg-slate-900):not(.bg-slate-800):not(.bg-slate-700):not(.bg-black):not(.bg-neutral-900) {
   color: var(--app-text) !important;
 }
 [data-theme="light"] .app-shell :is(.bg-white, .bg-white\/60, .bg-white\/70, .bg-white\/80, .bg-white\/90, .bg-slate-50, .bg-slate-100) .border-white,

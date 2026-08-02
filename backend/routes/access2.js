@@ -39,15 +39,21 @@ function decrypt(text) {
   return decrypted.toString();
 }
 
+function isUnlimitedSessionUser(fullName) {
+  return String(fullName || '').trim().toLowerCase() === 'shubham kumar';
+}
+
 // Helper function to issue session (same pattern as access.js)
 async function issueSession(res, fullName, role) {
-  const activeSession = await Session.findOne({
-    fullName,
-    revoked: false,
-    expiresAt: { $gt: new Date() },
-  });
-  if (activeSession) {
-    return res.status(409).json({ error: 'Already Logged on. If want to restore access contact Admin.' });
+  if (!isUnlimitedSessionUser(fullName)) {
+    const activeSession = await Session.findOne({
+      fullName,
+      revoked: false,
+      expiresAt: { $gt: new Date() },
+    });
+    if (activeSession) {
+      return res.status(409).json({ error: 'Already Logged on. If want to restore access contact Admin.' });
+    }
   }
 
   const jti = randomUUID();
