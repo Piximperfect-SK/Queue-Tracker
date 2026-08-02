@@ -396,17 +396,31 @@ const HomePage: React.FC = () => {
   const openInfo = (title: string, message: string) => setInfoModal({ open: true, title, message });
 
   useEffect(() => {
-    const load = () => {
-      try { const h=JSON.parse(localStorage.getItem('handlers')||'[]'); if(h.length) setHandlers(h.map((row: Handler) => normalizeHandler(row))); } catch {}
-      try { const r=JSON.parse(localStorage.getItem('roster')  ||'[]'); if(r.length) setRoster(r);   } catch {}
-      try {
-        const s=JSON.parse(localStorage.getItem('stats') || '[]');
-        if (s.length) setStats(s.map((row: DailyStats) => normalizeDailyStat(row)));
-      } catch {}
+    const applyState = (db: any) => {
+      if (!db) return;
+      const nextHandlers = Array.isArray(db.handlers || db.agents) ? (db.handlers || db.agents).map(normalizeHandler) : null;
+      if (nextHandlers) setHandlers(nextHandlers);
+      if (Array.isArray(db.roster)) setRoster(db.roster);
+      if (Array.isArray(db.stats)) setStats(db.stats.map((row: DailyStats) => normalizeDailyStat(row)));
     };
-    load();
-    const id = setInterval(load, 3000);
-    return () => clearInterval(id);
+
+    const onHandlers = (data: Handler[]) => { if (Array.isArray(data)) setHandlers(data.map(normalizeHandler)); };
+    const onRoster = (data: RosterEntry[]) => { if (Array.isArray(data)) setRoster(data); };
+    const onStats = (data: DailyStats[]) => { if (Array.isArray(data)) setStats(data.map((row) => normalizeDailyStat(row))); };
+    const onInit = (db: any) => applyState(db);
+
+    socket.on('handlers_updated', onHandlers);
+    socket.on('roster_updated', onRoster);
+    socket.on('stats_updated', onStats);
+    socket.on('init', onInit);
+    if (socket.connected) socket.emit('get_initial_data');
+
+    return () => {
+      socket.off('handlers_updated', onHandlers);
+      socket.off('roster_updated', onRoster);
+      socket.off('stats_updated', onStats);
+      socket.off('init', onInit);
+    };
   }, []);
 
   const handlerMap = useMemo(() => { const m=new Map<string,Handler>(); handlers.forEach(h=>m.set(h.id,h)); return m; }, [handlers]);

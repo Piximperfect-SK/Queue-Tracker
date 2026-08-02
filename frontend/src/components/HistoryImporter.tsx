@@ -48,6 +48,9 @@ interface ImportResult {
   skipped: number;
   months: string[];
   errors: string[];
+  handlers: { id: string; name: string; isQH: boolean; workType?: 'voice' | 'non-voice' }[];
+  roster: ImportRow[];
+  stats: { handlerId: string; date: string; incidents: number; sctasks: number; calls: number; comments: string }[];
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -101,11 +104,7 @@ function parseXlsx(file: File): Promise<ImportRow[]> {
   });
 }
 
-function doImport(rows: ImportRow[]): ImportResult {
-  // Load existing data
-  const existingHandlers: any[] = JSON.parse(localStorage.getItem('handlers') || '[]');
-  const existingRoster:   any[] = JSON.parse(localStorage.getItem('roster')   || '[]');
-  const existingStats:    any[] = JSON.parse(localStorage.getItem('stats')    || '[]');
+function doImport(rows: ImportRow[], existingHandlers: any[], existingRoster: any[], existingStats: any[]): ImportResult {
 
   // Build name→id map (normalised)
   const nameMap = new Map<string, string>();
@@ -155,12 +154,6 @@ function doImport(rows: ImportRow[]): ImportResult {
   const finalRoster = Array.from(rosterMap.values());
   const finalStats  = Array.from(statsMap.values());
 
-  // Persist locally
-  localStorage.setItem('handlers', JSON.stringify(newHandlers));
-  localStorage.setItem('roster',   JSON.stringify(finalRoster));
-  localStorage.setItem('stats',    JSON.stringify(finalStats));
-
-  // NOTE: backend sync is done separately via socket with ack
   return {
     rows:         rows.length,
     agents:       newHandlers.length - existingHandlers.length,
@@ -169,8 +162,40 @@ function doImport(rows: ImportRow[]): ImportResult {
     skipped,
     months:       Array.from(months).sort(),
     errors,
+    handlers:     newHandlers,
+    roster:       finalRoster,
+    stats:        finalStats,
   };
 }
+
+const fetchCurrentState = async () => new Promise<{ handlers: any[]; roster: any[]; stats: any[] }>((resolve) => {
+  const finish = (db: any) => {
+    resolve({
+      handlers: Array.isArray(db?.handlers || db?.agents) ? (db.handlers || db.agents) : [],
+      roster: Array.isArray(db?.roster) ? db.roster : [],
+      stats: Array.isArray(db?.stats) ? db.stats : [],
+    });
+  };
+
+  const onInit = (db: any) => {
+    socket.off('init', onInit);
+    clearTimeout(timer);
+    finish(db);
+  };
+
+  if (!socket.connected) {
+    resolve({ handlers: [], roster: [], stats: [] });
+    return;
+  }
+
+  const timer = setTimeout(() => {
+    socket.off('init', onInit);
+    resolve({ handlers: [], roster: [], stats: [] });
+  }, 12000);
+
+  socket.once('init', onInit);
+  socket.emit('get_initial_data');
+});
 
 // ── Component ─────────────────────────────────────────────────────────────────
 const HistoryImporter: React.FC = () => {
@@ -205,24 +230,16 @@ const HistoryImporter: React.FC = () => {
     if (!preview) return;
     setStage('importing');
     try {
-      // 1. Local import first (instant)
-      const res = doImport(preview.rows);
+      const currentState = await fetchCurrentState();
+      const res = doImport(preview.rows, currentState.handlers, currentState.roster, currentState.stats);
 
-      // 2. Sync to MongoDB via socket
-      // Build handler+roster payload from preview rows
-      const handlerMap = new Map<string, { id: string; name: string; isQH: boolean; workType: 'voice' | 'non-voice' }>();
-      const existingHandlers: any[] = JSON.parse(localStorage.getItem('handlers') || '[]');
-      existingHandlers.forEach((h: any) => handlerMap.set(h.id, h));
-
-      const rosterEntries: any[] = JSON.parse(localStorage.getItem('roster') || '[]')
-        .filter((r: any) => preview.months.includes(r.date?.slice(0,7)));
-      const statsEntries: any[] = JSON.parse(localStorage.getItem('stats') || '[]')
-        .filter((s: any) => preview.months.includes(s.date?.slice(0,7)));
+      const rosterEntries = res.roster.filter((r) => preview.months.includes(r.date?.slice(0, 7)));
+      const statsEntries = res.stats.filter((s) => preview.months.includes(s.date?.slice(0, 7)));
 
       // Push handlers+roster first, then stats
       await new Promise<void>((resolve) => {
         if (!socket.connected) { resolve(); return; }
-        syncData.updateHandlersImport(existingHandlers, rosterEntries, (ack) => {
+        syncData.updateHandlersImport(res.handlers, rosterEntries as any, (ack) => {
           console.log('Handlers+Roster import ack:', ack);
           resolve();
         });

@@ -40,7 +40,9 @@ const stateSchema = new mongoose.Schema({
   key: { type: String, default: 'global', unique: true },
   handlers: { type: Array, default: [] },
   roster: { type: Array, default: [] },
-  stats: { type: Array, default: [] }
+  stats: { type: Array, default: [] },
+  customShifts: { type: [String], default: [] },
+  shiftQH: { type: Array, default: [] }
 });
 
 const logSchema = new mongoose.Schema({
@@ -247,6 +249,19 @@ const sanitize = (text) => {
   if (typeof text !== 'string') return text;
   return text.replace(/<[^>]*>/g, '').trim();
 };
+
+const normalizeStringList = (values) => Array.from(new Set(
+  (Array.isArray(values) ? values : [])
+    .map((value) => (typeof value === 'string' ? sanitize(value) : ''))
+    .map((value) => value.trim())
+    .filter(Boolean)
+));
+
+const normalizeShiftQHRow = (row) => ({
+  handlerId: String(row?.handlerId || '').trim(),
+  date: String(row?.date || '').trim(),
+  shift: String(row?.shift || '').trim(),
+});
 
 const TEAM_ACCESS_KEY = (process.env.TEAM_ACCESS_KEY || "").trim(); // Ensure no sneaky spaces
 console.log('--- SECURITY CONFIG ---');
@@ -471,6 +486,42 @@ io.on('connection', async (socket) => {
     if (!(await checkSocketAction(socket, 'editRoster'))) return;
     await State.updateOne({ key: 'global' }, { $set: { stats: stats } });
     socket.broadcast.emit('stats_updated', stats);
+  });
+
+  socket.on('update_custom_shifts', async (customShifts, ack) => {
+    if (!(await checkSocketAction(socket, 'shiftManagement'))) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Forbidden: missing permission shiftManagement' });
+      return;
+    }
+
+    try {
+      const cleanCustomShifts = normalizeStringList(customShifts);
+      await State.updateOne({ key: 'global' }, { $set: { customShifts: cleanCustomShifts } });
+      socket.broadcast.emit('custom_shifts_updated', cleanCustomShifts);
+      if (typeof ack === 'function') ack({ ok: true });
+    } catch (err) {
+      console.error('update_custom_shifts error:', err);
+      if (typeof ack === 'function') ack({ ok: false, error: String(err) });
+    }
+  });
+
+  socket.on('update_shift_qh', async (shiftQH, ack) => {
+    if (!(await checkSocketAction(socket, 'editRoster'))) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Forbidden: missing permission editRoster' });
+      return;
+    }
+
+    try {
+      const cleanShiftQH = Array.isArray(shiftQH)
+        ? shiftQH.map(normalizeShiftQHRow).filter((row) => row.handlerId && row.date && row.shift)
+        : [];
+      await State.updateOne({ key: 'global' }, { $set: { shiftQH: cleanShiftQH } });
+      socket.broadcast.emit('shift_qh_updated', cleanShiftQH);
+      if (typeof ack === 'function') ack({ ok: true });
+    } catch (err) {
+      console.error('update_shift_qh error:', err);
+      if (typeof ack === 'function') ack({ ok: false, error: String(err) });
+    }
   });
 
   // Bulk history import — merges stats by handlerId+date instead of full replace

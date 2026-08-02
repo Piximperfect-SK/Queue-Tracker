@@ -27,6 +27,9 @@ export const syncData = {
   updateRoster:   (roster: RosterEntry[]) => socket.emit('update_roster', roster),
   updateStats:    (stats: DailyStats[]) => socket.emit('update_stats', stats),
   addLog:         (logEntry: LogEntry) => socket.emit('add_log', logEntry),
+  updateCustomShifts: (customShifts: string[], cb?: Ack) => socket.emit('update_custom_shifts', customShifts, cb),
+  updateShiftQH: (shiftQH: { handlerId: string; date: string; shift: string }[], cb?: Ack) =>
+    socket.emit('update_shift_qh', shiftQH, cb),
 
   // Bulk import — merges into MongoDB without overwriting unrelated data
   updateStatsImport: (rows: DailyStats[], cb?: Ack) =>

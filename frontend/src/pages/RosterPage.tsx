@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import * as XLSX from 'xlsx';
-import { MOCK_HANDLERS, SHIFTS, MOCK_ROSTER } from '../data/mockData';
+import { SHIFTS } from '../data/mockData';
 import { GripVertical, Plus, X, Trash2, AlertCircle, Upload, ChevronLeft, ChevronRight, Shield, Lock } from 'lucide-react';
 import type { Handler, RosterEntry, ShiftType } from '../types';
 import { addLog, saveLogsFromServer, saveSingleLogFromServer } from '../utils/logger';
@@ -250,13 +250,9 @@ interface RosterPageProps {
 const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }) => {
   const { actions } = useRole();
   const canImportRoster = actions.importRoster;
-  const [handlers, setHandlers] = useState<Handler[]>(() => {
-    const s = localStorage.getItem('handlers'); return s ? JSON.parse(s).map((row: Handler) => normalizeHandler(row)) : MOCK_HANDLERS;
-  });
-  const [roster, setRoster] = useState<RosterEntry[]>(() => {
-    const s = localStorage.getItem('roster');
-    return applyBlueprint(s ? JSON.parse(s) : MOCK_ROSTER);
-  });
+  const [handlers, setHandlers] = useState<Handler[]>([]);
+  const [roster, setRoster] = useState<RosterEntry[]>([]);
+  const [customShifts, setCustomShifts] = useState<string[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [restrictedAction, setRestrictedAction] = useState<string | null>(null);
@@ -286,15 +282,11 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
   } | null>(null);
 
   // Shift-specific QH assignments
-  const [shiftQH, setShiftQH] = useState<ShiftQH[]>(() => {
-    const saved = localStorage.getItem('shiftQH');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [shiftQH, setShiftQH] = useState<ShiftQH[]>([]);
 
   const saveShiftQH = (qhArray: ShiftQH[]) => {
     setShiftQH(qhArray);
-    localStorage.setItem('shiftQH', JSON.stringify(qhArray));
-    syncData.updateRoster(roster); // Notify changes
+    syncData.updateShiftQH(qhArray);
   };
 
   // Determine if handler should be QH for a shift/date
@@ -361,37 +353,41 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
 
   const availableShifts = useMemo(() => {
     const s = new Set(SHIFTS);
-    // Add custom shifts from localStorage
-    const custom = localStorage.getItem('customShifts');
-    if (custom) {
-      JSON.parse(custom).forEach((shift: string) => s.add(shift));
-    }
+    customShifts.forEach((shift) => s.add(shift));
     roster.filter(e => e.date === selectedDate).forEach(e => s.add(e.shift));
     return Array.from(s);
-  }, [roster, selectedDate]);
+  }, [roster, selectedDate, customShifts]);
 
   const shiftPickerOptions = useMemo(() =>
     Array.from(new Set([...ALL_SHIFT_TYPES, ...availableShifts])),
   [availableShifts]);
 
   useEffect(() => {
-    const onHandlers = (d: Handler[]) => { if (d) { const normalized = d.map(normalizeHandler); setHandlers(normalized); localStorage.setItem('handlers', JSON.stringify(normalized)); } };
-    const onRoster   = (d: RosterEntry[]) => { if (d) { const m = applyBlueprint(d); setRoster(m); localStorage.setItem('roster', JSON.stringify(m)); } };
+    const onHandlers = (d: Handler[]) => { if (Array.isArray(d)) setHandlers(d.map(normalizeHandler)); };
+    const onRoster   = (d: RosterEntry[]) => { if (Array.isArray(d)) setRoster(d); };
+    const onCustomShifts = (d: string[]) => { if (Array.isArray(d)) setCustomShifts(d); };
+    const onShiftQH = (d: ShiftQH[]) => { if (Array.isArray(d)) setShiftQH(d); };
     const onInit = (db: any) => {
       if (!db) return;
       const h = db.handlers || db.agents;
-      if (Array.isArray(h)) { const normalized = h.map(normalizeHandler); setHandlers(normalized); localStorage.setItem('handlers', JSON.stringify(normalized)); }
-      if (Array.isArray(db.roster)) { const m = applyBlueprint(db.roster); setRoster(m); localStorage.setItem('roster', JSON.stringify(m)); }
+      if (Array.isArray(h)) setHandlers(h.map(normalizeHandler));
+      if (Array.isArray(db.roster)) setRoster(db.roster);
+      if (Array.isArray(db.customShifts)) setCustomShifts(db.customShifts);
+      if (Array.isArray(db.shiftQH)) setShiftQH(db.shiftQH);
       if (db.logs) saveLogsFromServer(db.logs);
     };
     socket.on('handlers_updated', onHandlers);
     socket.on('roster_updated', onRoster);
+    socket.on('custom_shifts_updated', onCustomShifts);
+    socket.on('shift_qh_updated', onShiftQH);
     socket.on('log_added', ({ dateStr, logEntry }) => saveSingleLogFromServer(dateStr, logEntry));
     socket.on('init', onInit);
     if (socket.connected) socket.emit('get_initial_data');
     return () => {
       socket.off('handlers_updated', onHandlers);
       socket.off('roster_updated', onRoster);
+      socket.off('custom_shifts_updated', onCustomShifts);
+      socket.off('shift_qh_updated', onShiftQH);
       socket.off('log_added');
       socket.off('init', onInit);
     };
@@ -418,7 +414,7 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
     const oldShift = idx > -1 ? updated[idx].shift : 'Unassigned';
     if (idx > -1) updated[idx] = { ...updated[idx], shift };
     else updated.push({ handlerId, date: selectedDate, shift });
-    setRoster(updated); localStorage.setItem('roster', JSON.stringify(updated)); syncData.updateRoster(updated);
+    setRoster(updated); syncData.updateRoster(updated);
     addLog('Update Shift', `${handler?.name || handlerId}: ${oldShift} -> ${shift} (Date: ${selectedDate})`);
   };
 
@@ -427,7 +423,6 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
     const uh = handlers.filter(a => a.id !== handlerId);
     const ur = roster.filter(r => r.handlerId !== handlerId);
     setHandlers(uh); setRoster(ur);
-    localStorage.setItem('handlers', JSON.stringify(uh)); localStorage.setItem('roster', JSON.stringify(ur));
     syncData.updateHandlers(uh); syncData.updateRoster(ur);
     addLog('Delete Agent', `Permanently deleted handler: ${h?.name || handlerId}`, 'negative');
   }
@@ -592,12 +587,12 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
         });
 
       const merged = mergeRosterEntries(roster, parsedEntries);
-      setRoster(merged); localStorage.setItem('roster', JSON.stringify(merged));
+      setRoster(merged);
       await withAck('Roster', cb => syncData.updateRoster(merged, cb));
 
       if (newHandlers.length) {
         const uh = [...handlers, ...newHandlers];
-        setHandlers(uh); localStorage.setItem('handlers', JSON.stringify(uh));
+        setHandlers(uh);
         await withAck('Handlers', cb => syncData.updateHandlers(uh, cb));
       }
       const dates = parsedEntries.map(e => e.date).sort();
@@ -779,12 +774,10 @@ Rules:
     const { entries, newHandlers } = screenshotParseResult;
     const merged = mergeRosterEntries(roster, entries);
     setRoster(merged);
-    localStorage.setItem('roster', JSON.stringify(merged));
     syncData.updateRoster(merged);
     if (newHandlers.length) {
       const uh = [...handlers, ...newHandlers];
       setHandlers(uh);
-      localStorage.setItem('handlers', JSON.stringify(uh));
       syncData.updateHandlers(uh);
     }
     // Navigate to first date in the import
@@ -807,7 +800,7 @@ Rules:
       const to = leaveOperation.toShift;
       if (to === 'UNASSIGNED') {
         const ur = roster.filter(r => !(r.handlerId === leaveOperation.handlerId && r.date === selectedDate));
-        setRoster(ur); localStorage.setItem('roster', JSON.stringify(ur)); syncData.updateRoster(ur);
+        setRoster(ur); syncData.updateRoster(ur);
         const h = handlers.find(a => a.id === leaveOperation.handlerId);
         addLog('Update Shift', `${h?.name}: ${leaveOperation.fromShift} -> Unassigned`);
       } else if (to) executeShiftUpdate(leaveOperation.handlerId, to as ShiftType);
@@ -819,10 +812,10 @@ Rules:
     const name = newAgentName.trim(); if (!name) return;
     const id = createAgentId();
     const uh = [...handlers, { id, name, isQH: false, workType: 'voice' }];
-    setHandlers(uh); localStorage.setItem('handlers', JSON.stringify(uh)); syncData.updateHandlers(uh);
+    setHandlers(uh); syncData.updateHandlers(uh);
     if (newAgentShift) {
       const ur = mergeRosterEntries(roster, [{ handlerId: id, date: selectedDate, shift: newAgentShift }]);
-      setRoster(ur); localStorage.setItem('roster', JSON.stringify(ur)); syncData.updateRoster(ur);
+      setRoster(ur); syncData.updateRoster(ur);
       addLog('Register Agent', `Registered: ${name} → ${newAgentShift} on ${selectedDate}`, 'positive');
     } else { addLog('Register Agent', `Registered: ${name}`, 'positive'); }
     setNewAgentName(''); setNewAgentShift(''); setIsModalOpen(false);
@@ -852,14 +845,14 @@ Rules:
     else if (overId === 'OFF_DUTY') updateShift(handlerId, 'WeekOff');
     else if (overId === 'UNASSIGNED') {
       const ur = roster.filter(r => !(r.handlerId === handlerId && r.date === selectedDate));
-      setRoster(ur); localStorage.setItem('roster', JSON.stringify(ur));
+      setRoster(ur);
     } else if (overId === 'TRASH' && isHorizontal) deleteHandlerGlobally(handlerId);
     else {
       const overEntry = roster.find(r => r.handlerId === overId && r.date === selectedDate);
       if (overEntry) updateShift(handlerId, overEntry.shift);
       else if (getUnassignedHandlers().some(a => a.id === overId)) {
         const ur = roster.filter(r => !(r.handlerId === handlerId && r.date === selectedDate));
-        setRoster(ur); localStorage.setItem('roster', JSON.stringify(ur));
+        setRoster(ur);
       }
     }
   };

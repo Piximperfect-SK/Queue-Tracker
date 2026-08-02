@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { MOCK_HANDLERS, MOCK_ROSTER } from '../data/mockData';
+import { } from '../data/mockData';
 import { ShieldCheck, PhoneCall, X, Check, ChevronLeft, ChevronRight, Shield, ChevronUp, ChevronDown, Minus } from 'lucide-react';
 import type { DailyStats, Handler, RosterEntry, ShiftType } from '../types';
 import { addLog, saveLogsFromServer, saveSingleLogFromServer } from '../utils/logger';
@@ -143,15 +143,9 @@ interface TrackerPageProps {
 // ═════════════════════════════════════════════════════════════════════════
 const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate }) => {
   const { theme } = useTheme();
-  const [handlers, setHandlers] = useState<Handler[]>(() => {
-    const s = localStorage.getItem('handlers'); return s ? JSON.parse(s).map((row: Handler) => normalizeHandler(row)) : MOCK_HANDLERS;
-  });
-  const [roster, setRoster] = useState<RosterEntry[]>(() => {
-    const s = localStorage.getItem('roster'); return s ? JSON.parse(s) : MOCK_ROSTER;
-  });
-  const [stats, setStats] = useState<DailyStats[]>(() => {
-    const s = localStorage.getItem('stats'); return s ? JSON.parse(s).map((row: DailyStats) => normalizeDailyStat(row)) : [];
-  });
+  const [handlers, setHandlers] = useState<Handler[]>([]);
+  const [roster, setRoster] = useState<RosterEntry[]>([]);
+  const [stats, setStats] = useState<DailyStats[]>([]);
   const [currentTime, setCurrentTime]   = useState(new Date());
   const [flashMap, setFlashMap]         = useState<Record<string, 'positive' | 'negative'>>({});
   const [times, setTimes]               = useState({ ist: '', uk: '' });
@@ -199,15 +193,15 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
 
   // ── Socket sync ──────────────────────────────────────────────────────────
   useEffect(() => {
-    const onHandlers = (d: Handler[]) => { if (d) { const normalized = d.map(normalizeHandler); setHandlers(normalized); localStorage.setItem('handlers', JSON.stringify(normalized)); } };
-    const onRoster   = (d: RosterEntry[]) => { if (d) { setRoster(d); localStorage.setItem('roster', JSON.stringify(d)); } };
-    const onStats    = (d: DailyStats[]) => { if (d) { setStats(d); localStorage.setItem('stats', JSON.stringify(d)); } };
+    const onHandlers = (d: Handler[]) => { if (Array.isArray(d)) setHandlers(d.map(normalizeHandler)); };
+    const onRoster   = (d: RosterEntry[]) => { if (Array.isArray(d)) setRoster(d); };
+    const onStats    = (d: DailyStats[]) => { if (Array.isArray(d)) setStats(d.map((row) => normalizeDailyStat(row))); };
     const onInit     = (db: any) => {
       if (!db) return;
       const h = db.handlers || db.agents;
-      if (Array.isArray(h)) { const normalized = h.map(normalizeHandler); setHandlers(normalized); localStorage.setItem('handlers', JSON.stringify(normalized)); }
-      if (Array.isArray(db.roster)) { setRoster(db.roster); localStorage.setItem('roster', JSON.stringify(db.roster)); }
-      if (Array.isArray(db.stats)) { setStats(db.stats); localStorage.setItem('stats', JSON.stringify(db.stats)); }
+      if (Array.isArray(h)) setHandlers(h.map(normalizeHandler));
+      if (Array.isArray(db.roster)) setRoster(db.roster);
+      if (Array.isArray(db.stats)) setStats(db.stats.map((row: DailyStats) => normalizeDailyStat(row)));
       if (db.logs) saveLogsFromServer(db.logs);
     };
     socket.on('handlers_updated', onHandlers);

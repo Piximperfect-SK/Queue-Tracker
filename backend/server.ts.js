@@ -40,7 +40,9 @@ const stateSchema = new mongoose.Schema({
   key: { type: String, default: 'global', unique: true },
   handlers: { type: Array, default: [] },
   roster: { type: Array, default: [] },
-  stats: { type: Array, default: [] }
+  stats: { type: Array, default: [] },
+  customShifts: { type: [String], default: [] },
+  shiftQH: { type: Array, default: [] }
 });
 
 const logSchema = new mongoose.Schema({
@@ -250,6 +252,19 @@ const sanitize = (text) => {
   if (typeof text !== 'string') return text;
   return text.replace(/<[^>]*>/g, '').trim();
 };
+
+const normalizeStringList = (values) => Array.from(new Set(
+  (Array.isArray(values) ? values : [])
+    .map((value) => (typeof value === 'string' ? sanitize(value) : ''))
+    .map((value) => value.trim())
+    .filter(Boolean)
+));
+
+const normalizeShiftQHRow = (row) => ({
+  handlerId: String(row?.handlerId || '').trim(),
+  date: String(row?.date || '').trim(),
+  shift: String(row?.shift || '').trim(),
+});
 
 const normalizeCount = (value) => {
   const n = typeof value === 'number' ? value : Number(value || 0);
@@ -520,6 +535,42 @@ io.on('connection', async (socket) => {
       if (typeof cb === 'function') cb({ ok: true });
     } catch (err) {
       console.error('update_stats failed:', err);
+      if (typeof cb === 'function') cb({ ok: false, error: err.message });
+    }
+  });
+
+  socket.on('update_custom_shifts', async (customShifts, cb) => {
+    if (!(await checkSocketAction(socket, 'shiftManagement'))) {
+      if (typeof cb === 'function') cb({ ok: false, error: 'Forbidden: missing permission shiftManagement' });
+      return;
+    }
+
+    try {
+      const cleanCustomShifts = normalizeStringList(customShifts);
+      await State.updateOne({ key: 'global' }, { $set: { customShifts: cleanCustomShifts } });
+      socket.broadcast.emit('custom_shifts_updated', cleanCustomShifts);
+      if (typeof cb === 'function') cb({ ok: true });
+    } catch (err) {
+      console.error('update_custom_shifts failed:', err);
+      if (typeof cb === 'function') cb({ ok: false, error: err.message });
+    }
+  });
+
+  socket.on('update_shift_qh', async (shiftQH, cb) => {
+    if (!(await checkSocketAction(socket, 'editRoster'))) {
+      if (typeof cb === 'function') cb({ ok: false, error: 'Forbidden: missing permission editRoster' });
+      return;
+    }
+
+    try {
+      const cleanShiftQH = Array.isArray(shiftQH)
+        ? shiftQH.map(normalizeShiftQHRow).filter((row) => row.handlerId && row.date && row.shift)
+        : [];
+      await State.updateOne({ key: 'global' }, { $set: { shiftQH: cleanShiftQH } });
+      socket.broadcast.emit('shift_qh_updated', cleanShiftQH);
+      if (typeof cb === 'function') cb({ ok: true });
+    } catch (err) {
+      console.error('update_shift_qh failed:', err);
       if (typeof cb === 'function') cb({ ok: false, error: err.message });
     }
   });

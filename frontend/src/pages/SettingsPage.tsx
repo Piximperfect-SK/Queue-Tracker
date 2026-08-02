@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { MOCK_HANDLERS } from '../data/mockData';
 import { Trash2, ShieldCheck, FileText, Database, Settings as SettingsIcon, AlertCircle, Users, Activity, Server, Plus, X, Check, Edit3, Clock } from 'lucide-react';
 import type { Handler } from '../types';
 import { addLog, downloadLogsForDate, downloadAllLogs, saveLogsFromServer, saveSingleLogFromServer } from '../utils/logger';
@@ -29,16 +28,16 @@ const SettingsPage: React.FC = () => {
 
   useEffect(() => {
     const handleHandlers = (data: any) => {
-      const normalized = data.map(normalizeHandler);
+      const normalized = Array.isArray(data) ? data.map(normalizeHandler) : [];
       setHandlers(normalized);
-      localStorage.setItem('handlers', JSON.stringify(normalized));
     };
 
-    // Load custom shifts from localStorage
-    const saved = localStorage.getItem('customShifts');
-    if (saved) setCustomShifts(JSON.parse(saved));
+    const handleCustomShifts = (data: string[]) => {
+      if (Array.isArray(data)) setCustomShifts(data);
+    };
 
     socket.on('handlers_updated', handleHandlers);
+    socket.on('custom_shifts_updated', handleCustomShifts);
     socket.on('log_added', ({ dateStr, logEntry }) => {
       saveSingleLogFromServer(dateStr, logEntry);
     });
@@ -47,26 +46,26 @@ const SettingsPage: React.FC = () => {
         const data = db.handlers || db.agents;
         const normalized = data.map(normalizeHandler);
         setHandlers(normalized);
-        localStorage.setItem('handlers', JSON.stringify(normalized));
+      }
+      if (Array.isArray(db.customShifts)) {
+        setCustomShifts(db.customShifts);
       }
       if (db.logs) {
         saveLogsFromServer(db.logs);
       }
     });
 
-    const savedHandlers = localStorage.getItem('handlers');
-    if (savedHandlers) setHandlers(JSON.parse(savedHandlers).map((row: Handler) => normalizeHandler(row)));
-    else setHandlers(MOCK_HANDLERS);
+    if (socket.connected) socket.emit('get_initial_data');
 
     return () => {
       socket.off('handlers_updated', handleHandlers);
+      socket.off('custom_shifts_updated', handleCustomShifts);
       socket.off('init');
     };
   }, []);
 
   const saveHandlers = (updatedHandlers: Handler[]) => {
     setHandlers(updatedHandlers);
-    localStorage.setItem('handlers', JSON.stringify(updatedHandlers));
     syncData.updateHandlers(updatedHandlers);
   };
 
@@ -123,7 +122,7 @@ const SettingsPage: React.FC = () => {
     if (!newShiftInput.trim()) return;
     const updated = [...customShifts, newShiftInput.trim()];
     setCustomShifts(updated);
-    localStorage.setItem('customShifts', JSON.stringify(updated));
+    syncData.updateCustomShifts(updated);
     setNewShiftInput('');
     addLog('Shift Management', `Added new shift: ${newShiftInput.trim()}`, 'positive');
   };
@@ -131,7 +130,7 @@ const SettingsPage: React.FC = () => {
   const removeCustomShift = (shift: string) => {
     const updated = customShifts.filter(s => s !== shift);
     setCustomShifts(updated);
-    localStorage.setItem('customShifts', JSON.stringify(updated));
+    syncData.updateCustomShifts(updated);
     addLog('Shift Management', `Removed shift: ${shift}`, 'negative');
   };
 
