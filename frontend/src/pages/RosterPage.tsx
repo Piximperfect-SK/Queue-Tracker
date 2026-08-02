@@ -156,6 +156,8 @@ const applyBlueprint = (base: RosterEntry[]) => {
   return entries.length ? mergeRosterEntries(base, entries) : base;
 };
 
+const SERVER_ACK_TIMEOUT_MS = 30000;
+
 // ─── DroppableContainer ──────────────────────────────────────────────────────
 const DroppableContainer: React.FC<{ id: string; children: React.ReactNode; className?: string }> = ({ id, children, className }) => {
   const { setNodeRef, isOver } = useDroppable({ id });
@@ -576,7 +578,7 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
       const ackErrors: string[] = [];
       const withAck = (label: string, fn: (cb: (res: { ok: boolean; error?: string }) => void) => void) =>
         new Promise<void>(resolve => {
-          const timer = setTimeout(() => { ackErrors.push(`${label}: no response from server (timed out)`); resolve(); }, 8000);
+          const timer = setTimeout(() => { ackErrors.push(`${label}: server confirmation timed out`); resolve(); }, SERVER_ACK_TIMEOUT_MS);
           fn(res => {
             clearTimeout(timer);
             if (!res?.ok) ackErrors.push(`${label}: ${res?.error || 'failed'}`);
@@ -595,8 +597,13 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
       }
       const dates = parsedEntries.map(e => e.date).sort();
       if (dates.length) setSelectedDate(dates[0]);
-      const tone: ImportFeedback['tone'] = ackErrors.length ? 'error' : rowErrors.length ? 'warning' : 'success';
-      const savedMsg = ackErrors.length ? ` NOT saved to server — ${ackErrors.join('; ')}` : ' Saved to server.';
+      const onlyTimeoutErrors = ackErrors.length > 0 && ackErrors.every((e) => e.toLowerCase().includes('timed out'));
+      const tone: ImportFeedback['tone'] = ackErrors.length ? (onlyTimeoutErrors ? 'warning' : 'error') : rowErrors.length ? 'warning' : 'success';
+      const savedMsg = ackErrors.length
+        ? (onlyTimeoutErrors
+            ? ` Server confirmation pending/timed out — ${ackErrors.join('; ')}. Data may still complete on backend.`
+            : ` Server save failed — ${ackErrors.join('; ')}`)
+        : ' Saved to server.';
       setImportStatus({ message: `Imported ${parsedEntries.length} roster entries.${newHandlers.length?` +${newHandlers.length} new agent(s).`:''}${rowErrors.length?` (${rowErrors.length} skipped)`:''}${savedMsg}`, tone });
       addLog('Import Roster', `Imported ${parsedEntries.length} roster entries from ${file.name}${ackErrors.length ? ` — SYNC FAILED: ${ackErrors.join('; ')}` : ''}`, ackErrors.length ? 'negative' : 'positive');
     } catch (err) {

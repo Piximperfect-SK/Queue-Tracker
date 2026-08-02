@@ -122,6 +122,8 @@ const isLikelyNameText = (value: unknown) => {
 const findColumnIndex = (headers: string[], keywords: string[]) =>
   headers.findIndex((h) => keywords.some((k) => h.includes(k)));
 
+const SERVER_ACK_TIMEOUT_MS = 30000;
+
 const parseDateFromSheetName = (sheetName: string, fallbackYear: number) => {
   const raw = normalizeCellValue(sheetName);
   if (!raw) return null;
@@ -801,9 +803,9 @@ const HomePage: React.FC = () => {
       const withAck = (label: string, fn: (cb: (res: { ok: boolean; error?: string }) => void) => void) =>
         new Promise<void>((resolve) => {
           const timer = setTimeout(() => {
-            ackErrors.push(`${label}: no response from server (timed out)`);
+            ackErrors.push(`${label}: server confirmation timed out`);
             resolve();
-          }, 8000);
+          }, SERVER_ACK_TIMEOUT_MS);
           fn((res) => {
             clearTimeout(timer);
             if (!res?.ok) ackErrors.push(`${label}: ${res?.error || 'failed'}`);
@@ -825,8 +827,13 @@ const HomePage: React.FC = () => {
         await withAck('Handlers', (cb) => syncData.updateHandlers(mergedHandlers, cb));
       }
 
-      const tone: ImportFeedback['tone'] = ackErrors.length ? 'error' : refineWarnings.length ? 'warning' : 'success';
-      const savedMsg = ackErrors.length ? ` NOT saved to server — ${ackErrors.join('; ')}` : ' Saved to server.';
+      const onlyTimeoutErrors = ackErrors.length > 0 && ackErrors.every((e) => e.toLowerCase().includes('timed out'));
+      const tone: ImportFeedback['tone'] = ackErrors.length ? (onlyTimeoutErrors ? 'warning' : 'error') : refineWarnings.length ? 'warning' : 'success';
+      const savedMsg = ackErrors.length
+        ? (onlyTimeoutErrors
+            ? ` Server confirmation pending/timed out — ${ackErrors.join('; ')}. Data may still complete on backend.`
+            : ` Server save failed — ${ackErrors.join('; ')}`)
+        : ' Saved to server.';
       setImportStatus({
         message: `Imported ${parsedStats.length} analytics row(s).${newHandlers.length ? ` +${newHandlers.length} new agent(s).` : ''}${refineWarnings.length ? ` (${refineWarnings.length} skipped while refining)` : ''}${savedMsg}`,
         tone,
