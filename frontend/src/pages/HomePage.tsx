@@ -110,6 +110,19 @@ const parseNumberCell = (value: unknown) => {
   return Number.isFinite(n) ? n : 0;
 };
 
+const normalizeCount = (value: unknown) => {
+  const numeric = typeof value === 'number' && Number.isFinite(value) ? value : parseNumberCell(value);
+  return Math.max(0, Math.round(numeric));
+};
+
+const normalizeDailyStat = (stat: DailyStats): DailyStats => ({
+  ...stat,
+  incidents: normalizeCount(stat.incidents),
+  sctasks: normalizeCount(stat.sctasks),
+  calls: normalizeCount(stat.calls),
+  comments: typeof stat.comments === 'string' ? stat.comments : '',
+});
+
 const isLikelyNameText = (value: unknown) => {
   const v = normalizeCellValue(value);
   if (!v) return false;
@@ -317,7 +330,10 @@ const HomePage: React.FC = () => {
     const load = () => {
       try { const h=JSON.parse(localStorage.getItem('handlers')||'[]'); if(h.length) setHandlers(h); } catch {}
       try { const r=JSON.parse(localStorage.getItem('roster')  ||'[]'); if(r.length) setRoster(r);   } catch {}
-      try { const s=JSON.parse(localStorage.getItem('stats')   ||'[]'); if(s.length) setStats(s);    } catch {}
+      try {
+        const s=JSON.parse(localStorage.getItem('stats') || '[]');
+        if (s.length) setStats(s.map((row: DailyStats) => normalizeDailyStat(row)));
+      } catch {}
     };
     load();
     const id = setInterval(load, 3000);
@@ -401,7 +417,7 @@ const HomePage: React.FC = () => {
       .map(h => {
         const s  = agentStats[h.id] || {inc:0,task:0,calls:0,days:new Set()};
         const total = s.inc+s.task+s.calls;
-        const perDay = s.days.size > 0 ? +(total/s.days.size).toFixed(1) : 0;
+        const perDay = s.days.size > 0 ? Math.round(total / s.days.size) : 0;
         const shift = filteredRoster.find(r=>r.handlerId===h.id&&!LEAVE_TYPES.has(r.shift))?.shift || '—';
         const onLeave = filteredRoster.some(r=>r.handlerId===h.id&&LEAVE_TYPES.has(r.shift));
         return { id:h.id, name:h.name, isQH:h.isQH, inc:s.inc, task:s.task, calls:s.calls, total, perDay, days:s.days.size, shift, onLeave };
@@ -521,7 +537,7 @@ const HomePage: React.FC = () => {
 
     const shiftAoA = [
       ['Shift','Agents','Incidents','SC Tasks','Calls','Total','Avg / Agent'],
-      ...shiftAnalysis.map(s => [s.shift, s.agents, s.inc, s.task, s.calls, s.total, s.agents>0?+(s.total/s.agents).toFixed(1):0]),
+      ...shiftAnalysis.map(s => [s.shift, s.agents, s.inc, s.task, s.calls, s.total, s.agents>0?Math.round(s.total/s.agents):0]),
     ];
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(shiftAoA), 'Shift Breakdown');
 
@@ -609,14 +625,14 @@ const HomePage: React.FC = () => {
           continue;
         }
 
-        const incidents = incCol > -1 ? parseNumberCell(row[incCol]) : 0;
-        const sctasks = taskCol > -1 ? parseNumberCell(row[taskCol]) : 0;
-        const calls = callCol > -1 ? parseNumberCell(row[callCol]) : 0;
+        const incidents = incCol > -1 ? normalizeCount(row[incCol]) : 0;
+        const sctasks = taskCol > -1 ? normalizeCount(row[taskCol]) : 0;
+        const calls = callCol > -1 ? normalizeCount(row[callCol]) : 0;
         const totalHandled = totalHandledCol > -1
-          ? parseNumberCell(row[totalHandledCol])
+          ? normalizeCount(row[totalHandledCol])
           : incidents + sctasks + calls;
-        const endorsementTickets = endorsementCol > -1 ? parseNumberCell(row[endorsementCol]) : 0;
-        const grandTotal = grandTotalCol > -1 ? parseNumberCell(row[grandTotalCol]) : totalHandled + endorsementTickets;
+        const endorsementTickets = endorsementCol > -1 ? normalizeCount(row[endorsementCol]) : 0;
+        const grandTotal = grandTotalCol > -1 ? normalizeCount(row[grandTotalCol]) : totalHandled + endorsementTickets;
 
         if (!incidents && !sctasks && !calls && !totalHandled && /leave|weekoff|wo|pl|ml|el|ul/i.test(shift)) {
           warnings.push(`${sheetName} row ${i + 1}: skipped leave-only row`);
@@ -635,7 +651,7 @@ const HomePage: React.FC = () => {
           incidents,
           sctasks,
           calls,
-          p1p2vip: p1Col > -1 ? parseNumberCell(row[p1Col]) : 0,
+          p1p2vip: p1Col > -1 ? normalizeCount(row[p1Col]) : 0,
           comments: commentsCol > -1 ? normalizeCellValue(row[commentsCol]) : '',
           totalHandled,
           endorsementTickets,
@@ -655,7 +671,7 @@ const HomePage: React.FC = () => {
         const date = (dateCell ? parseExcelDate(dateCell) : null) ?? sheetDate;
         const nameCell = row.find((c) => isLikelyNameText(c));
         const name = nameCell ? normalizeCellValue(nameCell) : '';
-        const nums = row.map((c) => parseNumberCell(c)).filter((n) => Number.isFinite(n) && n > 0);
+        const nums = row.map((c) => normalizeCount(c)).filter((n) => Number.isFinite(n) && n > 0);
 
         if (!name || !date) {
           warnings.push(`${sheetName} row ${i + 1}: skipped (unable to infer name/date)`);
@@ -821,14 +837,14 @@ const HomePage: React.FC = () => {
           lookup.set(key, hid);
           newHandlers.push({ id: hid, name: row.agentName, isQH: false });
         }
-        parsedStats.push({
+        parsedStats.push(normalizeDailyStat({
           handlerId: hid,
           date: row.date,
           incidents: row.incidents,
           sctasks: row.sctasks,
           calls: row.calls,
           comments: '',
-        });
+        }));
       });
 
       const ackErrors: string[] = [];
@@ -845,11 +861,14 @@ const HomePage: React.FC = () => {
           });
         });
 
-      const mergedStats = mergeStatsEntries(stats, parsedStats);
-      setStats(mergedStats);
-      localStorage.setItem('stats', JSON.stringify(mergedStats));
+      const scopeDates = new Set(parsedStats.map((r) => r.date));
+      const preservedStats = stats.filter((r) => !scopeDates.has(r.date));
+      const mergedStats = mergeStatsEntries(preservedStats, parsedStats);
+      const normalizedMergedStats = mergedStats.map(normalizeDailyStat);
+      setStats(normalizedMergedStats);
+      localStorage.setItem('stats', JSON.stringify(normalizedMergedStats));
       setImportProgress({ step: 'Syncing analytics stats to server...', percent: 45, mode: 'import' });
-      await withAck('Stats', (cb) => syncData.updateStats(mergedStats, cb));
+      await withAck('Stats', (cb) => syncData.updateStatsImport(parsedStats, { replaceByDate: true }, cb));
 
       if (newHandlers.length) {
         const mergedHandlers = [...handlers, ...newHandlers];
@@ -1178,7 +1197,7 @@ const HomePage: React.FC = () => {
               <KpiCard label="Incidents"       value={totalInc}         sub="logged"          color="#2563eb" trend={pctChange(totalInc, prevTotalInc)}/>
               <KpiCard label="SC Tasks"        value={totalTask}        sub="completed"       color="#b45309" trend={pctChange(totalTask, prevTotalTask)}/>
               <KpiCard label="Calls"           value={totalCalls}       sub="handled"         color="#00ADB5" trend={pctChange(totalCalls, prevTotalCalls)}/>
-              <KpiCard label="Avg / Agent"     value={activeCount?+(grandTotal/activeCount).toFixed(1):0} sub="tickets+calls" color="#7c3aed"/>
+              <KpiCard label="Avg / Agent"     value={activeCount ? Math.round(grandTotal / activeCount) : 0} sub="tickets+calls" color="#7c3aed"/>
               <KpiCard label="Total Agents"    value={handlers.length}  sub="registered"      color="#475569"/>
             </div>
 
@@ -1482,7 +1501,7 @@ const HomePage: React.FC = () => {
                             <td key={i} style={{padding:'8px 12px',textAlign:'center',borderBottom:'1px solid #f1f5f9',fontSize:12,fontWeight:700,fontVariantNumeric:'tabular-nums',
                               color:i===4?'#0f172a':i===1?INC_C:i===2?TASK_C:i===3?CALL_C:'#374151'}}>{v}</td>
                           ))}
-                          <td style={{padding:'8px 12px',textAlign:'center',borderBottom:'1px solid #f1f5f9',fontSize:12,fontWeight:700,color:'#475569'}}>{s.agents>0?+(s.total/s.agents).toFixed(1):0}</td>
+                          <td style={{padding:'8px 12px',textAlign:'center',borderBottom:'1px solid #f1f5f9',fontSize:12,fontWeight:700,color:'#475569'}}>{s.agents > 0 ? Math.round(s.total / s.agents) : 0}</td>
                         </tr>
                       );
                     })}

@@ -5,6 +5,19 @@ import type { DailyStats, Handler, RosterEntry, ShiftType } from '../types';
 import { addLog, saveLogsFromServer, saveSingleLogFromServer } from '../utils/logger';
 import { socket, syncData } from '../utils/socket';
 
+const normalizeCount = (value: unknown) => {
+  const n = typeof value === 'number' ? value : Number(value || 0);
+  return Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0;
+};
+
+const normalizeDailyStat = (stat: DailyStats): DailyStats => ({
+  ...stat,
+  incidents: normalizeCount(stat.incidents),
+  sctasks: normalizeCount(stat.sctasks),
+  calls: normalizeCount(stat.calls),
+  comments: typeof stat.comments === 'string' ? stat.comments : '',
+});
+
 // ── Shift colour palette (Excel-style solid fills) ────────────────────────
 const SHIFT_STYLE: Record<string, {
   label: string; hex: string;
@@ -127,7 +140,7 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
     const s = localStorage.getItem('roster'); return s ? JSON.parse(s) : MOCK_ROSTER;
   });
   const [stats, setStats] = useState<DailyStats[]>(() => {
-    const s = localStorage.getItem('stats'); return s ? JSON.parse(s) : [];
+    const s = localStorage.getItem('stats'); return s ? JSON.parse(s).map((row: DailyStats) => normalizeDailyStat(row)) : [];
   });
   const [currentTime, setCurrentTime]   = useState(new Date());
   const [flashMap, setFlashMap]         = useState<Record<string, 'positive' | 'negative'>>({});
@@ -220,16 +233,17 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
   };
 
   const saveStats = (u: DailyStats[]) => {
-    setStats(u); localStorage.setItem('stats', JSON.stringify(u)); syncData.updateStats(u);
+    const normalized = u.map(normalizeDailyStat);
+    setStats(normalized); localStorage.setItem('stats', JSON.stringify(normalized)); syncData.updateStats(normalized);
   };
 
   const getHandlerStats = (handlerId: string): DailyStats => {
     const s = stats.find(s => s.handlerId === handlerId && s.date === selectedDate);
     return {
       handlerId, date: selectedDate,
-      incidents: Number(s?.incidents || 0),
-      sctasks:   Number(s?.sctasks   || 0),
-      calls:     Number(s?.calls     || 0),
+      incidents: normalizeCount(s?.incidents || 0),
+      sctasks:   normalizeCount(s?.sctasks   || 0),
+      calls:     normalizeCount(s?.calls     || 0),
       comments:  s?.comments || '',
     };
   };
@@ -255,7 +269,7 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
   const updateStat = (handlerId: string, field: keyof DailyStats, value: any) => {
     const handler  = handlers.find(a => a.id === handlerId);
     const existing = stats.find(s => s.handlerId === handlerId && s.date === selectedDate);
-    const final    = (field === 'incidents' || field === 'sctasks' || field === 'calls') ? Number(value) || 0 : value;
+    const final    = (field === 'incidents' || field === 'sctasks' || field === 'calls') ? normalizeCount(value) : value;
     const old      = existing ? existing[field] : (field === 'comments' ? '' : 0);
     const updated  = existing
       ? stats.map(s => (s.handlerId === handlerId && s.date === selectedDate) ? { ...s, [field]: final } : s)

@@ -251,6 +251,20 @@ const sanitize = (text) => {
   return text.replace(/<[^>]*>/g, '').trim();
 };
 
+const normalizeCount = (value) => {
+  const n = typeof value === 'number' ? value : Number(value || 0);
+  return Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0;
+};
+
+const normalizeStatRow = (r) => ({
+  handlerId: String(r?.handlerId || '').trim(),
+  date: String(r?.date || '').trim(),
+  incidents: normalizeCount(r?.incidents),
+  sctasks: normalizeCount(r?.sctasks),
+  calls: normalizeCount(r?.calls),
+  comments: typeof r?.comments === 'string' ? sanitize(r.comments) : '',
+});
+
 const TEAM_ACCESS_KEY = (process.env.TEAM_ACCESS_KEY || "").trim(); // Ensure no sneaky spaces
 console.log('--- SECURITY CONFIG ---');
 console.log('Team Access Key:', TEAM_ACCESS_KEY ? 'PROTECTED (Key set)' : 'UNPROTECTED (No key set)');
@@ -491,11 +505,88 @@ io.on('connection', async (socket) => {
   socket.on('update_stats', async (stats, cb) => {
     if (!(await checkSocketAction(socket, 'editRoster'))) { if (typeof cb === 'function') cb({ ok: false, error: 'Forbidden: missing permission editRoster' }); return; }
     try {
-      await State.updateOne({ key: 'global' }, { $set: { stats: stats } });
-      socket.broadcast.emit('stats_updated', stats);
+      const cleanStats = Array.isArray(stats) ? stats.map(normalizeStatRow).filter(r => r.handlerId && r.date) : [];
+      await State.updateOne({ key: 'global' }, { $set: { stats: cleanStats } });
+      socket.broadcast.emit('stats_updated', cleanStats);
       if (typeof cb === 'function') cb({ ok: true });
     } catch (err) {
       console.error('update_stats failed:', err);
+      if (typeof cb === 'function') cb({ ok: false, error: err.message });
+    }
+  });
+
+  // Optimized import path for large analytics uploads.
+  // Replaces only the imported date scope, skips unchanged writes, and keeps
+  // non-imported dates untouched.
+  socket.on('update_stats_import', async (payload, cb) => {
+    if (!(await checkSocketAction(socket, 'editRoster'))) {
+      if (typeof cb === 'function') cb({ ok: false, error: 'Forbidden: missing permission editRoster' });
+      return;
+    }
+
+    try {
+      const rows = Array.isArray(payload?.rows) ? payload.rows : [];
+      const replaceByDate = payload?.replaceByDate !== false;
+      if (!rows.length) {
+        if (typeof cb === 'function') cb({ ok: true, skipped: true, reason: 'No rows provided' });
+        return;
+      }
+
+      const incomingMap = new Map(); // key: handlerId|date
+      for (const raw of rows) {
+        const stat = normalizeStatRow(raw);
+        if (!stat.handlerId || !stat.date) continue;
+        incomingMap.set(`${stat.handlerId}|${stat.date}`, stat);
+      }
+
+      if (!incomingMap.size) {
+        if (typeof cb === 'function') cb({ ok: true, skipped: true, reason: 'No valid rows' });
+        return;
+      }
+
+      const scopeDates = new Set(Array.from(incomingMap.values()).map((r) => r.date));
+      const scopeKeyFor = (r) => `${String(r.handlerId || '').trim()}|${String(r.date || '').trim()}`;
+      const valueSig = (r) => `${Number(r.incidents || 0)}|${Number(r.sctasks || 0)}|${Number(r.calls || 0)}|${typeof r.comments === 'string' ? r.comments : ''}`;
+
+      const state = await getFullState();
+      const existing = Array.isArray(state.stats) ? state.stats : [];
+
+      // Existing rows only in import scope for change detection.
+      const existingScopeMap = new Map();
+      for (const row of existing) {
+        if (!scopeDates.has(row?.date)) continue;
+        existingScopeMap.set(scopeKeyFor(row), normalizeStatRow(row));
+      }
+
+      let scopeChanged = false;
+      if (existingScopeMap.size !== incomingMap.size) {
+        scopeChanged = true;
+      } else {
+        for (const [key, incomingRow] of incomingMap.entries()) {
+          const ex = existingScopeMap.get(key);
+          if (!ex || valueSig(ex) !== valueSig(incomingRow)) {
+            scopeChanged = true;
+            break;
+          }
+        }
+      }
+
+      if (!scopeChanged) {
+        if (typeof cb === 'function') cb({ ok: true, skipped: true, reason: 'No changes detected in import scope' });
+        return;
+      }
+
+      const preserved = replaceByDate
+        ? existing.filter((row) => !scopeDates.has(row?.date))
+        : existing.filter((row) => !incomingMap.has(scopeKeyFor(row)));
+
+      const nextStats = [...preserved, ...Array.from(incomingMap.values())];
+
+      await State.updateOne({ key: 'global' }, { $set: { stats: nextStats } });
+      socket.broadcast.emit('stats_updated', nextStats);
+      if (typeof cb === 'function') cb({ ok: true, updated: incomingMap.size, scopeDates: scopeDates.size });
+    } catch (err) {
+      console.error('update_stats_import failed:', err);
       if (typeof cb === 'function') cb({ ok: false, error: err.message });
     }
   });

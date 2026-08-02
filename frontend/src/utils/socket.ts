@@ -29,5 +29,10 @@ export const syncData = {
   updateHandlers: (handlers: Handler[], cb?: Ack) => socket.emit('update_handlers', handlers, cb),
   updateRoster: (roster: RosterEntry[], cb?: Ack) => socket.emit('update_roster', roster, cb),
   updateStats: (stats: DailyStats[], cb?: Ack) => socket.emit('update_stats', stats, cb),
+  updateStatsImport: (
+    rows: DailyStats[],
+    options?: { replaceByDate?: boolean },
+    cb?: Ack
+  ) => socket.emit('update_stats_import', { rows, replaceByDate: options?.replaceByDate ?? true }, cb),
   addLog: (logEntry: LogEntry) => socket.emit('add_log', logEntry),
 };
