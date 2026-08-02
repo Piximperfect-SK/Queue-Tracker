@@ -168,7 +168,7 @@ function doImport(rows: ImportRow[], existingHandlers: any[], existingRoster: an
   };
 }
 
-const fetchCurrentState = async () => new Promise<{ handlers: any[]; roster: any[]; stats: any[] }>((resolve) => {
+const fetchCurrentState = async () => new Promise<{ handlers: any[]; roster: any[]; stats: any[] }>((resolve, reject) => {
   const finish = (db: any) => {
     resolve({
       handlers: Array.isArray(db?.handlers || db?.agents) ? (db.handlers || db.agents) : [],
@@ -184,13 +184,13 @@ const fetchCurrentState = async () => new Promise<{ handlers: any[]; roster: any
   };
 
   if (!socket.connected) {
-    resolve({ handlers: [], roster: [], stats: [] });
+    reject(new Error('Not connected to the server'));
     return;
   }
 
   const timer = setTimeout(() => {
     socket.off('init', onInit);
-    resolve({ handlers: [], roster: [], stats: [] });
+    reject(new Error('Timed out while loading current data from the server'));
   }, 12000);
 
   socket.once('init', onInit);

@@ -17,12 +17,13 @@ const Navbar: React.FC<NavbarProps> = ({ currentUser, onLogout, onlineUsers }) =
   const { theme, toggle } = useTheme();
   const otherOnlineUsers = [...new Set(onlineUsers.filter((u) => u !== currentUser))];
   const visibleName = currentUser.length > 18 ? `${currentUser.slice(0, 18)}...` : currentUser;
+  const hasOtherUsers = otherOnlineUsers.length > 0;
 
   const navItemClass = ({ isActive }: { isActive: boolean }) =>
     `nav-item inline-flex items-center gap-2 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] transition-all ${
       isActive
-        ? 'bg-white/14 text-white shadow-sm'
-        : 'text-white/68 hover:text-white hover:bg-white/10'
+        ? 'bg-black/10 text-[var(--nav-text)] shadow-sm dark:bg-white/10 dark:text-white'
+        : 'text-[var(--nav-text-soft)] hover:text-[var(--nav-text)] hover:bg-black/5 dark:hover:bg-white/10'
     }`;
 
   useEffect(() => {
@@ -39,24 +40,27 @@ const Navbar: React.FC<NavbarProps> = ({ currentUser, onLogout, onlineUsers }) =
   }, []);
 
   return (
-    <nav className="app-nav sticky top-0 z-50 shrink-0 border-b border-white/10 bg-[#222831]/96 shadow-lg backdrop-blur-xl transition-colors duration-200">
+    <nav className="app-nav sticky top-0 z-50 shrink-0 border-b shadow-lg backdrop-blur-xl transition-colors duration-200" style={{ background: 'var(--nav-bg)', borderBottomColor: 'var(--nav-border)' }}>
       <div className="mx-auto max-w-screen-2xl px-4">
         <div className="flex h-16 items-center justify-between gap-4">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="nav-avatar flex h-10 w-10 items-center justify-center rounded-2xl bg-white/10 text-base font-black text-white shadow-inner shadow-black/20">P</div>
+            <div className="nav-avatar flex h-10 w-10 items-center justify-center rounded-2xl text-base font-black shadow-inner shadow-black/10" style={{ background: 'rgba(0,0,0,0.08)', color: 'var(--nav-text)' }}>P</div>
             <div className="min-w-0">
-              <div className="nav-text truncate text-[11px] font-black uppercase tracking-[0.22em] text-white/55">Productivity Suite</div>
-              <div className="nav-text truncate text-[24px] font-semibold tracking-tight text-white leading-none">Tracker</div>
+              <div className="nav-text truncate text-[11px] font-black uppercase tracking-[0.22em]">Productivity Suite</div>
+              <div className="nav-text truncate text-[24px] font-semibold tracking-tight leading-none">Tracker</div>
             </div>
-            <div className={`nav-pill ml-1 hidden items-center gap-2 rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] md:inline-flex ${isConnected ? 'border-[#00ADB5]/35 bg-[#00ADB5]/12 text-[#65dbe1]' : 'border-red-400/30 bg-red-500/12 text-red-300'}`}>
-              <span className={`h-2 w-2 rounded-full ${isConnected ? 'bg-[#00ADB5] animate-pulse' : 'bg-red-400'}`} />
+            <div
+              className={`nav-pill ml-1 hidden items-center gap-2 rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] md:inline-flex transition-all duration-200 ${isConnected ? 'border-emerald-400/30' : 'border-red-400/30'}`}
+              style={{ background: 'var(--nav-pill-bg)', color: 'var(--nav-pill-text)', borderColor: isConnected ? 'rgba(16,185,129,0.28)' : 'rgba(248,113,113,0.32)' }}
+            >
+              <span className={`h-2 w-2 rounded-full ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-red-400'}`} />
               {isConnected ? 'Sync Active' : 'Offline'}
             </div>
           </div>
 
           <div className="flex min-w-0 flex-1 items-center justify-end gap-3">
             <div className="hidden min-w-0 flex-1 justify-center xl:flex">
-              <div className="flex items-center gap-1 rounded-2xl border border-white/10 bg-white/6 p-1.5 shadow-inner shadow-black/10">
+              <div className="flex items-center gap-1 rounded-2xl border p-1.5 shadow-inner shadow-black/10" style={{ background: 'rgba(255,255,255,0.04)', borderColor: 'var(--nav-border)' }}>
                 {pages.admin && (
                   <NavLink to="/home" className={navItemClass}>
                     <LayoutDashboard size={13} />
@@ -96,48 +100,88 @@ const Navbar: React.FC<NavbarProps> = ({ currentUser, onLogout, onlineUsers }) =
               </div>
             </div>
 
-            <div className="nav-pill hidden items-center gap-2 rounded-full border border-white/12 bg-white/8 px-3 py-1.5 lg:flex">
+            <div
+              className="nav-pill group relative hidden items-center gap-2 rounded-full border px-3 py-1.5 lg:flex transition-all duration-200 hover:shadow-lg"
+              style={{ background: 'var(--nav-pill-bg)', borderColor: 'var(--nav-pill-border)', color: 'var(--nav-pill-text)' }}
+            >
               <div className="flex -space-x-2">
                 {otherOnlineUsers.slice(0, 3).map((user) => (
-                  <div key={user} className="flex h-7 w-7 items-center justify-center rounded-full border border-white/18 bg-white/10 text-[10px] font-black text-white shadow-sm">
+                  <div key={user} className="flex h-7 w-7 items-center justify-center rounded-full border text-[10px] font-black shadow-sm" style={{ background: 'var(--nav-chip-bg)', borderColor: 'var(--nav-chip-border)', color: 'var(--nav-text)' }}>
                     {user.charAt(0).toUpperCase()}
                   </div>
                 ))}
-                {otherOnlineUsers.length === 0 && (
-                  <div className="flex h-7 w-7 items-center justify-center rounded-full border border-dashed border-white/18 bg-transparent text-[9px] font-black text-white/40">0</div>
+                {!hasOtherUsers && (
+                  <div className="flex h-7 w-7 items-center justify-center rounded-full border border-dashed text-[9px] font-black" style={{ background: 'transparent', borderColor: 'var(--nav-chip-border)', color: 'var(--nav-text-muted)' }}>0</div>
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <span className={`h-2 w-2 rounded-full ${otherOnlineUsers.length > 0 ? 'bg-[#00ADB5]' : 'bg-white/30'}`} />
-                <span className="text-[10px] font-black uppercase tracking-[0.16em] text-white/82">
-                  {otherOnlineUsers.length > 0 ? `${otherOnlineUsers.length} Live` : 'Solo'}
+                <span className={`h-2 w-2 rounded-full ${hasOtherUsers ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                <span className="text-[10px] font-black uppercase tracking-[0.16em]" style={{ color: 'var(--nav-pill-text)' }}>
+                  {hasOtherUsers ? `${otherOnlineUsers.length} Live` : 'Solo'}
                 </span>
+              </div>
+
+              <div className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 w-[min(26rem,calc(100vw-2rem))] -translate-x-1/2 opacity-0 translate-y-1 transition-all duration-200 group-hover:pointer-events-auto group-hover:opacity-100 group-hover:translate-y-0">
+                <div className="rounded-2xl border p-3 shadow-2xl backdrop-blur-xl" style={{ background: 'var(--nav-bg)', borderColor: 'var(--nav-border)', color: 'var(--nav-text)' }}>
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[9px] font-black uppercase tracking-[0.22em]" style={{ color: 'var(--nav-text-muted)' }}>Logged In</p>
+                      <p className="text-[12px] font-black uppercase tracking-[0.14em]" style={{ color: 'var(--nav-text)' }}>{hasOtherUsers ? `${otherOnlineUsers.length} other users` : 'Only you right now'}</p>
+                    </div>
+                    <span className="rounded-full border px-2 py-1 text-[9px] font-black uppercase tracking-[0.2em]" style={{ background: 'var(--nav-chip-bg)', borderColor: 'var(--nav-chip-border)', color: 'var(--nav-text-muted)' }}>
+                      Live
+                    </span>
+                  </div>
+                  <div className="max-h-56 overflow-auto pr-1 scrollbar-hide">
+                    {hasOtherUsers ? (
+                      <div className="grid gap-2">
+                        {otherOnlineUsers.map((user) => (
+                          <div key={user} className="flex items-center gap-3 rounded-xl border px-3 py-2" style={{ background: 'var(--nav-chip-bg)', borderColor: 'var(--nav-chip-border)' }}>
+                            <div className="flex h-8 w-8 items-center justify-center rounded-full text-[10px] font-black" style={{ background: 'rgba(0,0,0,0.08)', color: 'var(--nav-text)' }}>
+                              {user.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="truncate text-[11px] font-black uppercase tracking-[0.08em]" style={{ color: 'var(--nav-text)' }}>{user}</div>
+                              <div className="text-[9px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--nav-text-muted)' }}>Connected</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="rounded-xl border px-3 py-3 text-[11px] font-semibold" style={{ background: 'var(--nav-chip-bg)', borderColor: 'var(--nav-chip-border)', color: 'var(--nav-text-muted)' }}>
+                        No other users are connected.
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 
             <button
               onClick={toggle}
               title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-              className="nav-item flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/6 text-white/65 transition-all hover:bg-white/12 hover:text-white"
+              className="nav-item flex h-10 w-10 items-center justify-center rounded-2xl border transition-all hover:shadow-sm"
+              style={{ background: 'var(--nav-pill-bg)', borderColor: 'var(--nav-pill-border)', color: 'var(--nav-pill-text)' }}
             >
               {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
             </button>
 
-            <div className="nav-divider hidden h-8 w-px bg-white/12 lg:block" />
+            <div className="nav-divider hidden h-8 w-px lg:block" style={{ background: 'var(--nav-border)' }} />
 
-            <div className="nav-user flex items-center gap-3 rounded-2xl border border-white/10 bg-white/8 px-3 py-2 shadow-sm">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-[11px] font-black text-[#222831]">
+            <div className="nav-user flex items-center gap-3 rounded-2xl border px-3 py-2 shadow-sm" style={{ background: 'var(--nav-pill-bg)', borderColor: 'var(--nav-pill-border)' }}>
+              <div className="flex h-8 w-8 items-center justify-center rounded-full text-[11px] font-black" style={{ background: 'rgba(0,0,0,0.1)', color: 'var(--nav-text)' }}>
                 {currentUser.charAt(0).toUpperCase()}
               </div>
               <div className="min-w-0">
-                <div className="text-[9px] font-black uppercase tracking-[0.18em] text-white/42">Signed In</div>
-                <div className="nav-text truncate text-[14px] font-black uppercase tracking-[0.08em] text-white">{visibleName}</div>
+                <div className="nav-credit text-[9px] font-black uppercase tracking-[0.18em]">Signed In</div>
+                <div className="nav-text truncate text-[14px] font-black uppercase tracking-[0.08em]">{visibleName}</div>
               </div>
             </div>
 
             <button
               onClick={onLogout}
-              className="nav-item flex h-10 w-10 items-center justify-center rounded-2xl border border-transparent text-white/60 transition-all hover:border-red-400/30 hover:bg-red-500 hover:text-white"
+              className="nav-item flex h-10 w-10 items-center justify-center rounded-2xl border border-transparent transition-all hover:border-red-400/30 hover:bg-red-500 hover:text-white"
+              style={{ color: 'var(--nav-text-soft)' }}
               title="Logout"
             >
               <LogOut size={18} />

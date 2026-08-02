@@ -40,6 +40,16 @@ html, body, #root {
   --tracker-muted: #94a3b8;
   --tracker-input-bg: #ffffff;
   --tracker-modal-bg: #ffffff;
+  --nav-bg: rgba(255,255,255,0.88);
+  --nav-border: rgba(148,163,184,0.22);
+  --nav-text: #0f172a;
+  --nav-text-soft: rgba(15,23,42,0.62);
+  --nav-text-muted: rgba(15,23,42,0.38);
+  --nav-pill-bg: rgba(255,255,255,0.7);
+  --nav-pill-border: rgba(148,163,184,0.28);
+  --nav-pill-text: #0f172a;
+  --nav-chip-bg: rgba(15,23,42,0.05);
+  --nav-chip-border: rgba(148,163,184,0.24);
 }
 
 [data-theme="dark"] {
@@ -72,6 +82,16 @@ html, body, #root {
   --tracker-muted: #93a4ba;
   --tracker-input-bg: rgba(15,23,42,0.94);
   --tracker-modal-bg: rgba(15,23,42,0.98);
+  --nav-bg: rgba(15,23,42,0.92);
+  --nav-border: rgba(148,163,184,0.14);
+  --nav-text: #f8fafc;
+  --nav-text-soft: rgba(248,250,252,0.68);
+  --nav-text-muted: rgba(248,250,252,0.42);
+  --nav-pill-bg: rgba(255,255,255,0.06);
+  --nav-pill-border: rgba(148,163,184,0.14);
+  --nav-pill-text: #f8fafc;
+  --nav-chip-bg: rgba(255,255,255,0.08);
+  --nav-chip-border: rgba(148,163,184,0.18);
 }
 
 @layer utilities {
@@ -80,7 +100,6 @@ html, body, #root {
   }
   .scrollbar-hide {
     -ms-overflow-style: none;
-    scrollbar-width: none;
   }
 }
 
@@ -280,6 +299,8 @@ html, body, #root {
 [data-theme="dark"] .text-slate-800,
 [data-theme="dark"] .text-slate-700,
 [data-theme="dark"] .text-slate-600 { color: var(--app-text) !important; }
+[data-theme="dark"] .text-black,
+[data-theme="dark"] .text-stone-900 { color: var(--app-text) !important; }
 [data-theme="dark"] .text-slate-500,
 [data-theme="dark"] .text-slate-400,
 [data-theme="dark"] .text-slate-300 { color: var(--app-text-soft) !important; }
@@ -294,20 +315,51 @@ html, body, #root {
 [data-theme="dark"] .shadow-xl,
 [data-theme="dark"] .shadow-2xl { box-shadow: var(--app-shadow) !important; }
 
+/* Light surface contrast guard: if a card/dialog uses a light surface but a nested
+   element still carries a white text utility, pull it back to readable app text. */
+[data-theme="light"] .app-shell :is(.bg-white, .bg-white\/60, .bg-white\/70, .bg-white\/80, .bg-white\/90, .bg-slate-50, .bg-slate-100) .text-white,
+[data-theme="light"] .app-shell :is(.bg-white, .bg-white\/60, .bg-white\/70, .bg-white\/80, .bg-white\/90, .bg-slate-50, .bg-slate-100) .text-white\/55,
+[data-theme="light"] .app-shell :is(.bg-white, .bg-white\/60, .bg-white\/70, .bg-white\/80, .bg-white\/90, .bg-slate-50, .bg-slate-100) .text-white\/42,
+[data-theme="light"] .app-shell :is(.bg-white, .bg-white\/60, .bg-white\/70, .bg-white\/80, .bg-white\/90, .bg-slate-50, .bg-slate-100) .text-white\/82,
+[data-theme="light"] .app-shell :is(.bg-white, .bg-white\/60, .bg-white\/70, .bg-white\/80, .bg-white\/90, .bg-slate-50, .bg-slate-100) .text-white\/65,
+[data-theme="light"] .app-shell :is(.bg-white, .bg-white\/60, .bg-white\/70, .bg-white\/80, .bg-white\/90, .bg-slate-50, .bg-slate-100) .text-white\/60,
+[data-theme="light"] .app-shell :is(.bg-white, .bg-white\/60, .bg-white\/70, .bg-white\/80, .bg-white\/90, .bg-slate-50, .bg-slate-100) .text-white\/40,
+[data-theme="light"] .app-shell :is(.bg-white, .bg-white\/60, .bg-white\/70, .bg-white\/80, .bg-white\/90, .bg-slate-50, .bg-slate-100) .text-white\/68 {
+  color: var(--app-text) !important;
+}
+[data-theme="light"] .app-shell :is(.bg-white, .bg-white\/60, .bg-white\/70, .bg-white\/80, .bg-white\/90, .bg-slate-50, .bg-slate-100) .border-white,
+[data-theme="light"] .app-shell :is(.bg-white, .bg-white\/60, .bg-white\/70, .bg-white\/80, .bg-white\/90, .bg-slate-50, .bg-slate-100) .border-white\/10,
+[data-theme="light"] .app-shell :is(.bg-white, .bg-white\/60, .bg-white\/70, .bg-white\/80, .bg-white\/90, .bg-slate-50, .bg-slate-100) .border-white\/12,
+[data-theme="light"] .app-shell :is(.bg-white, .bg-white\/60, .bg-white\/70, .bg-white\/80, .bg-white\/90, .bg-slate-50, .bg-slate-100) .border-white\/18,
+[data-theme="light"] .app-shell :is(.bg-white, .bg-white\/60, .bg-white\/70, .bg-white\/80, .bg-white\/90, .bg-slate-50, .bg-slate-100) .border-white\/20,
+[data-theme="light"] .app-shell :is(.bg-white, .bg-white\/60, .bg-white\/70, .bg-white\/80, .bg-white\/90, .bg-slate-50, .bg-slate-100) .border-white\/30 {
+  border-color: var(--app-border) !important;
+}
+
 /* Navbar */
 [data-theme="light"] nav.app-nav {
-  background: #ffffff !important;
-  border-bottom-color: #e2e8f0 !important;
+  background: var(--nav-bg) !important;
+  border-bottom-color: var(--nav-border) !important;
   box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important;
 }
-[data-theme="light"] nav.app-nav .nav-text   { color: #1e293b !important; }
-[data-theme="light"] nav.app-nav .nav-text-m { color: rgba(30,41,59,0.6) !important; }
+[data-theme="dark"] nav.app-nav {
+  background: var(--nav-bg) !important;
+  border-bottom-color: var(--nav-border) !important;
+}
+[data-theme="light"] nav.app-nav .nav-text   { color: var(--nav-text) !important; }
+[data-theme="light"] nav.app-nav .nav-text-m { color: var(--nav-text-soft) !important; }
 [data-theme="light"] nav.app-nav .nav-item:hover { background: #f1f5f9 !important; }
-[data-theme="light"] nav.app-nav .nav-pill   { background: rgba(30,41,59,0.06) !important; border-color: rgba(30,41,59,0.15) !important; }
+[data-theme="light"] nav.app-nav .nav-pill   { background: var(--nav-pill-bg) !important; border-color: var(--nav-pill-border) !important; }
 [data-theme="light"] nav.app-nav .nav-avatar { background: #1e293b !important; }
-[data-theme="light"] nav.app-nav .nav-user   { background: #f1f5f9 !important; border-color: #e2e8f0 !important; }
-[data-theme="light"] nav.app-nav .nav-credit { color: rgba(30,41,59,0.35) !important; }
-[data-theme="light"] nav.app-nav .nav-divider { background: #e2e8f0 !important; }
+[data-theme="light"] nav.app-nav .nav-user   { background: rgba(255,255,255,0.75) !important; border-color: var(--nav-border) !important; }
+[data-theme="light"] nav.app-nav .nav-credit { color: var(--nav-text-muted) !important; }
+[data-theme="light"] nav.app-nav .nav-divider { background: var(--nav-border) !important; }
+[data-theme="dark"] nav.app-nav .nav-text { color: var(--nav-text) !important; }
+[data-theme="dark"] nav.app-nav .nav-text-m { color: var(--nav-text-soft) !important; }
+[data-theme="dark"] nav.app-nav .nav-pill { background: var(--nav-pill-bg) !important; border-color: var(--nav-pill-border) !important; }
+[data-theme="dark"] nav.app-nav .nav-user { background: rgba(255,255,255,0.04) !important; border-color: var(--nav-border) !important; }
+[data-theme="dark"] nav.app-nav .nav-credit { color: var(--nav-text-muted) !important; }
+[data-theme="dark"] nav.app-nav .nav-divider { background: var(--nav-border) !important; }
 
 /* Pages that use bg-white / bg-slate-* already look fine in light */
 /* TrackerPage: make borders and backgrounds respond */
@@ -343,30 +395,32 @@ html, body, #root {
 [data-theme="light"] nav.app-nav .text-white\/65,
 [data-theme="light"] nav.app-nav .text-white\/60,
 [data-theme="light"] nav.app-nav .text-white\/40,
-[data-theme="light"] nav.app-nav .text-white\/68 {
-  color: #1e293b !important;
+[data-theme="light"] nav.app-nav .text-white,
+[data-theme="light"] nav.app-nav .text-white\/55,
+[data-theme="light"] nav.app-nav .text-white\/42,
+[data-theme="light"] nav.app-nav .text-white\/82,
+[data-theme="light"] nav.app-nav .text-white\/65,
+[data-theme="light"] nav.app-nav .text-white\/60,
+[data-theme="light"] nav.app-nav .text-white\/40,
+[data-theme="light"] nav.app-nav .text-white\/68,
+[data-theme="dark"] nav.app-nav .text-white,
+[data-theme="dark"] nav.app-nav .text-white\/55,
+[data-theme="dark"] nav.app-nav .text-white\/42,
+[data-theme="dark"] nav.app-nav .text-white\/82,
+[data-theme="dark"] nav.app-nav .text-white\/65,
+[data-theme="dark"] nav.app-nav .text-white\/60,
+[data-theme="dark"] nav.app-nav .text-white\/40,
+[data-theme="dark"] nav.app-nav .text-white\/68 {
+  color: var(--nav-text) !important;
 }
-[data-theme="light"] nav.app-nav .text-white\/30 {
-  color: rgba(30,41,59,0.4) !important;
-}
-[data-theme="light"] nav.app-nav .text-white\/18 {
-  color: rgba(30,41,59,0.3) !important;
-}
-[data-theme="light"] nav.app-nav .text-white\/12 {
-  color: rgba(30,41,59,0.25) !important;
-}
-[data-theme="light"] nav.app-nav .text-white\/10 {
-  color: rgba(30,41,59,0.2) !important;
-}
-[data-theme="light"] nav.app-nav .text-white\/6 {
-  color: rgba(30,41,59,0.12) !important;
-}
-
-/* Online users avatar initials + "0" placeholder in light mode */
-[data-theme="light"] nav.app-nav .nav-pill .text-white {
-  color: #1e293b !important;
-}
-[data-theme="light"] nav.app-nav .nav-pill .text-white\/40 {
+[data-theme="light"] nav.app-nav .text-white\/30,
+[data-theme="dark"] nav.app-nav .text-white\/30 { color: var(--nav-text-soft) !important; }
+[data-theme="light"] nav.app-nav .text-white\/18,
+[data-theme="dark"] nav.app-nav .text-white\/18 { color: var(--nav-text-muted) !important; }
+[data-theme="light"] nav.app-nav .text-white\/12,
+[data-theme="dark"] nav.app-nav .text-white\/12 { color: var(--nav-text-muted) !important; }
+[data-theme="light"] nav.app-nav .text-white\/10,
+[data-theme="dark"] nav.app-nav .text-white\/10 { color: var(--nav-text-muted) !important; }
   color: rgba(30,41,59,0.4) !important;
 }
 
