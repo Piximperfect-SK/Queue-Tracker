@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import validator from 'validator';
 import rateLimit from 'express-rate-limit';
 import User from '../models/User.js';
+import Session from '../models/Session.js';
 
 // Rate limiters (configurable via env)
 const loginLimiter = rateLimit({
@@ -105,8 +106,30 @@ router.post('/login', loginLimiter, async (req, res) => {
 });
 
 // Logout
-router.post('/logout', (req, res) => {
-  res.clearCookie('token');
+router.post('/logout', async (req, res) => {
+  try {
+    const token = req.cookies?.token || (req.header('Authorization') || '').replace(/^Bearer\s+/i, '');
+    if (token) {
+      try {
+        const payload = jwt.verify(token, JWT_SECRET);
+        if (payload?.jti) {
+          await Session.updateOne(
+            { jti: payload.jti },
+            { $set: { revoked: true, revokedAt: new Date(), revokedBy: payload.username || payload.fullName || 'self' } }
+          );
+        }
+      } catch (_) {
+        // ignore invalid tokens; logout should still clear the cookie
+      }
+    }
+  } catch (_) {
+    // ignore logout bookkeeping failures
+  }
+  res.clearCookie('token', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+  });
   return res.json({ message: 'Logged out' });
 });
 

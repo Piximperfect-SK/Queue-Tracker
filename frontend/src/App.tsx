@@ -44,6 +44,9 @@ function App() {
   const handleLogout = () => {
     localStorage.removeItem('currentUser');
     clearToken();
+    if (socket.connected) {
+      socket.disconnect();
+    }
     (async () => {
       try {
         await fetch(`${BACKEND}/api/logout`, {
@@ -119,9 +122,10 @@ function App() {
     socket.on('error_message', handleErrorMessage);
     socket.on('init', handleInit);
     socket.on('kicked', handleKicked);
-    socket.on('presence_updated', (users: string[]) => {
+    const handlePresenceUpdated = (users: string[]) => {
       setOnlineUsers(users);
-    });
+    };
+    socket.on('presence_updated', handlePresenceUpdated);
 
     if (socket.connected) {
       handleConnect();
@@ -136,7 +140,7 @@ function App() {
       socket.off('error_message', handleErrorMessage);
       socket.off('kicked', handleKicked);
       socket.off('init', handleInit);
-      socket.off('presence_updated');
+      socket.off('presence_updated', handlePresenceUpdated);
     };
   }, [currentUser, isAuthenticated]);
 

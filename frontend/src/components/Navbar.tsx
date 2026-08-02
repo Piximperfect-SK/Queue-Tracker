@@ -102,19 +102,29 @@ const Navbar: React.FC<NavbarProps> = ({ currentUser, onLogout, onlineUsers }) =
 
             <div
               className="nav-pill group relative hidden items-center gap-2 rounded-full border px-3 py-1.5 lg:flex transition-all duration-200 hover:shadow-lg"
-              style={{ background: 'var(--nav-pill-bg)', borderColor: 'var(--nav-pill-border)', color: 'var(--nav-pill-text)' }}
+              style={{ background: 'transparent', borderColor: 'transparent', color: 'var(--nav-pill-text)' }}
             >
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 rounded-full"
+                style={{
+                  backgroundImage: theme === 'dark'
+                    ? 'linear-gradient(135deg, rgba(0,173,181,0.14), rgba(15,23,42,0.00))'
+                    : 'linear-gradient(135deg, rgba(0,124,130,0.10), rgba(255,255,255,0.00))',
+                  opacity: 0.9,
+                }}
+              />
               <div className="flex -space-x-2">
                 {otherOnlineUsers.slice(0, 3).map((user) => (
-                  <div key={user} className="flex h-7 w-7 items-center justify-center rounded-full border text-[10px] font-black shadow-sm" style={{ background: 'var(--nav-chip-bg)', borderColor: 'var(--nav-chip-border)', color: 'var(--nav-text)' }}>
+                  <div key={user} className="relative z-10 flex h-7 w-7 items-center justify-center rounded-full border text-[10px] font-black shadow-sm" style={{ background: 'var(--nav-chip-bg)', borderColor: 'var(--nav-chip-border)', color: 'var(--nav-text)' }}>
                     {user.charAt(0).toUpperCase()}
                   </div>
                 ))}
                 {!hasOtherUsers && (
-                  <div className="flex h-7 w-7 items-center justify-center rounded-full border border-dashed text-[9px] font-black" style={{ background: 'transparent', borderColor: 'var(--nav-chip-border)', color: 'var(--nav-text-muted)' }}>0</div>
+                  <div className="relative z-10 flex h-7 w-7 items-center justify-center rounded-full border border-dashed text-[9px] font-black" style={{ background: 'transparent', borderColor: 'var(--nav-chip-border)', color: 'var(--nav-text-muted)' }}>0</div>
                 )}
               </div>
-              <div className="flex items-center gap-2">
+              <div className="relative z-10 flex items-center gap-2">
                 <span className={`h-2 w-2 rounded-full ${hasOtherUsers ? 'bg-emerald-500' : 'bg-slate-400'}`} />
                 <span className="text-[10px] font-black uppercase tracking-[0.16em]" style={{ color: 'var(--nav-pill-text)' }}>
                   {hasOtherUsers ? `${otherOnlineUsers.length} Live` : 'Solo'}

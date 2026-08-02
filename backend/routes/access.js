@@ -32,6 +32,15 @@ function requireAdmin(req, res, next) {
 }
 
 async function issueSession(res, fullName, role) {
+  const activeSession = await Session.findOne({
+    fullName,
+    revoked: false,
+    expiresAt: { $gt: new Date() },
+  });
+  if (activeSession) {
+    return res.status(409).json({ error: 'Already Logged on. If want to restore access contact Admin.' });
+  }
+
   const jti = randomUUID();
   const expiresAt = new Date(Date.now() + 8 * 3600 * 1000);
   const token = jwt.sign({ fullName, role, jti }, JWT_SECRET, { expiresIn: '8h' });

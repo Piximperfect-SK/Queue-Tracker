@@ -303,7 +303,28 @@ let db = {
   logs: {}
 };
 
-let onlineUsers = new Map(); // socket.id -> username
+let onlineUsers = new Map(); // fullName -> Set<socket.id>
+let socketToUser = new Map(); // socket.id -> fullName
+
+const getOnlineUsers = () => Array.from(onlineUsers.keys());
+
+const addOnlineUser = (socketId, fullName) => {
+  socketToUser.set(socketId, fullName);
+  if (!onlineUsers.has(fullName)) onlineUsers.set(fullName, new Set());
+  onlineUsers.get(fullName).add(socketId);
+};
+
+const removeOnlineUser = (socketId) => {
+  const fullName = socketToUser.get(socketId);
+  if (!fullName) return null;
+  socketToUser.delete(socketId);
+  const set = onlineUsers.get(fullName);
+  if (set) {
+    set.delete(socketId);
+    if (set.size === 0) onlineUsers.delete(fullName);
+  }
+  return fullName;
+};
 
 // Helper to get full state
 const getFullState = async () => {
@@ -422,7 +443,7 @@ io.on('connection', async (socket) => {
   // IMMEDIATELY broadcast current online users to EVERYONE
   // This ensures new tabs see everyone and everyone sees the new connection attempt
   const broadcastPresence = () => {
-    io.emit('presence_updated', Array.from(onlineUsers.values()));
+    io.emit('presence_updated', getOnlineUsers());
   };
 
   const sendSyncData = async () => {
@@ -433,7 +454,7 @@ io.on('connection', async (socket) => {
   broadcastPresence();
 
   socket.on('get_presence', () => {
-    socket.emit('presence_updated', Array.from(onlineUsers.values()));
+    socket.emit('presence_updated', getOnlineUsers());
   });
 
   socket.on('get_initial_data', async () => {
@@ -451,7 +472,7 @@ io.on('connection', async (socket) => {
     }
 
     const cleanName = sanitize(username || socket.user.fullName);
-    onlineUsers.set(socket.id, cleanName);
+    addOnlineUser(socket.id, cleanName);
     broadcastPresence();
     
     // Send full data again upon successful join to ensure sync
@@ -617,14 +638,13 @@ io.on('connection', async (socket) => {
   });
 
   socket.on('disconnect', () => {
-    const username = onlineUsers.get(socket.id);
+    const username = removeOnlineUser(socket.id);
     eventCounts.delete(socket.id); // Clean up rate limit tracking
     if (socket.user && socket.user.jti) {
       unregisterSocketSession(socket.user.jti, socket.id);
     }
     if (username) {
-      onlineUsers.delete(socket.id);
-      io.emit('presence_updated', Array.from(onlineUsers.values()));
+      io.emit('presence_updated', getOnlineUsers());
       console.log(`User ${username} (${socket.id}) disconnected.`);
     }
   });
