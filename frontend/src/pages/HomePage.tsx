@@ -276,6 +276,7 @@ const HomePage: React.FC = () => {
   const [refinedRows, setRefinedRows] = useState<RefinedAnalyticsRow[]>([]);
   const [refineWarnings, setRefineWarnings] = useState<string[]>([]);
   const [refineSourceName, setRefineSourceName] = useState('');
+  const [importProgress, setImportProgress] = useState<{ step: string; percent: number; mode: 'import' | 'both' | null } | null>(null);
   const analyticsFileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -504,11 +505,13 @@ const HomePage: React.FC = () => {
     grandTotal, prevGrandTotal, handlers.length, qhCount, agentRows, shiftAnalysis, leaveDist,
   ]);
 
-  const closeRefineModal = () => {
+  const closeRefineModal = (force = false) => {
+    if (importProgress && !force) return;
     setIsRefineModalOpen(false);
     setRefinedRows([]);
     setRefineWarnings([]);
     setRefineSourceName('');
+    setImportProgress(null);
     if (analyticsFileInputRef.current) analyticsFileInputRef.current.value = '';
   };
 
@@ -768,6 +771,7 @@ const HomePage: React.FC = () => {
     if (!refinedRows.length) return;
     setImportStatus(null);
     setIsImportingAnalytics(true);
+    setImportProgress({ step: 'Preparing analytics rows...', percent: 10, mode: 'import' });
     try {
       const lookup = new Map<string, string>();
       handlers.forEach((h) => lookup.set(h.name.trim().toLowerCase(), h.id));
@@ -810,12 +814,14 @@ const HomePage: React.FC = () => {
       const mergedStats = mergeStatsEntries(stats, parsedStats);
       setStats(mergedStats);
       localStorage.setItem('stats', JSON.stringify(mergedStats));
+      setImportProgress({ step: 'Syncing analytics stats to server...', percent: 45, mode: 'import' });
       await withAck('Stats', (cb) => syncData.updateStats(mergedStats, cb));
 
       if (newHandlers.length) {
         const mergedHandlers = [...handlers, ...newHandlers];
         setHandlers(mergedHandlers);
         localStorage.setItem('handlers', JSON.stringify(mergedHandlers));
+        setImportProgress({ step: 'Syncing newly discovered handlers...', percent: 75, mode: 'import' });
         await withAck('Handlers', (cb) => syncData.updateHandlers(mergedHandlers, cb));
       }
 
@@ -825,19 +831,24 @@ const HomePage: React.FC = () => {
         message: `Imported ${parsedStats.length} analytics row(s).${newHandlers.length ? ` +${newHandlers.length} new agent(s).` : ''}${refineWarnings.length ? ` (${refineWarnings.length} skipped while refining)` : ''}${savedMsg}`,
         tone,
       });
-      closeRefineModal();
+      setImportProgress({ step: 'Import completed.', percent: 100, mode: 'import' });
+      closeRefineModal(true);
     } catch (err) {
       setImportStatus({
         message: `Import failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
         tone: 'error',
       });
+      setImportProgress({ step: 'Import failed.', percent: 100, mode: 'import' });
     } finally {
       setIsImportingAnalytics(false);
+      setTimeout(() => setImportProgress(null), 1200);
     }
   };
 
   const importAndDownloadRefined = async () => {
+    setImportProgress({ step: 'Generating refined download file...', percent: 8, mode: 'both' });
     downloadRefinedCopy();
+    setImportProgress({ step: 'Download generated. Starting import...', percent: 18, mode: 'both' });
     await importRefinedRows();
   };
 
@@ -1489,6 +1500,21 @@ const HomePage: React.FC = () => {
                   </div>
                 </div>
               </div>
+
+              {importProgress && (
+                <div style={{border:'1px solid #bfdbfe',background:'#eff6ff',borderRadius:8,padding:'8px 10px'}}>
+                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,marginBottom:6}}>
+                    <span style={{fontSize:9,fontWeight:900,color:'#1d4ed8',textTransform:'uppercase',letterSpacing:'0.12em'}}>
+                      {importProgress.mode === 'both' ? 'Download + Import Progress' : 'Import Progress'}
+                    </span>
+                    <span style={{fontSize:11,fontWeight:900,color:'#1e3a8a'}}>{importProgress.percent}%</span>
+                  </div>
+                  <div style={{height:8,background:'#dbeafe',borderRadius:999,overflow:'hidden'}}>
+                    <div style={{height:'100%',width:`${Math.max(0, Math.min(100, importProgress.percent))}%`,background:'#2563eb',transition:'width 220ms ease'}} />
+                  </div>
+                  <div style={{fontSize:11,fontWeight:700,color:'#1e40af',marginTop:6}}>{importProgress.step}</div>
+                </div>
+              )}
 
               {refineWarnings.length > 0 && (
                 <div style={{border:'1px solid #fde68a',background:'#fffbeb',borderRadius:8,padding:'8px 10px'}}>
