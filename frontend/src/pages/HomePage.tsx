@@ -6,8 +6,8 @@ import {
   PieChart, Pie, Cell, AreaChart, Area,
 } from 'recharts';
 import {
-  TrendingUp, Users, PhoneCall, FileText, Activity, ChevronLeft, ChevronRight,
-  BarChart2, Award, Shield, Calendar, AlertTriangle, ArrowUp, ArrowDown,
+  Users, Activity, ChevronLeft, ChevronRight,
+  BarChart2, Shield, Calendar, ArrowUp, ArrowDown,
   Search, ChevronUp, ChevronDown, Minus,
 } from 'lucide-react';
 
@@ -39,30 +39,25 @@ const pct     = (a: number, b: number) => b > 0 ? Math.round((a/b)*100) : 0;
 // ── KPI Card ──────────────────────────────────────────────────────────────────
 const KpiCard: React.FC<{
   label: string; value: string | number; sub?: string;
-  Icon: React.FC<{size?:number;color?:string}>;
-  color: string; bg: string; border: string; trend?: number;
-}> = ({ label, value, sub, Icon, color, bg, border, trend }) => (
-  <div style={{ background:'#fff', border:`1px solid ${border}`, borderRadius:12, padding:'14px 16px', display:'flex', flexDirection:'column', gap:6, boxShadow:'0 1px 3px rgba(0,0,0,0.05)', minWidth:0 }}>
-    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-      <span style={{ fontSize:8, fontWeight:900, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'0.2em' }}>{label}</span>
-      <div style={{ width:28, height:28, borderRadius:7, background:bg, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-        <Icon size={13} color={color} />
-      </div>
-    </div>
-    <div style={{ display:'flex', alignItems:'flex-end', gap:6 }}>
-      <span style={{ fontSize:26, fontWeight:900, color:'#0f172a', fontVariantNumeric:'tabular-nums', lineHeight:1 }}>{value}</span>
+  Icon?: React.FC<{size?:number;color?:string}>;
+  color: string; bg?: string; border?: string; trend?: number;
+}> = ({ label, value, sub, color, trend }) => (
+  <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderLeft:`3px solid ${color}`, borderRadius:6, padding:'12px 14px', display:'flex', flexDirection:'column', gap:5, minWidth:0 }}>
+    <span style={{ fontSize:10, fontWeight:700, color:'#64748b', textTransform:'uppercase', letterSpacing:'0.07em' }}>{label}</span>
+    <div style={{ display:'flex', alignItems:'baseline', gap:8 }}>
+      <span style={{ fontSize:24, fontWeight:700, color:'#0f172a', fontVariantNumeric:'tabular-nums', lineHeight:1 }}>{value}</span>
       {trend !== undefined && trend !== 0 && (
-        <span style={{ fontSize:10, fontWeight:700, color: trend>0?'#16a34a':'#dc2626', marginBottom:2, display:'flex', alignItems:'center', gap:2 }}>
-          {trend>0 ? <ArrowUp size={10}/> : <ArrowDown size={10}/>} {Math.abs(trend)}%
+        <span style={{ fontSize:11, fontWeight:600, color: trend>0?'#16a34a':'#dc2626', display:'flex', alignItems:'center', gap:2 }}>
+          {trend>0 ? <ArrowUp size={10}/> : <ArrowDown size={10}/>}{Math.abs(trend)}%
         </span>
       )}
     </div>
-    {sub && <span style={{ fontSize:9, color:'#94a3b8', fontWeight:600 }}>{sub}</span>}
+    {sub && <span style={{ fontSize:10, color:'#94a3b8' }}>{sub}</span>}
   </div>
 );
 
 const Card: React.FC<{ children: React.ReactNode; style?: React.CSSProperties }> = ({ children, style }) => (
-  <div style={{ background:'#fff', borderRadius:12, border:'1px solid #e2e8f0', boxShadow:'0 1px 3px rgba(0,0,0,0.05)', display:'flex', flexDirection:'column', overflow:'hidden', ...style }}>
+  <div style={{ background:'#fff', borderRadius:6, border:'1px solid #e2e8f0', display:'flex', flexDirection:'column', overflow:'hidden', ...style }}>
     {children}
   </div>
 );
@@ -309,8 +304,7 @@ const HomePage: React.FC = () => {
     {id:'leave',    label:'Leave Report',   icon:<Calendar size={13}/>},
   ];
 
-  const MEDAL   = ['🥇','🥈','🥉','4️⃣','5️⃣'];
-  const MEDAL_C = ['#f59e0b','#94a3b8','#b45309','#64748b','#94a3b8'];
+  const RANK_C = ['#0f172a','#475569','#64748b'];
 
   const TH: React.FC<{label:string;col?:string;align?:string}> = ({label,col,align='center'}) => (
     <th onClick={col?()=>toggleSort(col):undefined} style={{
@@ -331,8 +325,8 @@ const HomePage: React.FC = () => {
     >
       {rank!==undefined && (
         <td style={{padding:'6px 10px',textAlign:'center',borderBottom:'1px solid #f1f5f9'}}>
-          <span style={{fontSize:medals&&rank<3?14:11,fontWeight:700,color:'#94a3b8'}}>
-            {medals&&rank<3?MEDAL[rank]:rank+1}
+          <span style={{fontSize:11,fontWeight:medals&&rank<3?900:700,color:medals&&rank<3?RANK_C[rank]:'#94a3b8',fontVariantNumeric:'tabular-nums'}}>
+            {rank+1}
           </span>
         </td>
       )}
@@ -397,7 +391,7 @@ const HomePage: React.FC = () => {
             <div style={{width:28,height:28,background:'#0f172a',borderRadius:7,display:'flex',alignItems:'center',justifyContent:'center'}}><BarChart2 size={14} color="white"/></div>
             <div style={{lineHeight:1}}>
               <div style={{fontSize:7,color:'#94a3b8',fontWeight:900,textTransform:'uppercase',letterSpacing:'0.2em'}}>Admin</div>
-              <div style={{fontSize:12,color:'#0f172a',fontWeight:900,textTransform:'uppercase',letterSpacing:'0.1em'}}>Analytics Dashboard</div>
+              <div style={{fontSize:12,color:'#0f172a',fontWeight:900,textTransform:'uppercase',letterSpacing:'0.1em'}}>Overview</div>
             </div>
           </div>
           <div style={{width:1,height:24,background:'#e2e8f0'}}/>
@@ -461,12 +455,12 @@ const HomePage: React.FC = () => {
           {/* ── OVERVIEW ───────────────────────────────────────────────────── */}
           {activeTab==='overview' && (<>
             <div style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:10,flexShrink:0}}>
-              <KpiCard label="Active Agents" value={activeCount}  sub="on shift"       Icon={Users}     color="#0f172a" bg="#f1f5f9" border="#e2e8f0"/>
-              <KpiCard label="Total Agents"  value={handlers.length} sub="registered"  Icon={Users}     color="#475569" bg="#f8fafc" border="#e2e8f0"/>
-              <KpiCard label="Incidents"     value={totalInc}     sub="logged"          Icon={FileText}  color="#2563eb" bg="#dbeafe" border="#bfdbfe"/>
-              <KpiCard label="SC Tasks"      value={totalTask}    sub="completed"       Icon={Activity}  color="#b45309" bg="#fef9c3" border="#fde68a"/>
-              <KpiCard label="Calls"         value={totalCalls}   sub="handled"         Icon={PhoneCall} color="#00ADB5" bg="#f0fdfa" border="#99f6e4"/>
-              <KpiCard label="Avg / Agent"   value={activeCount?+(grandTotal/activeCount).toFixed(1):0} sub="tickets+calls" Icon={TrendingUp} color="#7c3aed" bg="#ede9fe" border="#c4b5fd"/>
+              <KpiCard label="Active Agents" value={activeCount}  sub="on shift"       color="#0f172a"/>
+              <KpiCard label="Total Agents"  value={handlers.length} sub="registered"  color="#475569"/>
+              <KpiCard label="Incidents"     value={totalInc}     sub="logged"          color="#2563eb"/>
+              <KpiCard label="SC Tasks"      value={totalTask}    sub="completed"       color="#b45309"/>
+              <KpiCard label="Calls"         value={totalCalls}   sub="handled"         color="#00ADB5"/>
+              <KpiCard label="Avg / Agent"   value={activeCount?+(grandTotal/activeCount).toFixed(1):0} sub="tickets+calls" color="#7c3aed"/>
             </div>
 
             <div style={{display:'grid',gridTemplateColumns:'1fr 260px',gap:10,flex:1,minHeight:200}}>
@@ -539,19 +533,19 @@ const HomePage: React.FC = () => {
                 </div>
               </Card>
               <Card>
-                <CardHead sup="Rankings" title="Top Performers" right={<Award size={14} color="#f59e0b"/>}/>
+                <CardHead sup="Rankings" title="Top Performers"/>
                 <div style={{flex:1,overflow:'hidden',padding:'8px 14px 10px',display:'flex',flexDirection:'column',gap:6}}>
                   {topPerformers.length===0?<Empty msg="No data"/>:topPerformers.map((r,i)=>(
                     <div key={r.id}>
                       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:2}}>
-                        <div style={{display:'flex',alignItems:'center',gap:5}}>
-                          <span style={{fontSize:11}}>{MEDAL[i]}</span>
+                        <div style={{display:'flex',alignItems:'center',gap:7}}>
+                          <span style={{fontSize:11,fontWeight:900,color:i<3?RANK_C[i]:'#94a3b8',width:12,fontVariantNumeric:'tabular-nums'}}>{i+1}</span>
                           <span style={{fontSize:11,fontWeight:700,color:'#0f172a',maxWidth:100,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.name}</span>
                         </div>
-                        <span style={{fontSize:12,fontWeight:900,color:MEDAL_C[i],fontVariantNumeric:'tabular-nums'}}>{r.total}</span>
+                        <span style={{fontSize:12,fontWeight:900,color:'#0f172a',fontVariantNumeric:'tabular-nums'}}>{r.total}</span>
                       </div>
                       <div style={{height:4,background:'#f1f5f9',borderRadius:2,overflow:'hidden'}}>
-                        <div style={{width:`${pct(r.total,topPerformers[0].total)}%`,height:'100%',background:MEDAL_C[i],borderRadius:2}}/>
+                        <div style={{width:`${pct(r.total,topPerformers[0].total)}%`,height:'100%',background:i<3?RANK_C[i]:'#cbd5e1',borderRadius:2}}/>
                       </div>
                     </div>
                   ))}
@@ -618,10 +612,10 @@ const HomePage: React.FC = () => {
           {/* ── QH ─────────────────────────────────────────────────────────── */}
           {activeTab==='qh' && (<>
             <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10,flexShrink:0}}>
-              <KpiCard label="Queue Handlers" value={qhCount}                          sub="designated"   Icon={Shield}    color="#b45309" bg="#fef3c7" border="#fde68a"/>
-              <KpiCard label="QH Incidents"   value={qhRows.reduce((a,r)=>a+r.inc,0)} sub="logged"       Icon={FileText}  color="#2563eb" bg="#dbeafe" border="#bfdbfe"/>
-              <KpiCard label="QH Tasks"       value={qhRows.reduce((a,r)=>a+r.task,0)}sub="completed"    Icon={Activity}  color="#b45309" bg="#fef9c3" border="#fde68a"/>
-              <KpiCard label="QH Calls"       value={qhRows.reduce((a,r)=>a+r.calls,0)}sub="handled"     Icon={PhoneCall} color="#00ADB5" bg="#f0fdfa" border="#99f6e4"/>
+              <KpiCard label="Queue Handlers" value={qhCount}                          sub="designated"   color="#b45309"/>
+              <KpiCard label="QH Incidents"   value={qhRows.reduce((a,r)=>a+r.inc,0)} sub="logged"       color="#2563eb"/>
+              <KpiCard label="QH Tasks"       value={qhRows.reduce((a,r)=>a+r.task,0)}sub="completed"    color="#b45309"/>
+              <KpiCard label="QH Calls"       value={qhRows.reduce((a,r)=>a+r.calls,0)}sub="handled"     color="#00ADB5"/>
             </div>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,flex:1,minHeight:200}}>
               <Card style={{flex:1,minHeight:0}}>
@@ -782,10 +776,10 @@ const HomePage: React.FC = () => {
           {/* ── LEAVE REPORT ───────────────────────────────────────────────── */}
           {activeTab==='leave' && (<>
             <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10,flexShrink:0}}>
-              <KpiCard label="Total on Leave"  value={leaveCount}                                              sub="in period"  Icon={AlertTriangle} color="#dc2626" bg="#fee2e2" border="#fca5a5"/>
-              <KpiCard label="WeekOff"         value={filteredRoster.filter(r=>r.shift==='WeekOff').length}        sub="entries"    Icon={Calendar}      color="#64748b" bg="#f1f5f9" border="#e2e8f0"/>
-              <KpiCard label="Medical Leave"   value={filteredRoster.filter(r=>r.shift==='Medical Leave').length}  sub="entries"    Icon={Activity}      color="#831843" bg="#fce7f3" border="#f9a8d4"/>
-              <KpiCard label="Planned Leave"   value={filteredRoster.filter(r=>r.shift==='Planned Leave').length}  sub="entries"    Icon={FileText}      color="#78350f" bg="#fef3c7" border="#fde68a"/>
+              <KpiCard label="Total on Leave"  value={leaveCount}                                              sub="in period"  color="#dc2626"/>
+              <KpiCard label="WeekOff"         value={filteredRoster.filter(r=>r.shift==='WeekOff').length}        sub="entries"    color="#64748b"/>
+              <KpiCard label="Medical Leave"   value={filteredRoster.filter(r=>r.shift==='Medical Leave').length}  sub="entries"    color="#831843"/>
+              <KpiCard label="Planned Leave"   value={filteredRoster.filter(r=>r.shift==='Planned Leave').length}  sub="entries"    color="#78350f"/>
             </div>
             <div style={{display:'grid',gridTemplateColumns:'1fr 260px',gap:10,flex:1,minHeight:200}}>
               <Card style={{flex:1,minHeight:0}}>
