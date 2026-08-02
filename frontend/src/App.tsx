@@ -20,12 +20,14 @@ import PageGuard from './components/PageGuard';
 const BACKEND = (import.meta.env.VITE_BACKEND_URL || '').replace(/\/$/, '');
 
 function App() {
+  const initialSavedUser = localStorage.getItem('currentUser');
   const [currentUser, setCurrentUser] = useState<string | null>(() => {
     const saved = localStorage.getItem('currentUser');
     return saved === 'Guest' ? null : saved;
   });
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [isBootstrappingSession, setIsBootstrappingSession] = useState(() => !!initialSavedUser && initialSavedUser !== 'Guest');
   
   // New auth flow state
   const [authStage, setAuthStage] = useState<'name' | 'totp' | 'setup-qr' | 'setup-confirm' | 'pending' | 'rejected'>('name');
@@ -57,14 +59,24 @@ function App() {
     setInputName('');
     setInputCode('');
     setAuthError(null);
+    setIsBootstrappingSession(false);
   };
 
   useEffect(() => {
+    let bootstrapTimer: ReturnType<typeof setTimeout> | null = null;
+
     const handleConnect = () => {
       console.log('CONNECTED to server');
       setIsBackendDown(false);
       if (currentUser && currentUser !== 'Guest') {
         syncData.join(currentUser);
+        if (bootstrapTimer) clearTimeout(bootstrapTimer);
+        bootstrapTimer = setTimeout(() => {
+          // Prevent infinite loading if init event is delayed/lost.
+          setIsBootstrappingSession(false);
+        }, 10000);
+      } else {
+        setIsBootstrappingSession(false);
       }
     };
 
@@ -74,22 +86,27 @@ function App() {
         setIsBackendDown(true);
       }
       setIsVerifying(false);
+      setIsBootstrappingSession(false);
     };
 
     const handleErrorMessage = (msg: string) => {
       setAuthError(msg);
       setIsVerifying(false);
+      setIsBootstrappingSession(false);
       handleLogout();
     };
 
     const handleInit = () => {
+      if (bootstrapTimer) clearTimeout(bootstrapTimer);
       if (!currentUser || currentUser === 'Guest') {
+        setIsBootstrappingSession(false);
         handleLogout();
         return;
       }
       setIsAuthenticated(true);
       setIsVerifying(false);
       localStorage.setItem('currentUser', currentUser);
+      setIsBootstrappingSession(false);
     };
 
     const handleKicked = (data: { message?: string }) => {
@@ -113,6 +130,7 @@ function App() {
     }
 
     return () => {
+      if (bootstrapTimer) clearTimeout(bootstrapTimer);
       socket.off('connect', handleConnect);
       socket.off('connect_error', handleConnectError);
       socket.off('error_message', handleErrorMessage);
@@ -121,6 +139,24 @@ function App() {
       socket.off('presence_updated');
     };
   }, [currentUser, isAuthenticated]);
+
+  // Session bootstrap state: show loading instead of flashing login while we
+  // verify a previously saved user session after page refresh.
+  if (isBootstrappingSession && !isAuthenticated) {
+    return (
+      <div className="h-screen w-screen bg-slate-50 flex items-center justify-center p-6 relative overflow-hidden font-sans">
+        <img src={bgImage} alt="Background" className="absolute inset-0 w-full h-full object-cover scale-105" />
+        <div className="absolute inset-0 bg-white/25 backdrop-blur-[2px]" />
+        <div className="relative z-10 bg-white/80 backdrop-blur-2xl border border-white/50 rounded-3xl shadow-2xl px-10 py-9 text-center max-w-md w-full">
+          <div className="w-12 h-12 mx-auto mb-5 rounded-2xl bg-slate-900 text-white flex items-center justify-center">
+            <Loader2 size={22} className="animate-spin" />
+          </div>
+          <h1 className="text-xl font-black text-slate-900 tracking-tight">Restoring Session</h1>
+          <p className="mt-2 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">Reconnecting to secure workspace</p>
+        </div>
+      </div>
+    );
+  }
 
   // New auth handlers
   const handleNameLookup = async (e: React.FormEvent) => {

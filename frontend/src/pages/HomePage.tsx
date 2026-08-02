@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRole } from '../auth/RoleContext';
 import type { Handler, RosterEntry, DailyStats } from '../types';
-import { syncData } from '../utils/socket';
+import { syncData, socket } from '../utils/socket';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, AreaChart, Area,
@@ -123,6 +123,30 @@ const findColumnIndex = (headers: string[], keywords: string[]) =>
   headers.findIndex((h) => keywords.some((k) => h.includes(k)));
 
 const SERVER_ACK_TIMEOUT_MS = 30000;
+
+const verifyImportedStatsOnServer = (expectedRows: DailyStats[]) =>
+  new Promise<{ ok: boolean; detail: string }>((resolve) => {
+    const timer = setTimeout(() => {
+      socket.off('init', onInit);
+      resolve({ ok: false, detail: 'verification request timed out' });
+    }, 15000);
+
+    const sample = expectedRows.slice(0, 250);
+    const sampleKeys = new Set(sample.map((r) => `${r.handlerId}|${r.date}|${r.incidents}|${r.sctasks}|${r.calls}`));
+
+    const onInit = (db: any) => {
+      clearTimeout(timer);
+      const serverStats: DailyStats[] = Array.isArray(db?.stats) ? db.stats : [];
+      const serverKeys = new Set(serverStats.map((r) => `${r.handlerId}|${r.date}|${Number(r.incidents || 0)}|${Number(r.sctasks || 0)}|${Number(r.calls || 0)}`));
+      let matched = 0;
+      sampleKeys.forEach((k) => { if (serverKeys.has(k)) matched += 1; });
+      const ratio = sampleKeys.size ? matched / sampleKeys.size : 0;
+      resolve({ ok: ratio >= 0.95, detail: `matched ${matched}/${sampleKeys.size} sample rows` });
+    };
+
+    socket.once('init', onInit);
+    socket.emit('get_initial_data');
+  });
 
 const parseDateFromSheetName = (sheetName: string, fallbackYear: number) => {
   const raw = normalizeCellValue(sheetName);
@@ -677,7 +701,7 @@ const HomePage: React.FC = () => {
       const ab = await file.arrayBuffer();
       const wb = XLSX.read(ab, { type: 'array' });
       if (!wb.SheetNames.length) {
-        setImportStatus({ message: 'No sheets found in uploaded file.', tone: 'error' });
+        setImportStatus({ message: 'No sheets found in uploaded file.', tone: 'warning' });
         return;
       }
 
@@ -726,7 +750,7 @@ const HomePage: React.FC = () => {
       const warnings = workbookWarnings;
 
       if (!refined.length) {
-        setImportStatus({ message: 'Unable to refine file into import-ready analytics rows.', tone: 'error' });
+        setImportStatus({ message: 'Unable to refine file into import-ready analytics rows.', tone: 'warning' });
         return;
       }
 
@@ -735,7 +759,7 @@ const HomePage: React.FC = () => {
     } catch (err) {
       setImportStatus({
         message: `Refine failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
-        tone: 'error',
+        tone: 'warning',
       });
     } finally {
       setIsRefiningAnalytics(false);
@@ -828,14 +852,29 @@ const HomePage: React.FC = () => {
       }
 
       const onlyTimeoutErrors = ackErrors.length > 0 && ackErrors.every((e) => e.toLowerCase().includes('timed out'));
-      const tone: ImportFeedback['tone'] = ackErrors.length ? (onlyTimeoutErrors ? 'warning' : 'error') : refineWarnings.length ? 'warning' : 'success';
-      const savedMsg = ackErrors.length
+      let effectiveAckErrors = [...ackErrors];
+      let verificationMsg = '';
+
+      if (onlyTimeoutErrors) {
+        setImportProgress({ step: 'Ack timed out. Verifying backend save status...', percent: 90, mode: 'import' });
+        const verified = await verifyImportedStatsOnServer(parsedStats);
+        if (verified.ok) {
+          effectiveAckErrors = [];
+          verificationMsg = ` Verified on backend (${verified.detail}).`;
+        } else {
+          verificationMsg = ` Still unconfirmed (${verified.detail}).`;
+        }
+      }
+
+      const tone: ImportFeedback['tone'] = effectiveAckErrors.length ? 'warning' : 'success';
+      const savedMsg = effectiveAckErrors.length
         ? (onlyTimeoutErrors
-            ? ` Server confirmation pending/timed out — ${ackErrors.join('; ')}. Data may still complete on backend.`
-            : ` Server save failed — ${ackErrors.join('; ')}`)
+            ? ` Server confirmation pending/timed out — ${effectiveAckErrors.join('; ')}.${verificationMsg}`
+            : ` Server save failed — ${effectiveAckErrors.join('; ')}`)
         : ' Saved to server.';
+      const refineNote = refineWarnings.length ? ` ${refineWarnings.length} row(s) were skipped during refining.` : '';
       setImportStatus({
-        message: `Imported ${parsedStats.length} analytics row(s).${newHandlers.length ? ` +${newHandlers.length} new agent(s).` : ''}${refineWarnings.length ? ` (${refineWarnings.length} skipped while refining)` : ''}${savedMsg}`,
+        message: `Imported ${parsedStats.length} analytics row(s).${newHandlers.length ? ` +${newHandlers.length} new agent(s).` : ''}${refineNote}${savedMsg}`,
         tone,
       });
       setImportProgress({ step: 'Import completed.', percent: 100, mode: 'import' });
@@ -843,7 +882,7 @@ const HomePage: React.FC = () => {
     } catch (err) {
       setImportStatus({
         message: `Import failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
-        tone: 'error',
+        tone: 'warning',
       });
       setImportProgress({ step: 'Import failed.', percent: 100, mode: 'import' });
     } finally {
