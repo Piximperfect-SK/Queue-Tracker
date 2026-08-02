@@ -22,10 +22,16 @@ const SettingsPage: React.FC = () => {
   const [customShifts, setCustomShifts] = useState<string[]>([]);
   const [newShiftInput, setNewShiftInput] = useState('');
 
+  const normalizeHandler = (handler: Handler): Handler => ({
+    ...handler,
+    workType: handler.workType === 'non-voice' ? 'non-voice' : 'voice',
+  });
+
   useEffect(() => {
     const handleHandlers = (data: any) => {
-      setHandlers(data);
-      localStorage.setItem('handlers', JSON.stringify(data));
+      const normalized = data.map(normalizeHandler);
+      setHandlers(normalized);
+      localStorage.setItem('handlers', JSON.stringify(normalized));
     };
 
     // Load custom shifts from localStorage
@@ -39,8 +45,9 @@ const SettingsPage: React.FC = () => {
     socket.on('init', (db) => {
       if ((db.handlers || db.agents) && (db.handlers?.length || db.agents?.length)) {
         const data = db.handlers || db.agents;
-        setHandlers(data);
-        localStorage.setItem('handlers', JSON.stringify(data));
+        const normalized = data.map(normalizeHandler);
+        setHandlers(normalized);
+        localStorage.setItem('handlers', JSON.stringify(normalized));
       }
       if (db.logs) {
         saveLogsFromServer(db.logs);
@@ -48,7 +55,7 @@ const SettingsPage: React.FC = () => {
     });
 
     const savedHandlers = localStorage.getItem('handlers');
-    if (savedHandlers) setHandlers(JSON.parse(savedHandlers));
+    if (savedHandlers) setHandlers(JSON.parse(savedHandlers).map((row: Handler) => normalizeHandler(row)));
     else setHandlers(MOCK_HANDLERS);
 
     return () => {
@@ -93,7 +100,8 @@ const SettingsPage: React.FC = () => {
     const newHandler: Handler = {
       id: Date.now().toString(),
       name: 'New Handler',
-      isQH: false
+      isQH: false,
+      workType: 'voice'
     };
     saveHandlers([...handlers, newHandler]);
     addLog('Add Handler', `Added new handler: ${newHandler.name}`, 'positive');
@@ -129,6 +137,15 @@ const SettingsPage: React.FC = () => {
 
   const qhCount = handlers.filter(h => h.isQH).length;
   const standardCount = handlers.length - qhCount;
+  const voiceCount = handlers.filter(h => h.workType !== 'non-voice').length;
+  const nonVoiceCount = handlers.filter(h => h.workType === 'non-voice').length;
+
+  const updateWorkType = (id: string, workType: 'voice' | 'non-voice') => {
+    const handler = handlers.find(a => a.id === id);
+    const updated = handlers.map(a => a.id === id ? { ...a, workType } : a);
+    saveHandlers(updated);
+    addLog('Update Handler Type', `${handler?.name || id}: set as ${workType}`, 'neutral');
+  };
 
   return (
     <div className="h-full flex flex-col overflow-hidden p-3">
@@ -182,7 +199,7 @@ const SettingsPage: React.FC = () => {
       </div>
 
       {/* ── Stats Cards ── */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3 shrink-0">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mb-3 shrink-0">
         <div className="bg-slate-50 rounded-lg border border-slate-200 p-2.5 flex items-center gap-2">
           <div className="w-8 h-8 bg-blue-50 rounded flex items-center justify-center text-blue-600 shrink-0">
             <Users size={16} />
@@ -207,7 +224,16 @@ const SettingsPage: React.FC = () => {
           </div>
           <div>
             <p className="text-base font-bold text-slate-900">{standardCount}</p>
-            <p className="text-[9px] font-medium text-slate-500 uppercase tracking-wide">Standard</p>
+            <p className="text-[9px] font-medium text-slate-500 uppercase tracking-wide">Agent</p>
+          </div>
+        </div>
+        <div className="bg-slate-50 rounded-lg border border-slate-200 p-2.5 flex items-center gap-2">
+          <div className="w-8 h-8 bg-cyan-50 rounded flex items-center justify-center text-cyan-600 shrink-0">
+            <Activity size={16} />
+          </div>
+          <div>
+            <p className="text-base font-bold text-slate-900">{voiceCount}/{nonVoiceCount}</p>
+            <p className="text-[9px] font-medium text-slate-500 uppercase tracking-wide">Voice / Non-Voice</p>
           </div>
         </div>
       </div>
@@ -295,8 +321,17 @@ const SettingsPage: React.FC = () => {
                           ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                           : 'bg-slate-100 text-slate-500 border-slate-200'
                       }`}>
-                        {handler.isQH ? 'QH' : 'STD'}
+                        {handler.isQH ? 'QH' : 'Agent'}
                       </span>
+                      <select
+                        value={handler.workType || 'voice'}
+                        onChange={(e) => updateWorkType(handler.id, e.target.value as 'voice' | 'non-voice')}
+                        disabled={!isPrivileged}
+                        className="text-[8px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded border border-cyan-200 bg-cyan-50 text-cyan-700 disabled:opacity-60"
+                      >
+                        <option value="voice">Voice</option>
+                        <option value="non-voice">Non-Voice</option>
+                      </select>
                       <span className="text-[8px] text-slate-400 font-mono">ID: {handler.id.slice(0, 8)}</span>
                     </div>
                   </div>

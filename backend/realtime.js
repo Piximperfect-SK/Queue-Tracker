@@ -10,6 +10,10 @@ export function setIo(io) {
   ioInstance = io;
 }
 
+export function getIo() {
+  return ioInstance;
+}
+
 export function registerSocketSession(jti, socketId) {
   if (!jtiToSocketIds.has(jti)) jtiToSocketIds.set(jti, new Set());
   jtiToSocketIds.get(jti).add(socketId);

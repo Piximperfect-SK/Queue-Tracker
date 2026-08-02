@@ -1,18 +1,18 @@
 import type { Handler, ShiftType, RosterEntry } from '../types';
 
 export const MOCK_HANDLERS: Handler[] = [
-  { id: '1', name: 'Nadeer Muhammad', isQH: false },
-  { id: '2', name: 'Santosh Guttedar', isQH: false },
-  { id: '3', name: 'Nisha Nigam', isQH: false },
-  { id: '4', name: 'Shubham Kumar', isQH: false },
-  { id: '5', name: 'Divya Tanu Raj', isQH: false },
-  { id: '6', name: 'Amit Sharma', isQH: false },
-  { id: '7', name: 'Priya Singh', isQH: false },
-  { id: '8', name: 'Rahul Verma', isQH: false },
-  { id: '9', name: 'Suresh Raina', isQH: false },
-  { id: '10', name: 'Deepak Chahar', isQH: false },
-  { id: '11', name: 'Rishabh Pant', isQH: false },
-  { id: '12', name: 'Hardik Pandya', isQH: false },
+  { id: '1', name: 'Nadeer Muhammad', isQH: false, workType: 'voice' },
+  { id: '2', name: 'Santosh Guttedar', isQH: false, workType: 'voice' },
+  { id: '3', name: 'Nisha Nigam', isQH: false, workType: 'voice' },
+  { id: '4', name: 'Shubham Kumar', isQH: false, workType: 'voice' },
+  { id: '5', name: 'Divya Tanu Raj', isQH: false, workType: 'voice' },
+  { id: '6', name: 'Amit Sharma', isQH: false, workType: 'voice' },
+  { id: '7', name: 'Priya Singh', isQH: false, workType: 'non-voice' },
+  { id: '8', name: 'Rahul Verma', isQH: false, workType: 'non-voice' },
+  { id: '9', name: 'Suresh Raina', isQH: false, workType: 'non-voice' },
+  { id: '10', name: 'Deepak Chahar', isQH: false, workType: 'non-voice' },
+  { id: '11', name: 'Rishabh Pant', isQH: false, workType: 'non-voice' },
+  { id: '12', name: 'Hardik Pandya', isQH: false, workType: 'non-voice' },
 ];
 
 export const SHIFTS: ShiftType[] = ['6AM-3PM', '12PM-9PM', '1PM-10PM', '2PM-11PM', '10PM-7AM'];

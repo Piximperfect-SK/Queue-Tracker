@@ -5,6 +5,7 @@ const userSchema = new mongoose.Schema({
   fullName: { type: String, required: true, trim: true },
   passwordHash: { type: String, required: true },
   role: { type: String, enum: ['admin', 'queue_handler', 'associate'], default: 'associate' },
+  workType: { type: String, enum: ['voice', 'non-voice'], default: 'voice' },
   isActive: { type: Boolean, default: true },
   failedLogins: { type: Number, default: 0 },
   lastLoginAt: Date,

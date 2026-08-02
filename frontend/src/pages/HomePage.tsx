@@ -123,6 +123,11 @@ const normalizeDailyStat = (stat: DailyStats): DailyStats => ({
   comments: typeof stat.comments === 'string' ? stat.comments : '',
 });
 
+const normalizeHandler = (handler: Handler): Handler => ({
+  ...handler,
+  workType: handler.workType === 'non-voice' ? 'non-voice' : 'voice',
+});
+
 const isLikelyNameText = (value: unknown) => {
   const v = normalizeCellValue(value);
   if (!v) return false;
@@ -215,25 +220,25 @@ const KpiCard: React.FC<{
   color: string; bg?: string; border?: string; trend?: number;
   onInfo?: () => void;
 }> = ({ label, value, sub, color, trend, onInfo }) => (
-  <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderLeft:`3px solid ${color}`, borderRadius:6, padding:'12px 14px', display:'flex', flexDirection:'column', gap:5, minWidth:0 }}>
+  <div style={{ background:'var(--home-card-bg)', border:'1px solid var(--home-card-border)', borderLeft:`3px solid ${color}`, borderRadius:6, padding:'12px 14px', display:'flex', flexDirection:'column', gap:5, minWidth:0, boxShadow:'var(--app-shadow)' }}>
     <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 }}>
-      <span style={{ fontSize:10, fontWeight:700, color:'#64748b', textTransform:'uppercase', letterSpacing:'0.07em' }}>{label}</span>
+      <span style={{ fontSize:10, fontWeight:700, color:'var(--app-text-soft)', textTransform:'uppercase', letterSpacing:'0.07em' }}>{label}</span>
       {onInfo && <InfoButton onClick={onInfo} muted />}
     </div>
     <div style={{ display:'flex', alignItems:'baseline', gap:8 }}>
-      <span style={{ fontSize:24, fontWeight:700, color:'#0f172a', fontVariantNumeric:'tabular-nums', lineHeight:1 }}>{value}</span>
+      <span style={{ fontSize:24, fontWeight:700, color:'var(--app-text)', fontVariantNumeric:'tabular-nums', lineHeight:1 }}>{value}</span>
       {trend !== undefined && trend !== 0 && (
         <span style={{ fontSize:11, fontWeight:600, color: trend>0?'#16a34a':'#dc2626', display:'flex', alignItems:'center', gap:2 }}>
           {trend>0 ? <ArrowUp size={10}/> : <ArrowDown size={10}/>}{Math.abs(trend)}%
         </span>
       )}
     </div>
-    {sub && <span style={{ fontSize:10, color:'#94a3b8' }}>{sub}</span>}
+    {sub && <span style={{ fontSize:10, color:'var(--app-text-muted)' }}>{sub}</span>}
   </div>
 );
 
 const Card: React.FC<{ children: React.ReactNode; style?: React.CSSProperties }> = ({ children, style }) => (
-  <div style={{ background:'#fff', borderRadius:6, border:'1px solid #e2e8f0', display:'flex', flexDirection:'column', overflow:'hidden', ...style }}>
+  <div style={{ background:'var(--home-card-bg)', borderRadius:6, border:'1px solid var(--home-card-border)', display:'flex', flexDirection:'column', overflow:'hidden', boxShadow:'var(--app-shadow)', ...style }}>
     {children}
   </div>
 );
@@ -241,9 +246,9 @@ const Card: React.FC<{ children: React.ReactNode; style?: React.CSSProperties }>
 const CardHead: React.FC<{ sup: string; title: string; right?: React.ReactNode; onInfo?: () => void }> = ({ sup, title, right, onInfo }) => (
   <div style={{ flexShrink:0, padding:'10px 14px 0', display:'flex', alignItems:'flex-start', justifyContent:'space-between' }}>
     <div>
-      <div style={{ fontSize:8, color:'#94a3b8', fontWeight:900, textTransform:'uppercase', letterSpacing:'0.2em' }}>{sup}</div>
+      <div style={{ fontSize:8, color:'var(--app-text-muted)', fontWeight:900, textTransform:'uppercase', letterSpacing:'0.2em' }}>{sup}</div>
       <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:2 }}>
-        <div style={{ fontSize:12, fontWeight:900, color:'#0f172a' }}>{title}</div>
+        <div style={{ fontSize:12, fontWeight:900, color:'var(--app-text)' }}>{title}</div>
         {onInfo && <InfoButton onClick={onInfo} muted />}
       </div>
     </div>
@@ -254,15 +259,15 @@ const CardHead: React.FC<{ sup: string; title: string; right?: React.ReactNode; 
 const Empty: React.FC<{ msg?: string }> = ({ msg='No data for this period' }) => (
   <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:8, opacity:0.2, minHeight:80 }}>
     <BarChart2 size={24} strokeWidth={1} color="#94a3b8"/>
-    <span style={{ fontSize:9, fontWeight:700, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'0.15em' }}>{msg}</span>
+    <span style={{ fontSize:9, fontWeight:700, color:'var(--app-text-muted)', textTransform:'uppercase', letterSpacing:'0.15em' }}>{msg}</span>
   </div>
 );
 
 const TT = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
   return (
-    <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, padding:'8px 12px', boxShadow:'0 4px 12px rgba(0,0,0,0.1)', fontSize:11 }}>
-      <div style={{ fontWeight:900, color:'#0f172a', marginBottom:4 }}>{label}</div>
+    <div style={{ background:'var(--home-tooltip-bg)', border:'1px solid var(--home-card-border)', borderRadius:8, padding:'8px 12px', boxShadow:'var(--app-shadow)', fontSize:11 }}>
+      <div style={{ fontWeight:900, color:'var(--app-text)', marginBottom:4 }}>{label}</div>
       {payload.map((p:any,i:number) => (
         <div key={i} style={{ display:'flex', alignItems:'center', gap:6, color:p.color||'#374151', fontWeight:700 }}>
           <div style={{ width:8, height:8, borderRadius:2, background:p.color||'#374151', flexShrink:0 }}/>
@@ -276,15 +281,15 @@ const TT = ({ active, payload, label }: any) => {
 const PieTT = ({ active, payload }: any) => {
   if (!active || !payload?.length) return null;
   return (
-    <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:8, padding:'6px 10px', boxShadow:'0 4px 12px rgba(0,0,0,0.1)', fontSize:11 }}>
-      <span style={{ fontWeight:900, color:'#0f172a' }}>{payload[0].name}: </span>
+    <div style={{ background:'var(--home-tooltip-bg)', border:'1px solid var(--home-card-border)', borderRadius:8, padding:'6px 10px', boxShadow:'var(--app-shadow)', fontSize:11 }}>
+      <span style={{ fontWeight:900, color:'var(--app-text)' }}>{payload[0].name}: </span>
       <span style={{ fontWeight:700, color:payload[0].payload.fill }}>{fmt(payload[0].value)}</span>
     </div>
   );
 };
 
 const LegendDot: React.FC<{color:string;label:string;type?:'dot'|'line'}> = ({color,label,type='dot'}) => (
-  <div style={{ display:'flex', alignItems:'center', gap:4, fontSize:9, fontWeight:700, color:'#64748b' }}>
+  <div style={{ display:'flex', alignItems:'center', gap:4, fontSize:9, fontWeight:700, color:'var(--app-text-soft)' }}>
     {type==='line'
       ? <div style={{ width:14, height:2, borderRadius:1, background:color }}/>
       : <div style={{ width:8, height:8, borderRadius:2, background:color }}/>
@@ -305,13 +310,13 @@ const InfoButton: React.FC<{ onClick: () => void; muted?: boolean }> = ({ onClic
       width: 18,
       height: 18,
       borderRadius: '50%',
-      border: '1px solid #cbd5e1',
-      background: '#fff',
+      border: '1px solid var(--home-card-border)',
+      background: 'var(--home-pill-bg)',
       cursor: 'pointer',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      color: muted ? '#94a3b8' : '#475569',
+      color: muted ? 'var(--app-text-muted)' : 'var(--app-text-soft)',
       flexShrink: 0,
     }}
     title="More info"
@@ -326,9 +331,9 @@ const ControlPill: React.FC<{ active: boolean; onClick: () => void; label: strin
     style={{
       padding: '3px 8px',
       borderRadius: 999,
-      border: `1px solid ${active ? '#0f172a' : '#cbd5e1'}`,
-      background: active ? '#0f172a' : '#fff',
-      color: active ? '#fff' : '#64748b',
+      border: `1px solid ${active ? 'var(--app-text)' : 'var(--home-card-border)'}`,
+      background: active ? 'var(--app-text)' : 'var(--home-pill-bg)',
+      color: active ? 'var(--home-card-bg)' : 'var(--home-pill-text)',
       fontSize: 9,
       fontWeight: 800,
       letterSpacing: '0.08em',
@@ -392,7 +397,7 @@ const HomePage: React.FC = () => {
 
   useEffect(() => {
     const load = () => {
-      try { const h=JSON.parse(localStorage.getItem('handlers')||'[]'); if(h.length) setHandlers(h); } catch {}
+      try { const h=JSON.parse(localStorage.getItem('handlers')||'[]'); if(h.length) setHandlers(h.map((row: Handler) => normalizeHandler(row))); } catch {}
       try { const r=JSON.parse(localStorage.getItem('roster')  ||'[]'); if(r.length) setRoster(r);   } catch {}
       try {
         const s=JSON.parse(localStorage.getItem('stats') || '[]');
@@ -991,7 +996,7 @@ const HomePage: React.FC = () => {
         if (!hid) {
           hid = createAgentId();
           lookup.set(key, hid);
-          newHandlers.push({ id: hid, name: row.agentName, isQH: false });
+          newHandlers.push({ id: hid, name: row.agentName, isQH: false, workType: 'voice' });
         }
         parsedStats.push(normalizeDailyStat({
           handlerId: hid,
@@ -1222,22 +1227,22 @@ const HomePage: React.FC = () => {
   );
 
   return (
-    <div style={{height:'100%',display:'flex',flexDirection:'column',overflow:'hidden',background:'#f1f5f9',fontFamily:'system-ui,sans-serif'}}>
+    <div style={{height:'100%',display:'flex',flexDirection:'column',overflow:'hidden',background:'var(--app-bg)',color:'var(--app-text)',fontFamily:'system-ui,sans-serif'}}>
 
       {/* ══ TOPBAR ══════════════════════════════════════════════════════════ */}
-      <div style={{flexShrink:0,background:'#fff',borderBottom:'1px solid #e2e8f0',display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 16px',height:46}}>
+      <div style={{flexShrink:0,background:'var(--home-card-bg)',borderBottom:'1px solid var(--home-card-border)',display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 16px',height:46}}>
         <div style={{display:'flex',alignItems:'center',gap:12}}>
           <div style={{display:'flex',alignItems:'center',gap:8}}>
-            <div style={{width:28,height:28,background:'#0f172a',borderRadius:7,display:'flex',alignItems:'center',justifyContent:'center'}}><BarChart2 size={14} color="white"/></div>
+            <div style={{width:28,height:28,background:'var(--app-text)',borderRadius:7,display:'flex',alignItems:'center',justifyContent:'center'}}><BarChart2 size={14} color="white"/></div>
             <div style={{lineHeight:1}}>
-              <div style={{fontSize:7,color:'#94a3b8',fontWeight:900,textTransform:'uppercase',letterSpacing:'0.2em'}}>Admin</div>
-              <div style={{fontSize:12,color:'#0f172a',fontWeight:900,textTransform:'uppercase',letterSpacing:'0.1em'}}>Overview</div>
+              <div style={{fontSize:7,color:'var(--app-text-muted)',fontWeight:900,textTransform:'uppercase',letterSpacing:'0.2em'}}>Admin</div>
+              <div style={{fontSize:12,color:'var(--app-text)',fontWeight:900,textTransform:'uppercase',letterSpacing:'0.1em'}}>Overview</div>
             </div>
           </div>
-          <div style={{width:1,height:24,background:'#e2e8f0'}}/>
-          <div style={{display:'flex',background:'#f1f5f9',borderRadius:8,padding:3,border:'1px solid #e2e8f0',gap:2}}>
+          <div style={{width:1,height:24,background:'var(--home-card-border)'}}/>
+          <div style={{display:'flex',background:'var(--home-head-bg)',borderRadius:8,padding:3,border:'1px solid var(--home-card-border)',gap:2}}>
             {(['day','month','year'] as FilterMode[]).map(m=>(
-              <button key={m} onClick={()=>setMode(m)} style={{padding:'3px 12px',borderRadius:6,border:'none',cursor:'pointer',fontSize:10,fontWeight:900,textTransform:'uppercase',letterSpacing:'0.12em',transition:'all 0.15s',background:mode===m?'#0f172a':'transparent',color:mode===m?'#fff':'#64748b'}}>
+              <button key={m} onClick={()=>setMode(m)} style={{padding:'3px 12px',borderRadius:6,border:'none',cursor:'pointer',fontSize:10,fontWeight:900,textTransform:'uppercase',letterSpacing:'0.12em',transition:'all 0.15s',background:mode===m?'var(--app-text)':'transparent',color:mode===m?'var(--home-card-bg)':'var(--app-text-soft)'}}>
                 {m}
               </button>
             ))}
@@ -1315,7 +1320,7 @@ const HomePage: React.FC = () => {
       <div style={{flex:1,minHeight:0,display:'flex',overflow:'hidden'}}>
 
         {/* Sidebar */}
-        <div style={{width:160,flexShrink:0,background:'#fff',borderRight:'1px solid #e2e8f0',display:'flex',flexDirection:'column',padding:'10px 8px',gap:2}}>
+        <div style={{width:160,flexShrink:0,background:'var(--home-card-bg)',borderRight:'1px solid var(--home-card-border)',display:'flex',flexDirection:'column',padding:'10px 8px',gap:2}}>
           {TABS.map(t=>(
             <button key={t.id} onClick={()=>setActiveTab(t.id)} style={{
               display:'flex',alignItems:'center',gap:8,padding:'8px 10px',borderRadius:8,border:'none',

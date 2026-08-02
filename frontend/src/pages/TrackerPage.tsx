@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { MOCK_HANDLERS, MOCK_ROSTER } from '../data/mockData';
-import { ShieldCheck, PhoneCall, X, Check, ChevronLeft, ChevronRight, Shield } from 'lucide-react';
+import { ShieldCheck, PhoneCall, X, Check, ChevronLeft, ChevronRight, Shield, ChevronUp, ChevronDown, Minus } from 'lucide-react';
 import type { DailyStats, Handler, RosterEntry, ShiftType } from '../types';
 import { addLog, saveLogsFromServer, saveSingleLogFromServer } from '../utils/logger';
 import { socket, syncData } from '../utils/socket';
+import { useTheme } from '../theme/ThemeContext';
 
 const normalizeCount = (value: unknown) => {
   const n = typeof value === 'number' ? value : Number(value || 0);
@@ -17,6 +18,13 @@ const normalizeDailyStat = (stat: DailyStats): DailyStats => ({
   calls: normalizeCount(stat.calls),
   comments: typeof stat.comments === 'string' ? stat.comments : '',
 });
+
+const normalizeHandler = (handler: Handler): Handler => ({
+  ...handler,
+  workType: handler.workType === 'non-voice' ? 'non-voice' : 'voice',
+});
+
+type WorkType = 'voice' | 'non-voice';
 
 // ── Shift colour palette (Excel-style solid fills) ────────────────────────
 const SHIFT_STYLE: Record<string, {
@@ -65,6 +73,7 @@ const EditCell: React.FC<{
   onCallClick?: () => void;
   textColor: string;
 }> = ({ value, onChange, flash, isCall, onCallClick, textColor }) => {
+  const { theme } = useTheme();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -93,8 +102,8 @@ const EditCell: React.FC<{
         onChange={e => setDraft(e.target.value)}
         onBlur={commit}
         onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false); }}
-        className="w-full h-full text-center font-black text-[13px] outline-none bg-white border-2 border-[#00ADB5] tabular-nums"
-        style={{ color: textColor }}
+        className="w-full h-full text-center font-black text-[13px] outline-none border-2 border-[#00ADB5] tabular-nums"
+        style={{ color: textColor, background: 'var(--tracker-input-bg)' }}
         type="number" min={0}
       />
     );
@@ -111,10 +120,10 @@ const EditCell: React.FC<{
         fontVariantNumeric: 'tabular-nums',
         color: flash === 'positive' ? '#16a34a'
              : flash === 'negative' ? '#dc2626'
-             : value > 0 ? textColor : '#94a3b8',
+             : value > 0 ? textColor : 'var(--tracker-muted)',
         background: flash === 'positive' ? '#dcfce7'
                   : flash === 'negative' ? '#fee2e2'
-                  : 'transparent',
+               : theme === 'dark' ? 'rgba(255,255,255,0.02)' : 'transparent',
       }}
     >
       {value}
@@ -133,8 +142,9 @@ interface TrackerPageProps {
 
 // ═════════════════════════════════════════════════════════════════════════
 const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate }) => {
+  const { theme } = useTheme();
   const [handlers, setHandlers] = useState<Handler[]>(() => {
-    const s = localStorage.getItem('handlers'); return s ? JSON.parse(s) : MOCK_HANDLERS;
+    const s = localStorage.getItem('handlers'); return s ? JSON.parse(s).map((row: Handler) => normalizeHandler(row)) : MOCK_HANDLERS;
   });
   const [roster, setRoster] = useState<RosterEntry[]>(() => {
     const s = localStorage.getItem('roster'); return s ? JSON.parse(s) : MOCK_ROSTER;
@@ -147,6 +157,8 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
   const [times, setTimes]               = useState({ ist: '', uk: '' });
   const [isCallModalOpen, setIsCallModalOpen] = useState(false);
   const [callData, setCallData]         = useState({ handlerId: '', ticketNumber: '', type: 'New' as 'New' | 'Update' });
+  const [sortCol, setSortCol] = useState<'name' | 'shift' | 'incidents' | 'sctasks' | 'calls' | 'total'>('shift');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const wrapRef = useRef<HTMLDivElement>(null);
   const [rowH, setRowH] = useState(28);
 
@@ -157,9 +169,9 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
       const totalH    = wrapRef.current.clientHeight;
       const topbarH   = 40;  // fixed topbar
       const colHeadH  = 26;  // column header row
-      const shiftRows = handlerGroups.length;           // one header row per shift
+      const workTypeRows = workTypeGroups.reduce((count, group) => count + 1 + group.shiftGroups.length, 0);
       const agentRows = activeHandlers.length;
-      const totalRows = shiftRows + agentRows;
+      const totalRows = workTypeRows + agentRows;
       const available = totalH - topbarH - colHeadH;
       const h = totalRows > 0 ? Math.max(22, Math.floor(available / totalRows)) : 28;
       setRowH(h);
@@ -187,13 +199,13 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
 
   // ── Socket sync ──────────────────────────────────────────────────────────
   useEffect(() => {
-    const onHandlers = (d: Handler[]) => { if (d) { setHandlers(d); localStorage.setItem('handlers', JSON.stringify(d)); } };
+    const onHandlers = (d: Handler[]) => { if (d) { const normalized = d.map(normalizeHandler); setHandlers(normalized); localStorage.setItem('handlers', JSON.stringify(normalized)); } };
     const onRoster   = (d: RosterEntry[]) => { if (d) { setRoster(d); localStorage.setItem('roster', JSON.stringify(d)); } };
     const onStats    = (d: DailyStats[]) => { if (d) { setStats(d); localStorage.setItem('stats', JSON.stringify(d)); } };
     const onInit     = (db: any) => {
       if (!db) return;
       const h = db.handlers || db.agents;
-      if (Array.isArray(h)) { setHandlers(h); localStorage.setItem('handlers', JSON.stringify(h)); }
+      if (Array.isArray(h)) { const normalized = h.map(normalizeHandler); setHandlers(normalized); localStorage.setItem('handlers', JSON.stringify(normalized)); }
       if (Array.isArray(db.roster)) { setRoster(db.roster); localStorage.setItem('roster', JSON.stringify(db.roster)); }
       if (Array.isArray(db.stats)) { setStats(db.stats); localStorage.setItem('stats', JSON.stringify(db.stats)); }
       if (db.logs) saveLogsFromServer(db.logs);
@@ -248,15 +260,56 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
     };
   };
 
+  const statsByHandler = useMemo(() => {
+    const map = new Map<string, DailyStats>();
+    stats.forEach((row) => {
+      if (row.date === selectedDate) map.set(row.handlerId, normalizeDailyStat(row));
+    });
+    return map;
+  }, [stats, selectedDate]);
+
   const activeHandlers = useMemo(() => {
     const hidden = new Set(['WeekOff','Medical Leave','Planned Leave','Earned Leave','Unplanned Leave','Complimentary Off','MID-LEAVE']);
+    const workTypeOrder: Record<WorkType, number> = { voice: 0, 'non-voice': 1 };
     const order: Record<string, number> = { '6AM-3PM':0,'12PM-9PM':1,'1PM-10PM':2,'2PM-11PM':3,'10PM-7AM':4 };
-    return roster
+    const rows = roster
       .filter(r => r.date === selectedDate && !hidden.has(r.shift))
       .map(r => { const h = handlers.find(a => a.id === r.handlerId); return h ? { ...h, shift: r.shift as ShiftType } : null; })
       .filter((a): a is Handler & { shift: ShiftType } => a !== null)
-      .sort((a, b) => (order[a.shift] ?? 999) - (order[b.shift] ?? 999));
-  }, [selectedDate, roster, handlers]);
+      .sort((a, b) => {
+        const dir = sortDir === 'asc' ? 1 : -1;
+
+        const valueFor = (row: Handler & { shift: ShiftType }) => {
+          const stats = normalizeDailyStat((statsByHandler.get(row.id) ?? { handlerId: row.id, date: selectedDate, incidents: 0, sctasks: 0, calls: 0, comments: '' }) as DailyStats);
+          switch (sortCol) {
+            case 'name': return row.name.toLowerCase();
+            case 'incidents': return stats.incidents;
+            case 'sctasks': return stats.sctasks;
+            case 'calls': return stats.calls;
+            case 'total': return stats.incidents + stats.sctasks + stats.calls;
+            case 'shift':
+            default:
+              return order[row.shift] ?? 999;
+          }
+        };
+
+        const workTypeCompare = workTypeOrder[a.workType === 'non-voice' ? 'non-voice' : 'voice'] - workTypeOrder[b.workType === 'non-voice' ? 'non-voice' : 'voice'];
+        if (workTypeCompare !== 0) return workTypeCompare;
+
+        const left = valueFor(a);
+        const right = valueFor(b);
+        if (typeof left === 'number' && typeof right === 'number') {
+          if (left !== right) return (left - right) * dir;
+        } else if (String(left) !== String(right)) {
+          return String(left).localeCompare(String(right)) * dir;
+        }
+
+        const shiftCompare = ((order[a.shift] ?? 999) - (order[b.shift] ?? 999));
+        if (shiftCompare !== 0) return shiftCompare;
+        return a.name.localeCompare(b.name);
+      });
+    return rows;
+  }, [selectedDate, roster, handlers, sortCol, sortDir]);
 
   const totalStats = useMemo(() =>
     activeHandlers.reduce((acc, h) => {
@@ -265,6 +318,33 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
       return acc;
     }, { incidents: 0, sctasks: 0, calls: 0 }),
     [activeHandlers, stats, selectedDate]);
+
+  const workTypeGroups = useMemo(() => {
+    const groups: {
+      workType: WorkType;
+      handlers: (Handler & { shift: ShiftType })[];
+      shiftGroups: { shift: ShiftType; handlers: (Handler & { shift: ShiftType })[] }[];
+    }[] = [];
+
+    activeHandlers.forEach((handler) => {
+      const workType: WorkType = handler.workType === 'non-voice' ? 'non-voice' : 'voice';
+      let currentGroup = groups[groups.length - 1];
+      if (!currentGroup || currentGroup.workType !== workType) {
+        currentGroup = { workType, handlers: [], shiftGroups: [] };
+        groups.push(currentGroup);
+      }
+
+      currentGroup.handlers.push(handler);
+      const lastShiftGroup = currentGroup.shiftGroups[currentGroup.shiftGroups.length - 1];
+      if (lastShiftGroup && lastShiftGroup.shift === handler.shift) {
+        lastShiftGroup.handlers.push(handler);
+      } else {
+        currentGroup.shiftGroups.push({ shift: handler.shift, handlers: [handler] });
+      }
+    });
+
+    return groups;
+  }, [activeHandlers]);
 
   const updateStat = (handlerId: string, field: keyof DailyStats, value: any) => {
     const handler  = handlers.find(a => a.id === handlerId);
@@ -307,16 +387,6 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
     weekday: 'short', day: 'numeric', month: 'short', year: 'numeric'
   });
 
-  const handlerGroups = useMemo(() => {
-    const groups: { shift: ShiftType; handlers: (Handler & { shift: ShiftType })[] }[] = [];
-    activeHandlers.forEach(h => {
-      const last = groups[groups.length - 1];
-      if (last && last.shift === h.shift) last.handlers.push(h);
-      else groups.push({ shift: h.shift, handlers: [h] });
-    });
-    return groups;
-  }, [activeHandlers]);
-
   // grand total row
   const grandTotal = totalStats.incidents + totalStats.sctasks + totalStats.calls;
 
@@ -334,60 +404,74 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
   };
   const gridCols = `${COLS.sno} ${COLS.name} ${COLS.shift} ${COLS.timing} ${COLS.inc} ${COLS.task} ${COLS.call} ${COLS.notes} ${COLS.total}`;
 
+  const toggleSort = (col: 'name' | 'shift' | 'incidents' | 'sctasks' | 'calls' | 'total') => {
+    if (sortCol === col) {
+      setSortDir((d) => d === 'asc' ? 'desc' : 'asc');
+      return;
+    }
+    setSortCol(col);
+    setSortDir(col === 'name' || col === 'shift' ? 'asc' : 'desc');
+  };
+
+  const SortMark: React.FC<{ col: 'name' | 'shift' | 'incidents' | 'sctasks' | 'calls' | 'total' }> = ({ col }) => {
+    if (sortCol !== col) return <Minus size={10} color="#64748b" />;
+    return sortDir === 'asc' ? <ChevronUp size={10} color="#e2e8f0" /> : <ChevronDown size={10} color="#e2e8f0" />;
+  };
+
   // border style
-  const BORDER = '1px solid #cbd5e1';
-  const BORDER_DARK = '1px solid #94a3b8';
+  const BORDER = '1px solid var(--tracker-border)';
+  const BORDER_DARK = '1px solid var(--tracker-border-strong)';
 
   return (
-    <div ref={wrapRef} className="h-full w-full flex flex-col overflow-hidden bg-white select-none">
+    <div ref={wrapRef} className="tracker-wrap h-full w-full flex flex-col overflow-hidden select-none" style={{ background: 'var(--tracker-page-bg)', color: 'var(--tracker-text)' }}>
 
       {/* ══ TOPBAR ════════════════════════════════════════════════════════ */}
-      <div style={{ height: 40, borderBottom: BORDER_DARK, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 12px', background: '#f8fafc' }}>
+      <div style={{ height: 40, borderBottom: BORDER_DARK, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 12px', background: 'var(--tracker-topbar-bg)' }}>
 
         {/* Left */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div style={{ width: 26, height: 26, background: '#0f172a', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ width: 26, height: 26, background: 'var(--app-text)', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <ShieldCheck size={13} color="white" />
             </div>
             <div style={{ lineHeight: 1 }}>
-              <div style={{ fontSize: 6, color: '#94a3b8', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.2em' }}>Live Board</div>
-              <div style={{ fontSize: 11, color: '#0f172a', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.12em' }}>Productivity Tracker</div>
+              <div style={{ fontSize: 6, color: 'var(--tracker-muted)', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.2em' }}>Live Board</div>
+              <div style={{ fontSize: 11, color: 'var(--tracker-text)', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.12em' }}>Productivity Tracker</div>
             </div>
           </div>
 
-          <div style={{ width: 1, height: 24, background: '#e2e8f0' }} />
+          <div style={{ width: 1, height: 24, background: 'var(--tracker-border)' }} />
 
           {/* Date nav */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <button onClick={() => navDate(-1)} style={{ width: 24, height: 24, border: BORDER, borderRadius: 4, background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <button onClick={() => navDate(-1)} style={{ width: 24, height: 24, border: BORDER, borderRadius: 4, background: 'var(--tracker-input-bg)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <ChevronLeft size={13} color="#64748b" />
             </button>
             <div style={{ position: 'relative' }}>
-              <div style={{ padding: '3px 10px', background: '#fff', border: BORDER_DARK, borderRadius: 4, fontSize: 11, fontWeight: 900, color: '#0f172a', letterSpacing: '0.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+              <div style={{ padding: '3px 10px', background: 'var(--tracker-input-bg)', border: BORDER_DARK, borderRadius: 4, fontSize: 11, fontWeight: 900, color: 'var(--tracker-text)', letterSpacing: '0.08em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
                 {dayLabel}
               </div>
               <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
                 style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%' }} />
             </div>
-            <button onClick={() => navDate(1)} style={{ width: 24, height: 24, border: BORDER, borderRadius: 4, background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <button onClick={() => navDate(1)} style={{ width: 24, height: 24, border: BORDER, borderRadius: 4, background: 'var(--tracker-input-bg)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <ChevronRight size={13} color="#64748b" />
             </button>
           </div>
 
           {/* Clocks */}
-          <div style={{ display: 'flex', border: BORDER, borderRadius: 4, overflow: 'hidden', background: '#fff' }}>
+          <div style={{ display: 'flex', border: BORDER, borderRadius: 4, overflow: 'hidden', background: 'var(--tracker-input-bg)' }}>
             {[{ label: 'IST', val: times.ist, color: '#00ADB5' }, { label: 'GMT', val: times.uk, color: '#64748b' }].map((c, i) => (
               <div key={c.label} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '3px 10px', borderLeft: i ? BORDER : 'none' }}>
                 <span style={{ fontSize: 8, fontWeight: 900, color: c.color, textTransform: 'uppercase', letterSpacing: '0.15em' }}>{c.label}</span>
-                <span style={{ fontSize: 11, fontWeight: 900, color: '#0f172a', fontVariantNumeric: 'tabular-nums' }}>{c.val}</span>
+                <span style={{ fontSize: 11, fontWeight: 900, color: 'var(--tracker-text)', fontVariantNumeric: 'tabular-nums' }}>{c.val}</span>
               </div>
             ))}
           </div>
         </div>
 
         {/* Right — totals */}
-        <div style={{ display: 'flex', border: BORDER_DARK, borderRadius: 4, overflow: 'hidden', background: '#fff' }}>
+        <div style={{ display: 'flex', border: BORDER_DARK, borderRadius: 4, overflow: 'hidden', background: 'var(--tracker-input-bg)' }}>
           {[
             { label: 'INC',   value: totalStats.incidents, color: '#0284c7', bg: '#e0f2fe' },
             { label: 'TASK',  value: totalStats.sctasks,   color: '#b45309', bg: '#fef9c3' },
@@ -404,7 +488,7 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
 
       {/* ══ TABLE ═════════════════════════════════════════════════════════ */}
       {activeHandlers.length === 0 ? (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', opacity: 0.2 }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', opacity: 0.2 }}>
           <ShieldCheck size={48} strokeWidth={1} color="#94a3b8" />
           <div style={{ fontSize: 11, fontWeight: 900, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.3em', marginTop: 12 }}>No Handlers on Shift</div>
         </div>
@@ -415,214 +499,216 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
           <div style={{
             display: 'grid', gridTemplateColumns: gridCols,
             height: 26, flexShrink: 0,
-            background: '#1e293b', borderBottom: '2px solid #0f172a',
+                    background: 'var(--tracker-header-bg)', borderBottom: '2px solid var(--tracker-header-border)',
           }}>
             {[
-              { label: '#' },
-              { label: 'Agent Name' },
-              { label: 'Shift' },
-              { label: 'Timing' },
-              { label: 'Incidents' },
-              { label: 'SC Tasks' },
-              { label: 'Calls' },
-              { label: 'Status / Notes' },
-              { label: 'Total' },
-            ].map(({ label }, i) => (
+              { label: '#', col: null },
+              { label: 'Agent Name', col: 'name' as const },
+              { label: 'Shift', col: 'shift' as const },
+              { label: 'Timing', col: null },
+              { label: 'Incidents', col: 'incidents' as const },
+              { label: 'SC Tasks', col: 'sctasks' as const },
+              { label: 'Calls', col: 'calls' as const },
+              { label: 'Status / Notes', col: null },
+              { label: 'Total', col: 'total' as const },
+            ].map(({ label, col }, i) => (
               <div key={i} style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 borderRight: i < 8 ? '1px solid #334155' : 'none',
                 fontSize: 9, fontWeight: 900, color: '#94a3b8',
                 textTransform: 'uppercase', letterSpacing: '0.18em',
-              }}>
-                {label}
+                cursor: col ? 'pointer' : 'default',
+                gap: col ? 4 : 0,
+              }} onClick={col ? () => toggleSort(col) : undefined}>
+                <span>{label}</span>
+                {col && <SortMark col={col} />}
               </div>
             ))}
           </div>
 
           {/* Rows */}
           <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-            {handlerGroups.map(({ shift, handlers: groupHandlers }) => {
-              const st = getStyle(shift);
-              let globalIdx = activeHandlers.findIndex(h => h.id === groupHandlers[0].id);
+            {workTypeGroups.map(({ workType, handlers: typeHandlers, shiftGroups }) => {
+              const typeBg = workType === 'non-voice' ? '#0f172a' : '#0b3b5a';
+              const typeBorder = workType === 'non-voice' ? '#1e293b' : '#0369a1';
+              const typeLabel = workType === 'non-voice' ? 'Non-Voice Agents' : 'Voice Agents';
+              const typeTotals = typeHandlers.reduce((acc, handler) => {
+                const stats = getHandlerStats(handler.id);
+                acc.incidents += stats.incidents;
+                acc.sctasks += stats.sctasks;
+                acc.calls += stats.calls;
+                return acc;
+              }, { incidents: 0, sctasks: 0, calls: 0 });
+              const typeTotal = typeTotals.incidents + typeTotals.sctasks + typeTotals.calls;
 
               return (
-                <React.Fragment key={shift}>
-                  {/* ── Shift header row ── */}
+                <React.Fragment key={workType}>
                   <div style={{
                     display: 'grid', gridTemplateColumns: gridCols,
                     height: rowH,
-                    background: st.headerBg,
-                    borderBottom: `1px solid ${st.headerBorder}`,
-                    borderTop: `2px solid ${st.headerBorder}`,
+                    background: typeBg,
+                    borderBottom: `1px solid ${typeBorder}`,
+                    borderTop: `2px solid ${typeBorder}`,
                   }}>
-                    {/* Span all cols via absolute positioning trick — use single cell spanning */}
                     <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', padding: '0 10px', gap: 8 }}>
-                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#fff', opacity: 0.7, flexShrink: 0 }} />
-                      <span style={{ fontSize: 10, fontWeight: 900, color: st.headerText, textTransform: 'uppercase', letterSpacing: '0.2em' }}>
-                        {st.label}
+                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#fff', opacity: 0.75, flexShrink: 0 }} />
+                      <span style={{ fontSize: 10, fontWeight: 900, color: '#fff', textTransform: 'uppercase', letterSpacing: '0.2em' }}>
+                        {typeLabel}
                       </span>
-                      <span style={{ fontSize: 9, color: st.headerText, opacity: 0.6, letterSpacing: '0.1em' }}>{shift}</span>
-                      <span style={{ marginLeft: 6, fontSize: 9, fontWeight: 700, color: st.headerText, opacity: 0.75, background: 'rgba(255,255,255,0.15)', borderRadius: 9, padding: '1px 8px' }}>
-                        {groupHandlers.length} agent{groupHandlers.length !== 1 ? 's' : ''}
+                      <span style={{ fontSize: 9, color: '#cbd5e1', letterSpacing: '0.1em' }}>{typeHandlers.length} agent{typeHandlers.length !== 1 ? 's' : ''}</span>
+                      <span style={{ marginLeft: 6, fontSize: 9, fontWeight: 700, color: '#fff', opacity: 0.75, background: 'rgba(255,255,255,0.15)', borderRadius: 9, padding: '1px 8px' }}>
+                        {typeTotal > 0 ? `INC ${typeTotals.incidents} · TASK ${typeTotals.sctasks} · CALLS ${typeTotals.calls}` : 'No activity yet'}
                       </span>
-                      {/* Shift totals */}
-                      {(() => {
-                        const si = groupHandlers.reduce((a, h) => a + getHandlerStats(h.id).incidents, 0);
-                        const st2 = groupHandlers.reduce((a, h) => a + getHandlerStats(h.id).sctasks,  0);
-                        const sc = groupHandlers.reduce((a, h) => a + getHandlerStats(h.id).calls,     0);
-                        const tot = si + st2 + sc;
-                        return tot > 0 ? (
-                          <span style={{ marginLeft: 'auto', fontSize: 9, fontWeight: 900, color: '#fff', opacity: 0.85, background: 'rgba(0,0,0,0.2)', borderRadius: 9, padding: '1px 10px', fontVariantNumeric: 'tabular-nums' }}>
-                            INC {si} · TASK {st2} · CALLS {sc} · {tot} total
-                          </span>
-                        ) : null;
-                      })()}
                     </div>
                   </div>
 
-                  {/* ── Agent rows ── */}
-                  {groupHandlers.map((handler, rowIdx) => {
-                    const hs       = getHandlerStats(handler.id);
-                    const disabled = isShiftNearEnd(handler.shift);
-                    const rowTotal = hs.incidents + hs.sctasks + hs.calls;
-                    const isAlt    = rowIdx % 2 === 1;
-                    const bg       = isAlt ? st.rowBgAlt : st.rowBg;
-                    const tc       = st.rowText;
-                    const sno      = globalIdx + rowIdx + 1;
-                    const cellBorder = `1px solid ${st.hex}30`;
+                  {shiftGroups.map(({ shift, handlers: groupHandlers }) => {
+                    const st = getStyle(shift);
+                    const globalIdx = activeHandlers.findIndex(h => h.id === groupHandlers[0].id);
 
                     return (
-                      <div
-                        key={handler.id}
-                        style={{
+                      <React.Fragment key={`${workType}-${shift}`}>
+                        <div style={{
                           display: 'grid', gridTemplateColumns: gridCols,
                           height: rowH,
-                          background: disabled ? '#f1f5f9' : bg,
-                          borderBottom: cellBorder,
-                          opacity: disabled ? 0.4 : 1,
-                          pointerEvents: disabled ? 'none' : 'auto',
-                          transition: 'background 0.1s',
-                        }}
-                        onMouseEnter={e => !disabled && (e.currentTarget.style.filter = 'brightness(0.95)')}
-                        onMouseLeave={e => (e.currentTarget.style.filter = '')}
-                      >
-                        {/* S.No */}
-                        <div style={{ display:'flex', alignItems:'center', justifyContent:'center', borderRight: cellBorder, fontSize: 10, fontWeight: 700, color: '#94a3b8', fontVariantNumeric:'tabular-nums' }}>
-                          {sno}
+                          background: st.headerBg,
+                          borderBottom: `1px solid ${st.headerBorder}`,
+                          borderTop: `2px solid ${st.headerBorder}`,
+                        }}>
+                          <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', padding: '0 10px', gap: 8 }}>
+                            <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#fff', opacity: 0.7, flexShrink: 0 }} />
+                            <span style={{ fontSize: 10, fontWeight: 900, color: st.headerText, textTransform: 'uppercase', letterSpacing: '0.2em' }}>
+                              {st.label}
+                            </span>
+                            <span style={{ fontSize: 9, color: st.headerText, opacity: 0.6, letterSpacing: '0.1em' }}>{shift}</span>
+                            <span style={{ marginLeft: 6, fontSize: 9, fontWeight: 700, color: st.headerText, opacity: 0.75, background: 'rgba(255,255,255,0.15)', borderRadius: 9, padding: '1px 8px' }}>
+                              {groupHandlers.length} agent{groupHandlers.length !== 1 ? 's' : ''}
+                            </span>
+                            {(() => {
+                              const si = groupHandlers.reduce((a, h) => a + getHandlerStats(h.id).incidents, 0);
+                              const st2 = groupHandlers.reduce((a, h) => a + getHandlerStats(h.id).sctasks, 0);
+                              const sc = groupHandlers.reduce((a, h) => a + getHandlerStats(h.id).calls, 0);
+                              const tot = si + st2 + sc;
+                              return tot > 0 ? (
+                                <span style={{ marginLeft: 'auto', fontSize: 9, fontWeight: 900, color: '#fff', opacity: 0.85, background: 'rgba(0,0,0,0.2)', borderRadius: 9, padding: '1px 10px', fontVariantNumeric: 'tabular-nums' }}>
+                                  INC {si} · TASK {st2} · CALLS {sc} · {tot} total
+                                </span>
+                              ) : null;
+                            })()}
+                          </div>
                         </div>
 
-                        {/* Name */}
-                        <div style={{ display:'flex', alignItems:'center', gap: 5, padding: '0 8px', borderRight: cellBorder, overflow:'hidden' }}>
-                          <span style={{ fontSize: 13, fontWeight: 700, color: tc, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{handler.name}</span>
-                          {handler.isQH && <Shield size={10} color="#f59e0b" title="Queue Handler" style={{ flexShrink:0 }} />}
-                        </div>
+                        {groupHandlers.map((handler, rowIdx) => {
+                          const hs = getHandlerStats(handler.id);
+                          const disabled = isShiftNearEnd(handler.shift);
+                          const rowTotal = hs.incidents + hs.sctasks + hs.calls;
+                          const isAlt = rowIdx % 2 === 1;
+                          const bg = isAlt ? st.rowBgAlt : st.rowBg;
+                          const tc = st.rowText;
+                          const sno = globalIdx + rowIdx + 1;
+                          const cellBorder = `1px solid ${st.hex}30`;
 
-                        {/* Shift label */}
-                        <div style={{ display:'flex', alignItems:'center', justifyContent:'center', borderRight: cellBorder }}>
-                          <span style={{ fontSize: 9, fontWeight: 900, color: st.headerBg, background: `${st.hex}20`, border: `1px solid ${st.hex}50`, borderRadius: 4, padding: '1px 6px', textTransform:'uppercase', letterSpacing:'0.1em', whiteSpace:'nowrap' }}>
-                            {st.label}
-                          </span>
-                        </div>
+                          return (
+                            <div
+                              key={handler.id}
+                              style={{
+                                display: 'grid', gridTemplateColumns: gridCols,
+                                height: rowH,
+                                background: disabled ? '#f1f5f9' : bg,
+                                borderBottom: cellBorder,
+                                opacity: disabled ? 0.4 : 1,
+                                pointerEvents: disabled ? 'none' : 'auto',
+                                transition: 'background 0.1s',
+                              }}
+                              onMouseEnter={e => !disabled && (e.currentTarget.style.filter = 'brightness(0.95)')}
+                              onMouseLeave={e => (e.currentTarget.style.filter = '')}
+                            >
+                              <div style={{ display:'flex', alignItems:'center', justifyContent:'center', borderRight: cellBorder, fontSize: 10, fontWeight: 700, color: '#94a3b8', fontVariantNumeric:'tabular-nums' }}>
+                                {sno}
+                              </div>
 
-                        {/* Timing */}
-                        <div style={{ display:'flex', alignItems:'center', justifyContent:'center', borderRight: cellBorder }}>
-                          <span style={{ fontSize: 10, fontWeight: 700, color: tc, fontVariantNumeric:'tabular-nums' }}>{handler.shift}</span>
-                        </div>
+                              <div style={{ display:'flex', alignItems:'center', gap: 5, padding: '0 8px', borderRight: cellBorder, overflow:'hidden' }}>
+                                <span style={{ fontSize: 13, fontWeight: 700, color: tc, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{handler.name}</span>
+                                {handler.isQH && <Shield size={10} color="#f59e0b" title="Queue Handler" style={{ flexShrink:0 }} />}
+                              </div>
 
-                        {/* INC */}
-                        <div style={{ borderRight: cellBorder, overflow:'hidden' }}>
-                          <EditCell
-                            value={hs.incidents}
-                            onChange={v => updateStat(handler.id, 'incidents', v)}
-                            flash={flashMap[`${handler.id}-incidents`] ?? null}
-                            textColor={tc}
-                          />
-                        </div>
+                              <div style={{ display:'flex', alignItems:'center', justifyContent:'center', borderRight: cellBorder }}>
+                                <span style={{ fontSize: 9, fontWeight: 900, color: st.headerBg, background: `${st.hex}20`, border: `1px solid ${st.hex}50`, borderRadius: 4, padding: '1px 6px', textTransform:'uppercase', letterSpacing:'0.1em', whiteSpace:'nowrap' }}>
+                                  {st.label}
+                                </span>
+                              </div>
 
-                        {/* TASK */}
-                        <div style={{ borderRight: cellBorder, overflow:'hidden' }}>
-                          <EditCell
-                            value={hs.sctasks}
-                            onChange={v => updateStat(handler.id, 'sctasks', v)}
-                            flash={flashMap[`${handler.id}-sctasks`] ?? null}
-                            textColor={tc}
-                          />
-                        </div>
+                              <div style={{ display:'flex', alignItems:'center', justifyContent:'center', borderRight: cellBorder }}>
+                                <span style={{ fontSize: 10, fontWeight: 700, color: tc, fontVariantNumeric:'tabular-nums' }}>{handler.shift}</span>
+                              </div>
 
-                        {/* CALL */}
-                        <div style={{ borderRight: cellBorder, overflow:'hidden' }}>
-                          <EditCell
-                            value={hs.calls}
-                            onChange={v => updateStat(handler.id, 'calls', v)}
-                            flash={flashMap[`${handler.id}-calls`] ?? null}
-                            textColor={tc}
-                            isCall
-                            onCallClick={() => {
-                              setCallData({ ...callData, handlerId: handler.id });
-                              setIsCallModalOpen(true);
-                            }}
-                          />
-                        </div>
+                              <div style={{ borderRight: cellBorder, overflow:'hidden' }}>
+                                <EditCell
+                                  value={hs.incidents}
+                                  onChange={v => updateStat(handler.id, 'incidents', v)}
+                                  flash={flashMap[`${handler.id}-incidents`] ?? null}
+                                  textColor={tc}
+                                />
+                              </div>
 
-                        {/* Notes */}
-                        <div style={{ borderRight: cellBorder, display:'flex', alignItems:'center', padding:'0 4px' }}>
-                          <input
-                            type="text"
-                            placeholder="Add note…"
-                            value={hs.comments}
-                            onChange={e => updateStat(handler.id, 'comments', e.target.value)}
-                            style={{
-                              width:'100%', height:'100%', border:'none', outline:'none',
-                              background:'transparent', fontSize: 11, color: tc,
-                              padding:'0 4px',
-                            }}
-                            onFocus={e => (e.currentTarget.style.background = '#fff')}
-                            onBlur={e => (e.currentTarget.style.background = 'transparent')}
-                          />
-                        </div>
+                              <div style={{ borderRight: cellBorder, overflow:'hidden' }}>
+                                <EditCell
+                                  value={hs.sctasks}
+                                  onChange={v => updateStat(handler.id, 'sctasks', v)}
+                                  flash={flashMap[`${handler.id}-sctasks`] ?? null}
+                                  textColor={tc}
+                                />
+                              </div>
 
-                        {/* Total */}
-                        <div style={{ display:'flex', alignItems:'center', justifyContent:'center' }}>
-                          <span style={{
-                            fontSize: 13, fontWeight: 900, fontVariantNumeric:'tabular-nums',
-                            color: rowTotal > 0 ? st.headerBg : '#cbd5e1',
-                            background: rowTotal > 0 ? `${st.hex}20` : 'transparent',
-                            borderRadius: 4, padding: rowTotal > 0 ? '1px 8px' : '0',
-                          }}>
-                            {rowTotal || '—'}
-                          </span>
-                        </div>
-                      </div>
+                              <div style={{ borderRight: cellBorder, overflow:'hidden' }}>
+                                <EditCell
+                                  value={hs.calls}
+                                  onChange={v => updateStat(handler.id, 'calls', v)}
+                                  flash={flashMap[`${handler.id}-calls`] ?? null}
+                                  textColor={tc}
+                                  isCall
+                                  onCallClick={() => {
+                                    setCallData({ ...callData, handlerId: handler.id });
+                                    setIsCallModalOpen(true);
+                                  }}
+                                />
+                              </div>
+
+                              <div style={{ borderRight: cellBorder, display:'flex', alignItems:'center', padding:'0 4px' }}>
+                                <input
+                                  type="text"
+                                  placeholder="Add note…"
+                                  value={hs.comments}
+                                  onChange={e => updateStat(handler.id, 'comments', e.target.value)}
+                                  style={{
+                                    width:'100%', height:'100%', border:'none', outline:'none',
+                                    background:'transparent', fontSize: 11, color: tc,
+                                    padding:'0 4px',
+                                  }}
+                                  onFocus={e => (e.currentTarget.style.background = '#fff')}
+                                  onBlur={e => (e.currentTarget.style.background = 'transparent')}
+                                />
+                              </div>
+
+                              <div style={{ display:'flex', alignItems:'center', justifyContent:'center' }}>
+                                <span style={{
+                                  fontSize: 13, fontWeight: 900, fontVariantNumeric:'tabular-nums',
+                                  color: rowTotal > 0 ? st.headerBg : '#cbd5e1',
+                                  background: rowTotal > 0 ? `${st.hex}20` : 'transparent',
+                                  borderRadius: 4, padding: rowTotal > 0 ? '1px 8px' : '0',
+                                }}>
+                                  {rowTotal || '—'}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </React.Fragment>
                     );
                   })}
                 </React.Fragment>
               );
             })}
-
-            {/* ── Grand Total row ── */}
-            <div style={{
-              display: 'grid', gridTemplateColumns: gridCols,
-              height: rowH,
-              background: '#1e293b',
-              borderTop: '2px solid #0f172a',
-            }}>
-              <div style={{ gridColumn: '1 / 5', display:'flex', alignItems:'center', padding:'0 12px' }}>
-                <span style={{ fontSize: 10, fontWeight: 900, color: '#94a3b8', textTransform:'uppercase', letterSpacing:'0.2em' }}>Grand Total</span>
-              </div>
-              {[
-                { v: totalStats.incidents, c: '#38bdf8' },
-                { v: totalStats.sctasks,   c: '#fbbf24' },
-                { v: totalStats.calls,     c: '#2dd4bf' },
-              ].map(({ v, c }, i) => (
-                <div key={i} style={{ display:'flex', alignItems:'center', justifyContent:'center', borderLeft:'1px solid #334155' }}>
-                  <span style={{ fontSize: 15, fontWeight: 900, color: c, fontVariantNumeric:'tabular-nums' }}>{v}</span>
-                </div>
-              ))}
-              <div style={{ borderLeft:'1px solid #334155' }} />
-              <div style={{ display:'flex', alignItems:'center', justifyContent:'center', borderLeft:'1px solid #334155' }}>
-                <span style={{ fontSize: 15, fontWeight: 900, color: '#f8fafc', fontVariantNumeric:'tabular-nums' }}>{grandTotal}</span>
-              </div>
-            </div>
           </div>
         </div>
       )}
@@ -631,15 +717,15 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
       {isCallModalOpen && (
         <div style={{ position:'fixed', inset:0, zIndex:50, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
           <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.25)', backdropFilter:'blur(4px)' }} onClick={() => setIsCallModalOpen(false)} />
-          <div style={{ position:'relative', background:'#fff', border:'1px solid #e2e8f0', borderRadius:16, width:320, overflow:'hidden', boxShadow:'0 20px 60px rgba(0,0,0,0.15)' }}>
-            <div style={{ padding:'20px 24px 16px', borderBottom:'1px solid #e2e8f0', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+          <div style={{ position:'relative', background:'var(--tracker-modal-bg)', border:'1px solid var(--tracker-border)', borderRadius:16, width:320, overflow:'hidden', boxShadow:'var(--app-shadow)' }}>
+            <div style={{ padding:'20px 24px 16px', borderBottom:'1px solid var(--tracker-border)', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
               <div style={{ display:'flex', alignItems:'center', gap:12 }}>
                 <div style={{ width:36, height:36, borderRadius:10, background:'#f0fdfa', border:'1px solid #99f6e4', display:'flex', alignItems:'center', justifyContent:'center' }}>
                   <PhoneCall size={15} color="#00ADB5" />
                 </div>
                 <div>
-                  <div style={{ fontSize:11, fontWeight:900, color:'#0f172a', textTransform:'uppercase', letterSpacing:'0.2em', lineHeight:1 }}>Log Call</div>
-                  <div style={{ fontSize:8, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'0.2em', marginTop:2 }}>Productivity entry</div>
+                  <div style={{ fontSize:11, fontWeight:900, color:'var(--tracker-text)', textTransform:'uppercase', letterSpacing:'0.2em', lineHeight:1 }}>Log Call</div>
+                  <div style={{ fontSize:8, color:'var(--tracker-muted)', textTransform:'uppercase', letterSpacing:'0.2em', marginTop:2 }}>Productivity entry</div>
                 </div>
               </div>
               <button onClick={() => setIsCallModalOpen(false)} style={{ width:32, height:32, border:'none', background:'transparent', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', borderRadius:8 }}>
@@ -649,7 +735,7 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
 
             <div style={{ padding:'20px 24px', display:'flex', flexDirection:'column', gap:14 }}>
               <div>
-                <div style={{ fontSize:9, fontWeight:900, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'0.2em', marginBottom:6 }}>Ticket Number</div>
+                <div style={{ fontSize:9, fontWeight:900, color:'var(--tracker-muted)', textTransform:'uppercase', letterSpacing:'0.2em', marginBottom:6 }}>Ticket Number</div>
                 <input
                   autoFocus
                   type="text"
@@ -657,20 +743,20 @@ const TrackerPage: React.FC<TrackerPageProps> = ({ selectedDate, setSelectedDate
                   value={callData.ticketNumber}
                   onChange={e => setCallData({ ...callData, ticketNumber: e.target.value.toUpperCase() })}
                   onKeyDown={e => e.key === 'Enter' && handleCallSubmit()}
-                  style={{ width:'100%', padding:'10px 14px', border:'2px solid #e2e8f0', borderRadius:10, fontSize:13, fontWeight:700, color:'#0f172a', outline:'none', letterSpacing:'0.15em', textTransform:'uppercase', boxSizing:'border-box' }}
+                  style={{ width:'100%', padding:'10px 14px', border:'2px solid var(--tracker-border)', borderRadius:10, fontSize:13, fontWeight:700, color:'var(--tracker-text)', outline:'none', letterSpacing:'0.15em', textTransform:'uppercase', boxSizing:'border-box', background:'var(--tracker-input-bg)' }}
                   onFocus={e => (e.currentTarget.style.borderColor = '#00ADB5')}
-                  onBlur={e => (e.currentTarget.style.borderColor = '#e2e8f0')}
+                  onBlur={e => (e.currentTarget.style.borderColor = 'var(--tracker-border)')}
                 />
               </div>
 
               <div>
-                <div style={{ fontSize:9, fontWeight:900, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'0.2em', marginBottom:6 }}>Call Type</div>
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, padding:4, background:'#f1f5f9', borderRadius:10 }}>
+                <div style={{ fontSize:9, fontWeight:900, color:'var(--tracker-muted)', textTransform:'uppercase', letterSpacing:'0.2em', marginBottom:6 }}>Call Type</div>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6, padding:4, background:'var(--app-bg-soft)', borderRadius:10 }}>
                   {(['New','Update'] as const).map(t => (
                     <button key={t} onClick={() => setCallData({ ...callData, type: t })} style={{
                       padding:'10px 0', borderRadius:8, border: callData.type === t ? '1px solid #e2e8f0' : 'none',
-                      background: callData.type === t ? '#fff' : 'transparent',
-                      fontSize:10, fontWeight:900, color: callData.type === t ? '#0f172a' : '#94a3b8',
+                      background: callData.type === t ? 'var(--tracker-input-bg)' : 'transparent',
+                      fontSize:10, fontWeight:900, color: callData.type === t ? 'var(--tracker-text)' : 'var(--tracker-muted)',
                       cursor:'pointer', textTransform:'uppercase', letterSpacing:'0.15em', transition:'all 0.15s',
                     }}>
                       {t}

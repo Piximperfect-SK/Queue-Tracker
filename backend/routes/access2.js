@@ -11,6 +11,8 @@ import Session from '../models/Session.js';
 import SetupSession from '../models/SetupSession.js';
 import { requireRole } from '../middleware/requireRole.js';
 import { encryptCode, decryptCode } from '../models/AccessCode.js';
+import mongoose from 'mongoose';
+import { getIo } from '../realtime.js';
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_jwt_secret';
@@ -254,7 +256,8 @@ router.post('/register/confirm', async (req, res) => {
       fullName: cleanName,
       secret: encrypt(setupData.secret),
       backupCodes: [],
-      status: 'pending'
+      status: 'pending',
+      workType: 'voice'
     });
     await pendingUser.save();
 
@@ -288,7 +291,8 @@ router.post('/pending/:fullName/approve', requireRole('admin'), async (req, res)
   try {
     const { fullName: encodedFullName } = req.params;
     const fullName = decodeURIComponent(encodedFullName);
-    const { role } = req.body;
+    const { role, workType } = req.body;
+    const normalizedWorkType = workType === 'non-voice' ? 'non-voice' : 'voice';
 
     console.log(`[APPROVE] Processing approval for ${fullName}, role: ${role}`);
 
@@ -330,12 +334,30 @@ router.post('/pending/:fullName/approve', requireRole('admin'), async (req, res)
     // Update pending status
     pending.status = 'approved';
     pending.assignedRole = role || 'associate';
+    pending.workType = normalizedWorkType;
     pending.processedAt = new Date();
     pending.processedBy = req.user?.fullName || 'admin';
     await pending.save();
 
-    console.log(`[APPROVE] Successfully approved ${fullName} as ${role || 'associate'}`);
-    res.json({ success: true, message: `${fullName} approved as ${role || 'associate'}` });
+    try {
+      const states = mongoose.connection.collection('states');
+      const globalState = await states.findOne({ key: 'global' });
+      const handlers = Array.isArray(globalState?.handlers) ? globalState.handlers : [];
+      const idx = handlers.findIndex((h) => String(h?.name || '').trim().toLowerCase() === fullName.trim().toLowerCase());
+      if (idx >= 0) {
+        handlers[idx] = { ...handlers[idx], name: handlers[idx].name || fullName, workType: normalizedWorkType };
+      } else {
+        handlers.push({ id: randomUUID(), name: fullName, isQH: false, workType: normalizedWorkType });
+      }
+      await states.updateOne({ key: 'global' }, { $set: { handlers } }, { upsert: true });
+      const io = getIo();
+      if (io) io.emit('handlers_updated', handlers);
+    } catch (stateErr) {
+      console.error('[APPROVE] Failed to sync handler workType:', stateErr.message);
+    }
+
+    console.log(`[APPROVE] Successfully approved ${fullName} as ${role || 'associate'} (${normalizedWorkType})`);
+    res.json({ success: true, message: `${fullName} approved as ${role || 'associate'} (${normalizedWorkType})` });
   } catch (err) {
     console.error('[APPROVE] Approval error:', err.message, err.stack);
     res.status(500).json({ error: 'Server error during approval', details: err.message });

@@ -6,6 +6,7 @@ const pendingUserSchema = new mongoose.Schema({
   backupCodes: [{ type: String }], // encrypted
   status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
   assignedRole: { type: String, default: 'Associate' },
+  workType: { type: String, enum: ['voice', 'non-voice'], default: 'voice' },
   requestedAt: { type: Date, default: Date.now },
   processedAt: { type: Date },
   processedBy: { type: String } // admin fullName

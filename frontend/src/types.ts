@@ -26,6 +26,7 @@ export interface Handler {
   id: string;
   name: string;
   isQH: boolean;
+  workType: 'voice' | 'non-voice';
 }
 
 export interface RosterEntry {

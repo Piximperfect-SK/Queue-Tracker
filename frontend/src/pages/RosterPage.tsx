@@ -95,6 +95,11 @@ const createAgentId = () => {
   return `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 };
 
+const normalizeHandler = (handler: Handler): Handler => ({
+  ...handler,
+  workType: handler.workType === 'non-voice' ? 'non-voice' : 'voice',
+});
+
 // ─── Shift colour config (light mode) ────────────────────────────────────────
 // Morning (6AM-3PM)        → Sky blue
 // Afternoon (12PM-9, 1-10) → Yellow / Amber
@@ -246,7 +251,7 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
   const { actions } = useRole();
   const canImportRoster = actions.importRoster;
   const [handlers, setHandlers] = useState<Handler[]>(() => {
-    const s = localStorage.getItem('handlers'); return s ? JSON.parse(s) : MOCK_HANDLERS;
+    const s = localStorage.getItem('handlers'); return s ? JSON.parse(s).map((row: Handler) => normalizeHandler(row)) : MOCK_HANDLERS;
   });
   const [roster, setRoster] = useState<RosterEntry[]>(() => {
     const s = localStorage.getItem('roster');
@@ -370,12 +375,12 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
   [availableShifts]);
 
   useEffect(() => {
-    const onHandlers = (d: Handler[]) => { if (d) { setHandlers(d); localStorage.setItem('handlers', JSON.stringify(d)); } };
+    const onHandlers = (d: Handler[]) => { if (d) { const normalized = d.map(normalizeHandler); setHandlers(normalized); localStorage.setItem('handlers', JSON.stringify(normalized)); } };
     const onRoster   = (d: RosterEntry[]) => { if (d) { const m = applyBlueprint(d); setRoster(m); localStorage.setItem('roster', JSON.stringify(m)); } };
     const onInit = (db: any) => {
       if (!db) return;
       const h = db.handlers || db.agents;
-      if (Array.isArray(h)) { setHandlers(h); localStorage.setItem('handlers', JSON.stringify(h)); }
+      if (Array.isArray(h)) { const normalized = h.map(normalizeHandler); setHandlers(normalized); localStorage.setItem('handlers', JSON.stringify(normalized)); }
       if (Array.isArray(db.roster)) { const m = applyBlueprint(db.roster); setRoster(m); localStorage.setItem('roster', JSON.stringify(m)); }
       if (db.logs) saveLogsFromServer(db.logs);
     };
@@ -518,7 +523,7 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
           if (!hid) {
             hid = createAgentId();
             lookup.set(key, hid);
-            newHandlers.push({ id: hid, name: nameCell, isQH: false });
+            newHandlers.push({ id: hid, name: nameCell, isQH: false, workType: 'voice' });
           }
 
           for (const colIdx of dateColumnIndices) {
@@ -565,7 +570,7 @@ const RosterPage: React.FC<RosterPageProps> = ({ selectedDate, setSelectedDate }
           const shift = parseShiftFromText(rawTiming || rawShift);
           const key = name.toLowerCase();
           let hid = lookup.get(key);
-          if (!hid) { hid = createAgentId(); lookup.set(key, hid); newHandlers.push({ id: hid, name, isQH: false }); }
+          if (!hid) { hid = createAgentId(); lookup.set(key, hid); newHandlers.push({ id: hid, name, isQH: false, workType: 'voice' }); }
           parsedEntries.push({ handlerId: hid, date, shift });
         });
       }
@@ -746,7 +751,7 @@ Rules:
         if (!hid) {
           hid = createAgentId();
           lookup.set(key, hid);
-          newHandlers.push({ id: hid, name, isQH: false });
+          newHandlers.push({ id: hid, name, isQH: false, workType: 'voice' });
         }
         for (const entry of agentRow.entries) {
           const shift = parseShiftFromText(entry.shift ?? '');
@@ -813,7 +818,7 @@ Rules:
   const handleAddAgentConfirm = () => {
     const name = newAgentName.trim(); if (!name) return;
     const id = createAgentId();
-    const uh = [...handlers, { id, name, isQH: false }];
+    const uh = [...handlers, { id, name, isQH: false, workType: 'voice' }];
     setHandlers(uh); localStorage.setItem('handlers', JSON.stringify(uh)); syncData.updateHandlers(uh);
     if (newAgentShift) {
       const ur = mergeRosterEntries(roster, [{ handlerId: id, date: selectedDate, shift: newAgentShift }]);

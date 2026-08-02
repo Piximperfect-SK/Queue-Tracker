@@ -146,13 +146,13 @@ function App() {
     return (
       <div className="h-screen w-screen bg-slate-50 flex items-center justify-center p-6 relative overflow-hidden font-sans">
         <img src={bgImage} alt="Background" className="absolute inset-0 w-full h-full object-cover scale-105" />
-        <div className="absolute inset-0 bg-white/25 backdrop-blur-[2px]" />
-        <div className="relative z-10 bg-white/80 backdrop-blur-2xl border border-white/50 rounded-3xl shadow-2xl px-10 py-9 text-center max-w-md w-full">
+        <div className="absolute inset-0 backdrop-blur-[2px]" style={{ background: 'var(--app-overlay)' }} />
+        <div className="relative z-10 backdrop-blur-2xl rounded-3xl px-10 py-9 text-center max-w-md w-full" style={{ background: 'var(--app-surface)', border: '1px solid var(--app-border)', boxShadow: 'var(--app-shadow)' }}>
           <div className="w-12 h-12 mx-auto mb-5 rounded-2xl bg-slate-900 text-white flex items-center justify-center">
             <Loader2 size={22} className="animate-spin" />
           </div>
-          <h1 className="text-xl font-black text-slate-900 tracking-tight">Restoring Session</h1>
-          <p className="mt-2 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">Reconnecting to secure workspace</p>
+          <h1 className="text-xl font-black tracking-tight" style={{ color: 'var(--app-text)' }}>Restoring Session</h1>
+          <p className="mt-2 text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--app-text-soft)' }}>Reconnecting to secure workspace</p>
         </div>
       </div>
     );
@@ -628,9 +628,11 @@ const AppFrame: React.FC<{
   return (
     <ThemeProvider>
     <RoleProvider>
-    <div className="h-screen w-full relative overflow-hidden font-sans selection:bg-blue-500/30 text-slate-900">
+    <div className="app-shell h-screen w-full relative overflow-hidden font-sans selection:bg-blue-500/30" style={{ color: 'var(--app-text)' }}>
       {/* Background Image */}
       <img src={bgImage} alt="Background" className="absolute inset-0 w-full h-full object-cover scale-105" />
+
+      <div className="absolute inset-0" style={{ background: 'var(--app-shell-bg)' }} />
 
       {/* Background visible — overlay removed to expose wallpaper */}
 

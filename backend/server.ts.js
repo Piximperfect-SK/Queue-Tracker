@@ -265,6 +265,16 @@ const normalizeStatRow = (r) => ({
   comments: typeof r?.comments === 'string' ? sanitize(r.comments) : '',
 });
 
+const normalizeWorkType = (value) => (value === 'non-voice' ? 'non-voice' : 'voice');
+
+const normalizeHandlerRow = (handler) => ({
+  ...handler,
+  id: String(handler?.id || '').trim(),
+  name: sanitize(handler?.name || ''),
+  isQH: !!handler?.isQH,
+  workType: normalizeWorkType(handler?.workType),
+});
+
 const TEAM_ACCESS_KEY = (process.env.TEAM_ACCESS_KEY || "").trim(); // Ensure no sneaky spaces
 console.log('--- SECURITY CONFIG ---');
 console.log('Team Access Key:', TEAM_ACCESS_KEY ? 'PROTECTED (Key set)' : 'UNPROTECTED (No key set)');
@@ -465,8 +475,7 @@ io.on('connection', async (socket) => {
   socket.on('update_handlers', async (handlers, cb) => {
     if (!(await checkSocketAction(socket, 'editHandlers'))) { if (typeof cb === 'function') cb({ ok: false, error: 'Forbidden: missing permission editHandlers' }); return; }
     try {
-      // Sanitize handler names
-      const cleanHandlers = handlers.map(a => ({ ...a, name: sanitize(a.name) }));
+      const cleanHandlers = handlers.map(normalizeHandlerRow);
       await State.updateOne({ key: 'global' }, { $set: { handlers: cleanHandlers } });
       socket.broadcast.emit('handlers_updated', cleanHandlers);
       if (typeof cb === 'function') cb({ ok: true });
@@ -480,7 +489,7 @@ io.on('connection', async (socket) => {
   socket.on('update_agents', async (agents, cb) => {
     if (!(await checkSocketAction(socket, 'editHandlers'))) { if (typeof cb === 'function') cb({ ok: false, error: 'Forbidden: missing permission editHandlers' }); return; }
     try {
-      const cleanAgents = agents.map(a => ({ ...a, name: sanitize(a.name) }));
+      const cleanAgents = agents.map(normalizeHandlerRow);
       await State.updateOne({ key: 'global' }, { $set: { handlers: cleanAgents } });
       socket.broadcast.emit('handlers_updated', cleanAgents);
       if (typeof cb === 'function') cb({ ok: true });

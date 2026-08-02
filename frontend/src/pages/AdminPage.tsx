@@ -71,6 +71,7 @@ interface PendingUserRecord {
   status: 'pending' | 'approved' | 'rejected';
   requestedAt: string;
   assignedRole?: string;
+  workType?: 'voice' | 'non-voice';
 }
 
 async function api(path: string, opts: RequestInit = {}) {
@@ -101,6 +102,7 @@ const AdminPage: React.FC = () => {
     fullName: string;
     username: string;
     role: Role;
+    workType: 'voice' | 'non-voice';
     isActive: boolean;
   }
   const [users, setUsers] = useState<UserRecord[]>([]);
@@ -139,6 +141,7 @@ const AdminPage: React.FC = () => {
   const [approvingUser, setApprovingUser] = useState<string | null>(null);
   const [rejectingUser, setRejectingUser] = useState<string | null>(null);
   const [selectedRole, setSelectedRole] = useState<Record<string, Role>>({});
+  const [selectedWorkType, setSelectedWorkType] = useState<Record<string, 'voice' | 'non-voice'>>({});
   const [resetting, setResetting] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
@@ -236,9 +239,10 @@ const AdminPage: React.FC = () => {
     setError(null);
     try {
       const role = selectedRole[fullName] || 'associate';
+      const workType = selectedWorkType[fullName] || 'voice';
       await api(`/api/access/pending/${encodeURIComponent(fullName)}/approve`, {
         method: 'POST',
-        body: JSON.stringify({ role })
+        body: JSON.stringify({ role, workType })
       });
       setPendingUsers((p) => p.filter((u) => u.fullName !== fullName));
     } catch (err: any) {
@@ -370,15 +374,15 @@ const AdminPage: React.FC = () => {
     }
   };
 
-  const handleUpdateUserRole = async (userId: string, newRole: Role) => {
+  const handleUpdateUserRole = async (userId: string, newRole: Role, workType: 'voice' | 'non-voice') => {
     setUpdatingRole(userId);
     setError(null);
     try {
       const data = await api('/api/roles', {
         method: 'PUT',
-        body: JSON.stringify({ userId, role: newRole }),
+        body: JSON.stringify({ userId, role: newRole, workType }),
       });
-      setUsers((u) => u.map((usr) => usr._id === userId ? { ...usr, role: data.user.role } : usr));
+      setUsers((u) => u.map((usr) => usr._id === userId ? { ...usr, role: data.user.role, workType: data.user.workType } : usr));
       setUserRoleChanges((c) => { const updated = { ...c }; delete updated[userId]; return updated; });
     } catch (err: any) {
       setError(err.message || 'Failed to update user role');
@@ -550,6 +554,15 @@ const AdminPage: React.FC = () => {
                         <option value="associate">Associate</option>
                         <option value="queue_handler">Queue Handler</option>
                         <option value="admin">Admin</option>
+                      </select>
+                      <select
+                        value={selectedWorkType[user.fullName] || user.workType || 'voice'}
+                        onChange={(e) => setSelectedWorkType({ ...selectedWorkType, [user.fullName]: e.target.value as 'voice' | 'non-voice' })}
+                        className="px-3 py-2 border border-slate-200 rounded-lg text-sm font-semibold"
+                        disabled={approvingUser === user.fullName || rejectingUser === user.fullName}
+                      >
+                        <option value="voice">Voice</option>
+                        <option value="non-voice">Non-Voice</option>
                       </select>
                       <button
                         onClick={() => handleApproveUser(user.fullName)}
@@ -828,6 +841,9 @@ const AdminPage: React.FC = () => {
                         <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${ROLE_COLORS[user.role]}`}>
                           {ROLE_LABELS[user.role]}
                         </span>
+                        <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border bg-cyan-50 text-cyan-700 border-cyan-200">
+                          {user.workType || 'voice'}
+                        </span>
                       </div>
                       <p className="text-xs text-slate-500">@{user.username}</p>
                     </div>
@@ -842,14 +858,24 @@ const AdminPage: React.FC = () => {
                         <option value="queue_handler">Queue Handler</option>
                         <option value="admin">Admin</option>
                       </select>
+                      <select
+                        value={selectedWorkType[user._id] ?? user.workType ?? 'voice'}
+                        onChange={(e) => setSelectedWorkType({ ...selectedWorkType, [user._id]: e.target.value as 'voice' | 'non-voice' })}
+                        className="px-2.5 py-1.5 border border-slate-200 rounded text-xs font-semibold focus:outline-none focus:border-slate-400"
+                        disabled={updatingRole === user._id || deletingUser === user._id}
+                      >
+                        <option value="voice">Voice</option>
+                        <option value="non-voice">Non-Voice</option>
+                      </select>
                       <button
                         onClick={() => {
                           const newRole = userRoleChanges[user._id] ?? user.role;
-                          if (newRole !== user.role) {
-                            handleUpdateUserRole(user._id, newRole);
+                          const newWorkType = selectedWorkType[user._id] ?? user.workType ?? 'voice';
+                          if (newRole !== user.role || newWorkType !== (user.workType ?? 'voice')) {
+                            handleUpdateUserRole(user._id, newRole, newWorkType);
                           }
                         }}
-                        disabled={updatingRole === user._id || deletingUser === user._id || (userRoleChanges[user._id] === undefined || userRoleChanges[user._id] === user.role)}
+                        disabled={updatingRole === user._id || deletingUser === user._id || ((userRoleChanges[user._id] === undefined || userRoleChanges[user._id] === user.role) && ((selectedWorkType[user._id] ?? user.workType ?? 'voice') === (user.workType ?? 'voice')))}
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 text-white rounded text-xs font-semibold hover:bg-slate-800 transition-all active:scale-95 disabled:opacity-40"
                       >
                         {updatingRole === user._id ? <RefreshCw size={12} className="animate-spin" /> : <Check size={12} />}

@@ -1,6 +1,8 @@
 import express from 'express';
+import mongoose from 'mongoose';
 import User from '../models/User.js';
 import jwt from 'jsonwebtoken';
+import { getIo } from '../realtime.js';
 
 import { requireAuth } from '../middleware/auth.js';
 
@@ -14,7 +16,7 @@ router.get('/roles', requireAuth, async (req, res) => {
   }
 
   try {
-    const users = await User.find({}).select('fullName username role isActive');
+    const users = await User.find({}).select('fullName username role workType isActive');
     return res.json({ users });
   } catch (err) {
     console.error('Error fetching roles:', err);
@@ -28,7 +30,7 @@ router.put('/roles', requireAuth, async (req, res) => {
     return res.status(403).json({ error: 'Forbidden' });
   }
 
-  const { userId, role } = req.body;
+  const { userId, role, workType } = req.body;
   if (!userId || !role) {
     return res.status(400).json({ error: 'Missing userId or role' });
   }
@@ -37,6 +39,7 @@ router.put('/roles', requireAuth, async (req, res) => {
   if (!validRoles.includes(role)) {
     return res.status(400).json({ error: `Invalid role. Must be one of: ${validRoles.join(', ')}` });
   }
+  const normalizedWorkType = workType === 'non-voice' ? 'non-voice' : 'voice';
 
   try {
     const targetUser = await User.findById(userId);
@@ -53,9 +56,29 @@ router.put('/roles', requireAuth, async (req, res) => {
     }
 
     targetUser.role = role;
+    targetUser.workType = normalizedWorkType;
     await targetUser.save();
 
-    return res.json({ message: 'Role updated', user: { fullName: targetUser.fullName, username: targetUser.username, role: targetUser.role } });
+    try {
+      const states = mongoose.connection.collection('states');
+      const globalState = await states.findOne({ key: 'global' });
+      const handlers = Array.isArray(globalState?.handlers) ? globalState.handlers : [];
+      const idx = handlers.findIndex((h) => String(h?.name || '').trim().toLowerCase() === targetUser.fullName.trim().toLowerCase());
+      if (idx >= 0) {
+        handlers[idx] = {
+          ...handlers[idx],
+          name: handlers[idx].name || targetUser.fullName,
+          workType: normalizedWorkType,
+        };
+        await states.updateOne({ key: 'global' }, { $set: { handlers } }, { upsert: true });
+        const io = getIo();
+        if (io) io.emit('handlers_updated', handlers);
+      }
+    } catch (stateErr) {
+      console.error('Error syncing handler workType after role update:', stateErr);
+    }
+
+    return res.json({ message: 'Role updated', user: { fullName: targetUser.fullName, username: targetUser.username, role: targetUser.role, workType: targetUser.workType } });
   } catch (err) {
     console.error('Error updating role:', err);
     return res.status(500).json({ error: 'Failed to update role' });
