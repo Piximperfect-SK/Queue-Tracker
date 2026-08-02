@@ -10,7 +10,7 @@ import * as XLSX from 'xlsx';
 import {
   Users, Activity, ChevronLeft, ChevronRight,
   BarChart2, Shield, Calendar, ArrowUp, ArrowDown, Download,
-  Search, ChevronUp, ChevronDown, Minus, Upload, Lock, X,
+  Search, ChevronUp, ChevronDown, Minus, Upload, Lock, X, Info,
 } from 'lucide-react';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -213,9 +213,13 @@ const KpiCard: React.FC<{
   label: string; value: string | number; sub?: string;
   Icon?: React.FC<{size?:number;color?:string}>;
   color: string; bg?: string; border?: string; trend?: number;
-}> = ({ label, value, sub, color, trend }) => (
+  onInfo?: () => void;
+}> = ({ label, value, sub, color, trend, onInfo }) => (
   <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderLeft:`3px solid ${color}`, borderRadius:6, padding:'12px 14px', display:'flex', flexDirection:'column', gap:5, minWidth:0 }}>
-    <span style={{ fontSize:10, fontWeight:700, color:'#64748b', textTransform:'uppercase', letterSpacing:'0.07em' }}>{label}</span>
+    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 }}>
+      <span style={{ fontSize:10, fontWeight:700, color:'#64748b', textTransform:'uppercase', letterSpacing:'0.07em' }}>{label}</span>
+      {onInfo && <InfoButton onClick={onInfo} muted />}
+    </div>
     <div style={{ display:'flex', alignItems:'baseline', gap:8 }}>
       <span style={{ fontSize:24, fontWeight:700, color:'#0f172a', fontVariantNumeric:'tabular-nums', lineHeight:1 }}>{value}</span>
       {trend !== undefined && trend !== 0 && (
@@ -234,13 +238,16 @@ const Card: React.FC<{ children: React.ReactNode; style?: React.CSSProperties }>
   </div>
 );
 
-const CardHead: React.FC<{ sup: string; title: string; right?: React.ReactNode }> = ({ sup, title, right }) => (
+const CardHead: React.FC<{ sup: string; title: string; right?: React.ReactNode; onInfo?: () => void }> = ({ sup, title, right, onInfo }) => (
   <div style={{ flexShrink:0, padding:'10px 14px 0', display:'flex', alignItems:'flex-start', justifyContent:'space-between' }}>
     <div>
       <div style={{ fontSize:8, color:'#94a3b8', fontWeight:900, textTransform:'uppercase', letterSpacing:'0.2em' }}>{sup}</div>
-      <div style={{ fontSize:12, fontWeight:900, color:'#0f172a', marginTop:2 }}>{title}</div>
+      <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:2 }}>
+        <div style={{ fontSize:12, fontWeight:900, color:'#0f172a' }}>{title}</div>
+        {onInfo && <InfoButton onClick={onInfo} muted />}
+      </div>
     </div>
-    {right && <div style={{ paddingTop:2 }}>{right}</div>}
+    {right && <div style={{ paddingTop:2, display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', justifyContent:'flex-end' }}>{right}</div>}
   </div>
 );
 
@@ -291,6 +298,49 @@ const SortIcon: React.FC<{col:string;active:string;dir:'asc'|'desc'}> = ({col,ac
   return dir==='asc' ? <ChevronUp size={10} color="#0f172a"/> : <ChevronDown size={10} color="#0f172a"/>;
 };
 
+const InfoButton: React.FC<{ onClick: () => void; muted?: boolean }> = ({ onClick, muted }) => (
+  <button
+    onClick={onClick}
+    style={{
+      width: 18,
+      height: 18,
+      borderRadius: '50%',
+      border: '1px solid #cbd5e1',
+      background: '#fff',
+      cursor: 'pointer',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      color: muted ? '#94a3b8' : '#475569',
+      flexShrink: 0,
+    }}
+    title="More info"
+  >
+    <Info size={11} />
+  </button>
+);
+
+const ControlPill: React.FC<{ active: boolean; onClick: () => void; label: string }> = ({ active, onClick, label }) => (
+  <button
+    onClick={onClick}
+    style={{
+      padding: '3px 8px',
+      borderRadius: 999,
+      border: `1px solid ${active ? '#0f172a' : '#cbd5e1'}`,
+      background: active ? '#0f172a' : '#fff',
+      color: active ? '#fff' : '#64748b',
+      fontSize: 9,
+      fontWeight: 800,
+      letterSpacing: '0.08em',
+      textTransform: 'uppercase',
+      cursor: 'pointer',
+      whiteSpace: 'nowrap',
+    }}
+  >
+    {label}
+  </button>
+);
+
 const Badge: React.FC<{label:string;color:string;bg:string;border:string}> = ({label,color,bg,border}) => (
   <span style={{ fontSize:8, fontWeight:900, color, background:bg, border:`1px solid ${border}`, borderRadius:4, padding:'1px 6px', textTransform:'uppercase', letterSpacing:'0.1em', whiteSpace:'nowrap' }}>
     {label}
@@ -310,6 +360,18 @@ const HomePage: React.FC = () => {
   const [agentSearch,   setAgentSearch]   = useState('');
   const [sortCol,       setSortCol]       = useState<string>('total');
   const [sortDir,       setSortDir]       = useState<'asc'|'desc'>('desc');
+  const [infoModal, setInfoModal] = useState<{ open: boolean; title: string; message: string }>({ open: false, title: '', message: '' });
+  const [productivityMode, setProductivityMode] = useState<'stacked' | 'inc' | 'task' | 'calls'>('stacked');
+  const [shiftCoverageMode, setShiftCoverageMode] = useState<'all' | 'top5'>('all');
+  const [trendMode, setTrendMode] = useState<'both' | 'inc' | 'calls'>('both');
+  const [qhCompareMode, setQhCompareMode] = useState<'split' | 'total'>('split');
+  const [shiftChartMode, setShiftChartMode] = useState<'split' | 'total'>('split');
+  const [coverageSortMode, setCoverageSortMode] = useState<'desc' | 'asc'>('desc');
+  const [leaveChartSortMode, setLeaveChartSortMode] = useState<'count' | 'alpha'>('count');
+  const [leaveSortCol, setLeaveSortCol] = useState<'agent' | 'type' | 'date' | 'qh'>('date');
+  const [leaveSortDir, setLeaveSortDir] = useState<'asc' | 'desc'>('desc');
+  const [shiftSortCol, setShiftSortCol] = useState<'shift' | 'agents' | 'inc' | 'task' | 'calls' | 'total' | 'avg'>('total');
+  const [shiftSortDir, setShiftSortDir] = useState<'asc' | 'desc'>('desc');
 
   const [handlers, setHandlers] = useState<Handler[]>([]);
   const [roster,   setRoster]   = useState<RosterEntry[]>([]);
@@ -325,6 +387,8 @@ const HomePage: React.FC = () => {
   const [backendSyncMonitor, setBackendSyncMonitor] = useState<{ active: boolean; percent: number; message: string; attempt: number; totalAttempts: number } | null>(null);
   const [syncDoneModal, setSyncDoneModal] = useState<{ open: boolean; title: string; message: string }>({ open: false, title: '', message: '' });
   const analyticsFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const openInfo = (title: string, message: string) => setInfoModal({ open: true, title, message });
 
   useEffect(() => {
     const load = () => {
@@ -433,6 +497,16 @@ const HomePage: React.FC = () => {
     else { setSortCol(col); setSortDir('desc'); }
   };
 
+  const toggleLeaveSort = (col: 'agent' | 'type' | 'date' | 'qh') => {
+    if (leaveSortCol === col) setLeaveSortDir((d) => d === 'asc' ? 'desc' : 'asc');
+    else { setLeaveSortCol(col); setLeaveSortDir(col === 'agent' ? 'asc' : 'desc'); }
+  };
+
+  const toggleShiftSort = (col: 'shift' | 'agents' | 'inc' | 'task' | 'calls' | 'total' | 'avg') => {
+    if (shiftSortCol === col) setShiftSortDir((d) => d === 'asc' ? 'desc' : 'asc');
+    else { setShiftSortCol(col); setShiftSortDir(col === 'shift' ? 'asc' : 'desc'); }
+  };
+
   const barData = useMemo(() => {
     if (mode==='day') {
       return filteredStats
@@ -496,6 +570,88 @@ const HomePage: React.FC = () => {
       return { shift, agents:ids.size, inc, task, calls, total:inc+task+calls };
     });
   }, [filteredRoster, filteredStats]);
+
+  const visibleBarData = useMemo(() => {
+    if (productivityMode === 'stacked') return barData;
+    const metricKey = productivityMode === 'inc' ? 'INC' : productivityMode === 'task' ? 'TASK' : 'CALLS';
+    return barData.filter((item: any) => Number(item[metricKey] || 0) > 0);
+  }, [barData, productivityMode]);
+
+  const visibleShiftDist = useMemo(() => {
+    const sorted = [...shiftDist].sort((a, b) => b.value - a.value);
+    return shiftCoverageMode === 'top5' ? sorted.slice(0, 5) : sorted;
+  }, [shiftDist, shiftCoverageMode]);
+
+  const visibleLeaveDist = useMemo(() => {
+    const rows = [...leaveDist];
+    return leaveChartSortMode === 'alpha'
+      ? rows.sort((a, b) => a.label.localeCompare(b.label))
+      : rows.sort((a, b) => b.value - a.value);
+  }, [leaveDist, leaveChartSortMode]);
+
+  const qhCompareData = useMemo(() => {
+    if (qhCompareMode === 'total') {
+      return [{
+        label: 'Total',
+        QH: qhRows.reduce((a, r) => a + r.total, 0),
+        Standard: stdRows.reduce((a, r) => a + r.total, 0),
+      }];
+    }
+    return [
+      {label:'Incidents',QH:qhRows.reduce((a,r)=>a+r.inc,0),  Standard:stdRows.reduce((a,r)=>a+r.inc,0)},
+      {label:'SC Tasks', QH:qhRows.reduce((a,r)=>a+r.task,0), Standard:stdRows.reduce((a,r)=>a+r.task,0)},
+      {label:'Calls',    QH:qhRows.reduce((a,r)=>a+r.calls,0),Standard:stdRows.reduce((a,r)=>a+r.calls,0)},
+    ];
+  }, [qhCompareMode, qhRows, stdRows]);
+
+  const shiftComparisonData = useMemo(() => {
+    if (shiftChartMode === 'total') {
+      return shiftAnalysis.map((s) => ({ label: s.shift, Total: s.total }));
+    }
+    return shiftAnalysis.map((s) => ({ label: s.shift, INC: s.inc, TASK: s.task, CALLS: s.calls }));
+  }, [shiftAnalysis, shiftChartMode]);
+
+  const coverageChartData = useMemo(() => {
+    const rows = shiftDist.map((s) => ({ label: s.name, Agents: s.value }));
+    return rows.sort((a, b) => coverageSortMode === 'desc' ? b.Agents - a.Agents : a.Agents - b.Agents);
+  }, [shiftDist, coverageSortMode]);
+
+  const leaveRows = useMemo(() => {
+    const rows = filteredRoster
+      .filter((r) => LEAVE_TYPES.has(r.shift))
+      .map((r, i) => {
+        const handler = handlerMap.get(r.handlerId);
+        return {
+          id: `${r.handlerId}-${r.date}-${i}`,
+          handlerName: handler?.name || r.handlerId,
+          leaveType: r.shift,
+          date: r.date,
+          isQH: !!handler?.isQH,
+          color: LEAVE_COLORS[i % LEAVE_COLORS.length],
+        };
+      });
+
+    const sorted = [...rows].sort((a, b) => {
+      const dir = leaveSortDir === 'asc' ? 1 : -1;
+      const left = leaveSortCol === 'agent' ? a.handlerName : leaveSortCol === 'type' ? a.leaveType : leaveSortCol === 'date' ? a.date : Number(a.isQH);
+      const right = leaveSortCol === 'agent' ? b.handlerName : leaveSortCol === 'type' ? b.leaveType : leaveSortCol === 'date' ? b.date : Number(b.isQH);
+      if (typeof left === 'number' && typeof right === 'number') return (left - right) * dir;
+      return String(left).localeCompare(String(right)) * dir;
+    });
+
+    return sorted;
+  }, [filteredRoster, handlerMap, leaveSortCol, leaveSortDir]);
+
+  const sortedShiftRows = useMemo(() => {
+    const rows = [...shiftAnalysis];
+    return rows.sort((a, b) => {
+      const dir = shiftSortDir === 'asc' ? 1 : -1;
+      const left = shiftSortCol === 'shift' ? a.shift : shiftSortCol === 'agents' ? a.agents : shiftSortCol === 'inc' ? a.inc : shiftSortCol === 'task' ? a.task : shiftSortCol === 'calls' ? a.calls : shiftSortCol === 'avg' ? (a.agents > 0 ? Math.round(a.total / a.agents) : 0) : a.total;
+      const right = shiftSortCol === 'shift' ? b.shift : shiftSortCol === 'agents' ? b.agents : shiftSortCol === 'inc' ? b.inc : shiftSortCol === 'task' ? b.task : shiftSortCol === 'calls' ? b.calls : shiftSortCol === 'avg' ? (b.agents > 0 ? Math.round(b.total / b.agents) : 0) : b.total;
+      if (typeof left === 'number' && typeof right === 'number') return (left - right) * dir;
+      return String(left).localeCompare(String(right)) * dir;
+    });
+  }, [shiftAnalysis, shiftSortCol, shiftSortDir]);
 
   const periodLabel = useMemo(() => {
     if(mode==='day') return new Date(selectedDay+'T00:00:00').toLocaleDateString('en-US',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
@@ -1192,51 +1348,58 @@ const HomePage: React.FC = () => {
               vs previous {mode}
             </div>
             <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:10,flexShrink:0}}>
-              <KpiCard label="Active Agents"   value={activeCount}      sub="on shift"        color="#0f172a" trend={pctChange(activeCount, prevActiveCount)}/>
-              <KpiCard label="Attendance"      value={`${attendanceRate}%`} sub="scheduled days worked" color="#0d9488" trend={pctChange(attendanceRate, prevAttendanceRate)}/>
-              <KpiCard label="Incidents"       value={totalInc}         sub="logged"          color="#2563eb" trend={pctChange(totalInc, prevTotalInc)}/>
-              <KpiCard label="SC Tasks"        value={totalTask}        sub="completed"       color="#b45309" trend={pctChange(totalTask, prevTotalTask)}/>
-              <KpiCard label="Calls"           value={totalCalls}       sub="handled"         color="#00ADB5" trend={pctChange(totalCalls, prevTotalCalls)}/>
-              <KpiCard label="Avg / Agent"     value={activeCount ? Math.round(grandTotal / activeCount) : 0} sub="tickets+calls" color="#7c3aed"/>
-              <KpiCard label="Total Agents"    value={handlers.length}  sub="registered"      color="#475569"/>
+              <KpiCard label="Active Agents"   value={activeCount}      sub="on shift"        color="#0f172a" trend={pctChange(activeCount, prevActiveCount)} onInfo={() => openInfo('Active Agents', 'Unique handlers scheduled on active shifts in the selected period. Leave and week-off entries are excluded.')}/>
+              <KpiCard label="Attendance"      value={`${attendanceRate}%`} sub="scheduled days worked" color="#0d9488" trend={pctChange(attendanceRate, prevAttendanceRate)} onInfo={() => openInfo('Attendance', 'Percentage of roster entries that were worked instead of being marked as leave or week off.')}/>
+              <KpiCard label="Incidents"       value={totalInc}         sub="logged"          color="#2563eb" trend={pctChange(totalInc, prevTotalInc)} onInfo={() => openInfo('Incidents', 'Total incident count imported or entered for the selected period.')}/>
+              <KpiCard label="SC Tasks"        value={totalTask}        sub="completed"       color="#b45309" trend={pctChange(totalTask, prevTotalTask)} onInfo={() => openInfo('SC Tasks', 'Total requests or SC task items completed in the selected period.')}/>
+              <KpiCard label="Calls"           value={totalCalls}       sub="handled"         color="#00ADB5" trend={pctChange(totalCalls, prevTotalCalls)} onInfo={() => openInfo('Calls', 'Total handled calls recorded against active handlers in the selected period.')}/>
+              <KpiCard label="Avg / Agent"     value={activeCount ? Math.round(grandTotal / activeCount) : 0} sub="tickets+calls" color="#7c3aed" onInfo={() => openInfo('Average per Agent', 'Rounded average of total analytics volume divided by active agents in the selected period.')}/>
+              <KpiCard label="Total Agents"    value={handlers.length}  sub="registered"      color="#475569" onInfo={() => openInfo('Total Agents', 'All registered handlers currently available in the system, regardless of leave or scheduling.')}/>
             </div>
 
             <div style={{display:'grid',gridTemplateColumns:'1fr 260px',gap:10,flex:1,minHeight:200}}>
               <Card>
                 <CardHead sup={mode==='day'?'Per Agent':mode==='month'?'Daily':'Monthly'} title="Productivity Volume"
-                  right={<div style={{display:'flex',gap:10}}><LegendDot color={INC_C} label="INC"/><LegendDot color={TASK_C} label="TASK"/><LegendDot color={CALL_C} label="CALLS"/></div>}/>
+                  onInfo={() => openInfo('Productivity Volume', 'Compares incident, SC task, and call volume for the selected period. Use the controls to isolate one metric or keep the stacked total view.')}
+                  right={<div style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'}}><LegendDot color={INC_C} label="INC"/><LegendDot color={TASK_C} label="TASK"/><LegendDot color={CALL_C} label="CALLS"/><ControlPill active={productivityMode==='stacked'} onClick={() => setProductivityMode('stacked')} label="All"/><ControlPill active={productivityMode==='inc'} onClick={() => setProductivityMode('inc')} label="Inc"/><ControlPill active={productivityMode==='task'} onClick={() => setProductivityMode('task')} label="Task"/><ControlPill active={productivityMode==='calls'} onClick={() => setProductivityMode('calls')} label="Calls"/></div>}/>
                 <div style={{flex:1,minHeight:0,padding:'8px 4px 6px'}}>
-                  {barData.length===0?<Empty/>:(
+                  {visibleBarData.length===0?<Empty/>:(
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={barData} margin={{top:4,right:8,left:-22,bottom:0}} barCategoryGap="28%">
+                      <BarChart data={visibleBarData} margin={{top:4,right:8,left:-22,bottom:0}} barCategoryGap="28%">
                         <CartesianGrid strokeDasharray="3 6" vertical={false} stroke="#f1f5f9"/>
                         <XAxis dataKey="label" tick={{fontSize:9,fontWeight:700,fill:'#64748b'}} tickLine={false} axisLine={false}/>
                         <YAxis tick={{fontSize:8,fill:'#94a3b8'}} tickLine={false} axisLine={false}/>
                         <Tooltip content={<TT/>}/>
-                        <Bar dataKey="INC"   stackId="a" fill={INC_C}  name="Incidents" radius={[0,0,0,0]}/>
-                        <Bar dataKey="TASK"  stackId="a" fill={TASK_C} name="SC Tasks"  radius={[0,0,0,0]}/>
-                        <Bar dataKey="CALLS" stackId="a" fill={CALL_C} name="Calls"     radius={[3,3,0,0]}/>
+                        {productivityMode === 'stacked' ? (
+                          <>
+                            <Bar dataKey="INC"   stackId="a" fill={INC_C}  name="Incidents" radius={[0,0,0,0]}/>
+                            <Bar dataKey="TASK"  stackId="a" fill={TASK_C} name="SC Tasks"  radius={[0,0,0,0]}/>
+                            <Bar dataKey="CALLS" stackId="a" fill={CALL_C} name="Calls"     radius={[3,3,0,0]}/>
+                          </>
+                        ) : (
+                          <Bar dataKey={productivityMode === 'inc' ? 'INC' : productivityMode === 'task' ? 'TASK' : 'CALLS'} fill={productivityMode === 'inc' ? INC_C : productivityMode === 'task' ? TASK_C : CALL_C} name={productivityMode === 'inc' ? 'Incidents' : productivityMode === 'task' ? 'SC Tasks' : 'Calls'} radius={[3,3,0,0]}/>
+                        )}
                       </BarChart>
                     </ResponsiveContainer>
                   )}
                 </div>
               </Card>
               <Card>
-                <CardHead sup="Distribution" title="Shift Coverage"/>
+                <CardHead sup="Distribution" title="Shift Coverage" onInfo={() => openInfo('Shift Coverage', 'Shows how many active roster assignments fall under each shift in the selected period.')} right={<div style={{display:'flex',gap:6}}><ControlPill active={shiftCoverageMode==='all'} onClick={() => setShiftCoverageMode('all')} label="All"/><ControlPill active={shiftCoverageMode==='top5'} onClick={() => setShiftCoverageMode('top5')} label="Top 5"/></div>} />
                 <div style={{flex:1,minHeight:0,display:'flex',flexDirection:'column'}}>
-                  {shiftDist.length===0?<Empty msg="No roster"/>:(<>
+                  {visibleShiftDist.length===0?<Empty msg="No roster"/>:(<>
                     <div style={{flex:1,minHeight:0}}>
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
-                          <Pie data={shiftDist} dataKey="value" nameKey="name" cx="50%" cy="48%" innerRadius="42%" outerRadius="68%" paddingAngle={2}>
-                            {shiftDist.map((e,i)=><Cell key={i} fill={e.fill}/>)}
+                          <Pie data={visibleShiftDist} dataKey="value" nameKey="name" cx="50%" cy="48%" innerRadius="42%" outerRadius="68%" paddingAngle={2}>
+                            {visibleShiftDist.map((e,i)=><Cell key={i} fill={e.fill}/>) }
                           </Pie>
                           <Tooltip content={<PieTT/>}/>
                         </PieChart>
                       </ResponsiveContainer>
                     </div>
                     <div style={{flexShrink:0,padding:'0 12px 10px',display:'flex',flexWrap:'wrap',gap:'3px 8px'}}>
-                      {shiftDist.map((e,i)=>(
+                      {visibleShiftDist.map((e,i)=>(
                         <div key={i} style={{display:'flex',alignItems:'center',gap:3,fontSize:8,fontWeight:700,color:'#374151'}}>
                           <div style={{width:6,height:6,borderRadius:2,background:e.fill,flexShrink:0}}/>{e.name} ({e.value})
                         </div>
@@ -1250,7 +1413,8 @@ const HomePage: React.FC = () => {
             <div style={{display:'grid',gridTemplateColumns:'1fr 240px 240px',gap:10,flex:1,minHeight:180}}>
               <Card>
                 <CardHead sup="Trend" title="Activity Over Time"
-                  right={<div style={{display:'flex',gap:10}}><LegendDot color={INC_C} label="INC" type="line"/><LegendDot color={CALL_C} label="CALLS" type="line"/></div>}/>
+                  onInfo={() => openInfo('Activity Over Time', 'Trend view of selected analytics volume across the current period. Use controls to view incidents, calls, or both together.')}
+                  right={<div style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'}}><LegendDot color={INC_C} label="INC" type="line"/><LegendDot color={CALL_C} label="CALLS" type="line"/><ControlPill active={trendMode==='both'} onClick={() => setTrendMode('both')} label="Both"/><ControlPill active={trendMode==='inc'} onClick={() => setTrendMode('inc')} label="Inc"/><ControlPill active={trendMode==='calls'} onClick={() => setTrendMode('calls')} label="Calls"/></div>}/>
                 <div style={{flex:1,minHeight:0,padding:'8px 4px 6px'}}>
                   {barData.length<2?<Empty msg="Need 2+ data points"/>:(
                     <ResponsiveContainer width="100%" height="100%">
@@ -1263,15 +1427,15 @@ const HomePage: React.FC = () => {
                         <XAxis dataKey="label" tick={{fontSize:9,fontWeight:700,fill:'#64748b'}} tickLine={false} axisLine={false}/>
                         <YAxis tick={{fontSize:8,fill:'#94a3b8'}} tickLine={false} axisLine={false}/>
                         <Tooltip content={<TT/>}/>
-                        <Area type="monotone" dataKey="INC"   stroke={INC_C}  strokeWidth={2} fill="url(#gI)" name="Incidents" dot={{r:2,fill:INC_C, stroke:'#fff',strokeWidth:1}}/>
-                        <Area type="monotone" dataKey="CALLS" stroke={CALL_C} strokeWidth={2} fill="url(#gC)" name="Calls"     dot={{r:2,fill:CALL_C,stroke:'#fff',strokeWidth:1}}/>
+                        {(trendMode === 'both' || trendMode === 'inc') && <Area type="monotone" dataKey="INC"   stroke={INC_C}  strokeWidth={2} fill="url(#gI)" name="Incidents" dot={{r:2,fill:INC_C, stroke:'#fff',strokeWidth:1}}/>}
+                        {(trendMode === 'both' || trendMode === 'calls') && <Area type="monotone" dataKey="CALLS" stroke={CALL_C} strokeWidth={2} fill="url(#gC)" name="Calls"     dot={{r:2,fill:CALL_C,stroke:'#fff',strokeWidth:1}}/>}
                       </AreaChart>
                     </ResponsiveContainer>
                   )}
                 </div>
               </Card>
               <Card>
-                <CardHead sup="Rankings · Avg / Day Worked" title="Top Performers"/>
+                <CardHead sup="Rankings · Avg / Day Worked" title="Top Performers" onInfo={() => openInfo('Top Performers', 'Ranks handlers by rounded average daily analytics output during the selected period.')} />
                 <div style={{flex:1,overflow:'hidden',padding:'8px 14px 10px',display:'flex',flexDirection:'column',gap:6}}>
                   {topPerformers.length===0?<Empty msg="No data"/>:topPerformers.map((r,i)=>(
                     <div key={r.id}>
@@ -1290,10 +1454,10 @@ const HomePage: React.FC = () => {
                 </div>
               </Card>
               <Card>
-                <CardHead sup="Absences" title="Leave Breakdown"/>
+                <CardHead sup="Absences" title="Leave Breakdown" onInfo={() => openInfo('Leave Breakdown', 'Breaks leave and week-off entries by type for the selected period.')} />
                 <div style={{flex:1,overflow:'hidden',padding:'8px 14px 10px',display:'flex',flexDirection:'column',gap:5}}>
-                  {leaveDist.length===0?<Empty msg="No leaves"/>:leaveDist.map(({label,value,color})=>{
-                    const max=leaveDist[0].value;
+                  {visibleLeaveDist.length===0?<Empty msg="No leaves"/>:visibleLeaveDist.map(({label,value,color})=>{
+                    const max=visibleLeaveDist[0].value;
                     return (
                       <div key={label}>
                         <div style={{display:'flex',justifyContent:'space-between',marginBottom:2}}>
@@ -1317,7 +1481,7 @@ const HomePage: React.FC = () => {
               <div style={{flexShrink:0,padding:'10px 14px',display:'flex',alignItems:'center',justifyContent:'space-between',borderBottom:'1px solid #e2e8f0'}}>
                 <div>
                   <div style={{fontSize:8,color:'#94a3b8',fontWeight:900,textTransform:'uppercase',letterSpacing:'0.2em'}}>Full Roster</div>
-                  <div style={{fontSize:13,fontWeight:900,color:'#0f172a',marginTop:2}}>All Agents — {agentRows.length}</div>
+                  <div style={{display:'flex',alignItems:'center',gap:6,marginTop:2}}><div style={{fontSize:13,fontWeight:900,color:'#0f172a'}}>All Agents — {agentRows.length}</div><InfoButton onClick={() => openInfo('All Agents Table', 'Sortable agent table showing combined analytics, days worked, average per day, current shift, and leave flag.')} muted /></div>
                 </div>
                 <div style={{display:'flex',alignItems:'center',gap:8}}>
                   <div style={{display:'flex',alignItems:'center',gap:6,padding:'5px 10px',background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:7}}>
@@ -1350,14 +1514,14 @@ const HomePage: React.FC = () => {
           {/* ── QH ─────────────────────────────────────────────────────────── */}
           {activeTab==='qh' && (<>
             <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10,flexShrink:0}}>
-              <KpiCard label="Queue Handlers" value={qhCount}                          sub="designated"   color="#b45309"/>
-              <KpiCard label="QH Incidents"   value={qhRows.reduce((a,r)=>a+r.inc,0)} sub="logged"       color="#2563eb"/>
-              <KpiCard label="QH Tasks"       value={qhRows.reduce((a,r)=>a+r.task,0)}sub="completed"    color="#b45309"/>
-              <KpiCard label="QH Calls"       value={qhRows.reduce((a,r)=>a+r.calls,0)}sub="handled"     color="#00ADB5"/>
+              <KpiCard label="Queue Handlers" value={qhCount}                          sub="designated"   color="#b45309" onInfo={() => openInfo('Queue Handlers', 'Total handlers currently marked as queue handlers (QH).')}/>
+              <KpiCard label="QH Incidents"   value={qhRows.reduce((a,r)=>a+r.inc,0)} sub="logged"       color="#2563eb" onInfo={() => openInfo('QH Incidents', 'Incident volume handled by QH-designated handlers in the selected period.')}/>
+              <KpiCard label="QH Tasks"       value={qhRows.reduce((a,r)=>a+r.task,0)}sub="completed"    color="#b45309" onInfo={() => openInfo('QH Tasks', 'SC task or request volume handled by QH-designated handlers.')}/>
+              <KpiCard label="QH Calls"       value={qhRows.reduce((a,r)=>a+r.calls,0)}sub="handled"     color="#00ADB5" onInfo={() => openInfo('QH Calls', 'Calls recorded against QH-designated handlers in the selected period.')}/>
             </div>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,flex:1,minHeight:200}}>
               <Card style={{flex:1,minHeight:0}}>
-                <CardHead sup="Queue Handler Detail" title={`QH Performance — ${qhRows.length}`}/>
+                <CardHead sup="Queue Handler Detail" title={`QH Performance — ${qhRows.length}`} onInfo={() => openInfo('QH Performance', 'Sortable performance table limited to handlers flagged as QH.')} />
                 <div style={{flex:1,minHeight:0,overflow:'auto',marginTop:8}}>
                   <table style={{width:'100%',borderCollapse:'collapse'}}>
                     <TableHeaders showRank/>
@@ -1372,14 +1536,11 @@ const HomePage: React.FC = () => {
               </Card>
               <Card>
                 <CardHead sup="Comparison" title="QH vs Standard"
-                  right={<div style={{display:'flex',gap:8}}><LegendDot color="#f59e0b" label="QH"/><LegendDot color="#3b82f6" label="Standard"/></div>}/>
+                  onInfo={() => openInfo('QH vs Standard', 'Compares QH contribution with standard handlers. Switch between split metrics and total volume.')}
+                  right={<div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}><LegendDot color="#f59e0b" label="QH"/><LegendDot color="#3b82f6" label="Standard"/><ControlPill active={qhCompareMode==='split'} onClick={() => setQhCompareMode('split')} label="Split"/><ControlPill active={qhCompareMode==='total'} onClick={() => setQhCompareMode('total')} label="Total"/></div>}/>
                 <div style={{flex:1,minHeight:0,padding:'8px 4px 6px'}}>
                   {(()=>{
-                    const data=[
-                      {label:'Incidents',QH:qhRows.reduce((a,r)=>a+r.inc,0),  Standard:stdRows.reduce((a,r)=>a+r.inc,0)},
-                      {label:'SC Tasks', QH:qhRows.reduce((a,r)=>a+r.task,0), Standard:stdRows.reduce((a,r)=>a+r.task,0)},
-                      {label:'Calls',    QH:qhRows.reduce((a,r)=>a+r.calls,0),Standard:stdRows.reduce((a,r)=>a+r.calls,0)},
-                    ];
+                    const data=qhCompareData;
                     if(!data.some(d=>d.QH+d.Standard>0)) return <Empty msg="No data to compare"/>;
                     return (
                       <ResponsiveContainer width="100%" height="100%">
@@ -1398,7 +1559,7 @@ const HomePage: React.FC = () => {
               </Card>
             </div>
             <Card style={{flex:1,minHeight:0}}>
-              <CardHead sup="Standard Agents" title={`Non-QH — ${stdRows.length} agents`}/>
+              <CardHead sup="Standard Agents" title={`Non-QH — ${stdRows.length} agents`} onInfo={() => openInfo('Standard Agents', 'Sortable performance table for handlers not marked as QH.')} />
               <div style={{flex:1,minHeight:0,overflow:'auto',marginTop:8}}>
                 <table style={{width:'100%',borderCollapse:'collapse'}}>
                   <TableHeaders showRank/>
@@ -1420,7 +1581,10 @@ const HomePage: React.FC = () => {
                 const c=SHIFT_COLORS[s.shift]||'#475569';
                 return (
                   <div key={s.shift} style={{background:'#fff',border:`1px solid ${c}30`,borderRadius:12,padding:'12px 14px',boxShadow:'0 1px 3px rgba(0,0,0,0.05)',borderTop:`3px solid ${c}`}}>
-                    <div style={{fontSize:8,fontWeight:900,color:c,textTransform:'uppercase',letterSpacing:'0.15em',marginBottom:4}}>{s.shift}</div>
+                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,marginBottom:4}}>
+                      <div style={{fontSize:8,fontWeight:900,color:c,textTransform:'uppercase',letterSpacing:'0.15em'}}>{s.shift}</div>
+                      <InfoButton onClick={() => openInfo(`${s.shift} Summary`, 'Shows total analytics volume and agent coverage for this shift in the selected period.')} muted />
+                    </div>
                     <div style={{fontSize:22,fontWeight:900,color:'#0f172a',fontVariantNumeric:'tabular-nums',lineHeight:1}}>{s.total}</div>
                     <div style={{fontSize:9,color:'#94a3b8',fontWeight:600,marginTop:3}}>{s.agents} agents</div>
                     <div style={{display:'flex',gap:8,marginTop:6}}>
@@ -1438,29 +1602,36 @@ const HomePage: React.FC = () => {
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,flex:1,minHeight:200}}>
               <Card>
                 <CardHead sup="Shift Comparison" title="Volume by Shift"
-                  right={<div style={{display:'flex',gap:8}}><LegendDot color={INC_C} label="INC"/><LegendDot color={TASK_C} label="TASK"/><LegendDot color={CALL_C} label="CALLS"/></div>}/>
+                  onInfo={() => openInfo('Volume by Shift', 'Compares shift performance either by split metrics or total combined volume.')}
+                  right={<div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}><LegendDot color={INC_C} label="INC"/><LegendDot color={TASK_C} label="TASK"/><LegendDot color={CALL_C} label="CALLS"/><ControlPill active={shiftChartMode==='split'} onClick={() => setShiftChartMode('split')} label="Split"/><ControlPill active={shiftChartMode==='total'} onClick={() => setShiftChartMode('total')} label="Total"/></div>}/>
                 <div style={{flex:1,minHeight:0,padding:'8px 4px 6px'}}>
                   {shiftAnalysis.every(s=>s.total===0)?<Empty/>:(
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={shiftAnalysis.map(s=>({label:s.shift,INC:s.inc,TASK:s.task,CALLS:s.calls}))} margin={{top:4,right:8,left:-22,bottom:0}} barCategoryGap="30%">
+                      <BarChart data={shiftComparisonData} margin={{top:4,right:8,left:-22,bottom:0}} barCategoryGap="30%">
                         <CartesianGrid strokeDasharray="3 6" vertical={false} stroke="#f1f5f9"/>
                         <XAxis dataKey="label" tick={{fontSize:8,fontWeight:700,fill:'#64748b'}} tickLine={false} axisLine={false}/>
                         <YAxis tick={{fontSize:8,fill:'#94a3b8'}} tickLine={false} axisLine={false}/>
                         <Tooltip content={<TT/>}/>
-                        <Bar dataKey="INC"   fill={INC_C}  name="Incidents" radius={[0,0,0,0]}/>
-                        <Bar dataKey="TASK"  fill={TASK_C} name="SC Tasks"  radius={[0,0,0,0]}/>
-                        <Bar dataKey="CALLS" fill={CALL_C} name="Calls"     radius={[3,3,0,0]}/>
+                        {shiftChartMode === 'split' ? (
+                          <>
+                            <Bar dataKey="INC"   fill={INC_C}  name="Incidents" radius={[0,0,0,0]}/>
+                            <Bar dataKey="TASK"  fill={TASK_C} name="SC Tasks"  radius={[0,0,0,0]}/>
+                            <Bar dataKey="CALLS" fill={CALL_C} name="Calls"     radius={[3,3,0,0]}/>
+                          </>
+                        ) : (
+                          <Bar dataKey="Total" fill="#0f172a" name="Total" radius={[3,3,0,0]}/>
+                        )}
                       </BarChart>
                     </ResponsiveContainer>
                   )}
                 </div>
               </Card>
               <Card>
-                <CardHead sup="Coverage" title="Agents per Shift"/>
+                <CardHead sup="Coverage" title="Agents per Shift" onInfo={() => openInfo('Agents per Shift', 'Shows staffing density per shift. Use controls to sort the bars by highest or lowest coverage.')} right={<div style={{display:'flex',gap:6}}><ControlPill active={coverageSortMode==='desc'} onClick={() => setCoverageSortMode('desc')} label="High-Low"/><ControlPill active={coverageSortMode==='asc'} onClick={() => setCoverageSortMode('asc')} label="Low-High"/></div>} />
                 <div style={{flex:1,minHeight:0,padding:'8px 4px 6px'}}>
                   {shiftDist.length===0?<Empty msg="No roster"/>:(
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={shiftDist.map(s=>({label:s.name,Agents:s.value}))} layout="vertical" margin={{top:4,right:32,left:60,bottom:4}}>
+                      <BarChart data={coverageChartData} layout="vertical" margin={{top:4,right:32,left:60,bottom:4}}>
                         <CartesianGrid strokeDasharray="3 6" horizontal={false} stroke="#f1f5f9"/>
                         <XAxis type="number" tick={{fontSize:8,fill:'#94a3b8'}} tickLine={false} axisLine={false}/>
                         <YAxis type="category" dataKey="label" tick={{fontSize:9,fontWeight:700,fill:'#374151'}} tickLine={false} axisLine={false} width={55}/>
@@ -1473,18 +1644,22 @@ const HomePage: React.FC = () => {
               </Card>
             </div>
             <Card style={{flexShrink:0}}>
-              <CardHead sup="Detail" title="Shift Breakdown Table"/>
+              <CardHead sup="Detail" title="Shift Breakdown Table" onInfo={() => openInfo('Shift Breakdown Table', 'Sortable shift-level totals and averages for the selected period. Click any header to reorder the table.')} />
               <div style={{overflow:'auto',marginTop:8}}>
                 <table style={{width:'100%',borderCollapse:'collapse'}}>
                   <thead>
                     <tr>
-                      {['Shift','Agents','Incidents','SC Tasks','Calls','Total','Avg/Agent'].map((h,i)=>(
-                        <th key={h} style={{padding:'7px 12px',fontSize:8,fontWeight:900,color:'#94a3b8',textTransform:'uppercase',letterSpacing:'0.15em',textAlign:i===0?'left':'center',borderBottom:'2px solid #e2e8f0',background:'#f8fafc',whiteSpace:'nowrap'}}>{h}</th>
-                      ))}
+                      <th onClick={() => toggleShiftSort('shift')} style={{padding:'7px 12px',fontSize:8,fontWeight:900,color:'#94a3b8',textTransform:'uppercase',letterSpacing:'0.15em',textAlign:'left',borderBottom:'2px solid #e2e8f0',background:'#f8fafc',whiteSpace:'nowrap',cursor:'pointer'}}><div style={{display:'flex',alignItems:'center',gap:4}}>Shift<SortIcon col="shift" active={shiftSortCol} dir={shiftSortDir}/></div></th>
+                      <th onClick={() => toggleShiftSort('agents')} style={{padding:'7px 12px',fontSize:8,fontWeight:900,color:'#94a3b8',textTransform:'uppercase',letterSpacing:'0.15em',textAlign:'center',borderBottom:'2px solid #e2e8f0',background:'#f8fafc',whiteSpace:'nowrap',cursor:'pointer'}}><div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:4}}>Agents<SortIcon col="agents" active={shiftSortCol} dir={shiftSortDir}/></div></th>
+                      <th onClick={() => toggleShiftSort('inc')} style={{padding:'7px 12px',fontSize:8,fontWeight:900,color:'#94a3b8',textTransform:'uppercase',letterSpacing:'0.15em',textAlign:'center',borderBottom:'2px solid #e2e8f0',background:'#f8fafc',whiteSpace:'nowrap',cursor:'pointer'}}><div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:4}}>Incidents<SortIcon col="inc" active={shiftSortCol} dir={shiftSortDir}/></div></th>
+                      <th onClick={() => toggleShiftSort('task')} style={{padding:'7px 12px',fontSize:8,fontWeight:900,color:'#94a3b8',textTransform:'uppercase',letterSpacing:'0.15em',textAlign:'center',borderBottom:'2px solid #e2e8f0',background:'#f8fafc',whiteSpace:'nowrap',cursor:'pointer'}}><div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:4}}>SC Tasks<SortIcon col="task" active={shiftSortCol} dir={shiftSortDir}/></div></th>
+                      <th onClick={() => toggleShiftSort('calls')} style={{padding:'7px 12px',fontSize:8,fontWeight:900,color:'#94a3b8',textTransform:'uppercase',letterSpacing:'0.15em',textAlign:'center',borderBottom:'2px solid #e2e8f0',background:'#f8fafc',whiteSpace:'nowrap',cursor:'pointer'}}><div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:4}}>Calls<SortIcon col="calls" active={shiftSortCol} dir={shiftSortDir}/></div></th>
+                      <th onClick={() => toggleShiftSort('total')} style={{padding:'7px 12px',fontSize:8,fontWeight:900,color:'#94a3b8',textTransform:'uppercase',letterSpacing:'0.15em',textAlign:'center',borderBottom:'2px solid #e2e8f0',background:'#f8fafc',whiteSpace:'nowrap',cursor:'pointer'}}><div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:4}}>Total<SortIcon col="total" active={shiftSortCol} dir={shiftSortDir}/></div></th>
+                      <th onClick={() => toggleShiftSort('avg')} style={{padding:'7px 12px',fontSize:8,fontWeight:900,color:'#94a3b8',textTransform:'uppercase',letterSpacing:'0.15em',textAlign:'center',borderBottom:'2px solid #e2e8f0',background:'#f8fafc',whiteSpace:'nowrap',cursor:'pointer'}}><div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:4}}>Avg/Agent<SortIcon col="avg" active={shiftSortCol} dir={shiftSortDir}/></div></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {shiftAnalysis.map(s=>{
+                    {sortedShiftRows.map(s=>{
                       const c=SHIFT_COLORS[s.shift]||'#475569';
                       return (
                         <tr key={s.shift} style={{background:'#fff'}}
@@ -1514,48 +1689,48 @@ const HomePage: React.FC = () => {
           {/* ── LEAVE REPORT ───────────────────────────────────────────────── */}
           {activeTab==='leave' && (<>
             <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10,flexShrink:0}}>
-              <KpiCard label="Total on Leave"  value={leaveCount}                                              sub="in period"  color="#dc2626"/>
-              <KpiCard label="WeekOff"         value={filteredRoster.filter(r=>r.shift==='WeekOff').length}        sub="entries"    color="#64748b"/>
-              <KpiCard label="Medical Leave"   value={filteredRoster.filter(r=>r.shift==='Medical Leave').length}  sub="entries"    color="#831843"/>
-              <KpiCard label="Planned Leave"   value={filteredRoster.filter(r=>r.shift==='Planned Leave').length}  sub="entries"    color="#78350f"/>
+              <KpiCard label="Total on Leave"  value={leaveCount}                                              sub="in period"  color="#dc2626" onInfo={() => openInfo('Total on Leave', 'Unique handlers who have at least one leave or week-off entry in the selected period.')}/>
+              <KpiCard label="WeekOff"         value={filteredRoster.filter(r=>r.shift==='WeekOff').length}        sub="entries"    color="#64748b" onInfo={() => openInfo('WeekOff', 'Count of week-off roster entries in the selected period.')}/>
+              <KpiCard label="Medical Leave"   value={filteredRoster.filter(r=>r.shift==='Medical Leave').length}  sub="entries"    color="#831843" onInfo={() => openInfo('Medical Leave', 'Count of medical leave roster entries in the selected period.')}/>
+              <KpiCard label="Planned Leave"   value={filteredRoster.filter(r=>r.shift==='Planned Leave').length}  sub="entries"    color="#78350f" onInfo={() => openInfo('Planned Leave', 'Count of planned leave roster entries in the selected period.')}/>
             </div>
             <div style={{display:'grid',gridTemplateColumns:'1fr 260px',gap:10,flex:1,minHeight:200}}>
               <Card style={{flex:1,minHeight:0}}>
-                <CardHead sup="Leave Detail" title="Agent Leave Records"/>
+                <CardHead sup="Leave Detail" title="Agent Leave Records" onInfo={() => openInfo('Agent Leave Records', 'Sortable leave table for the selected period. Click headers to sort by agent, leave type, date, or QH flag.')} />
                 <div style={{flex:1,minHeight:0,overflow:'auto',marginTop:8}}>
                   <table style={{width:'100%',borderCollapse:'collapse'}}>
                     <thead>
                       <tr>
-                        {['Agent','Leave Type','Date','QH'].map((h,i)=>(
-                          <th key={h} style={{padding:'7px 12px',fontSize:8,fontWeight:900,color:'#94a3b8',textTransform:'uppercase',letterSpacing:'0.15em',textAlign:i===0?'left':'center',borderBottom:'2px solid #e2e8f0',background:'#f8fafc'}}>{h}</th>
-                        ))}
+                        <th onClick={() => toggleLeaveSort('agent')} style={{padding:'7px 12px',fontSize:8,fontWeight:900,color:'#94a3b8',textTransform:'uppercase',letterSpacing:'0.15em',textAlign:'left',borderBottom:'2px solid #e2e8f0',background:'#f8fafc',cursor:'pointer'}}><div style={{display:'flex',alignItems:'center',gap:4}}>Agent<SortIcon col="agent" active={leaveSortCol} dir={leaveSortDir}/></div></th>
+                        <th onClick={() => toggleLeaveSort('type')} style={{padding:'7px 12px',fontSize:8,fontWeight:900,color:'#94a3b8',textTransform:'uppercase',letterSpacing:'0.15em',textAlign:'center',borderBottom:'2px solid #e2e8f0',background:'#f8fafc',cursor:'pointer'}}><div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:4}}>Leave Type<SortIcon col="type" active={leaveSortCol} dir={leaveSortDir}/></div></th>
+                        <th onClick={() => toggleLeaveSort('date')} style={{padding:'7px 12px',fontSize:8,fontWeight:900,color:'#94a3b8',textTransform:'uppercase',letterSpacing:'0.15em',textAlign:'center',borderBottom:'2px solid #e2e8f0',background:'#f8fafc',cursor:'pointer'}}><div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:4}}>Date<SortIcon col="date" active={leaveSortCol} dir={leaveSortDir}/></div></th>
+                        <th onClick={() => toggleLeaveSort('qh')} style={{padding:'7px 12px',fontSize:8,fontWeight:900,color:'#94a3b8',textTransform:'uppercase',letterSpacing:'0.15em',textAlign:'center',borderBottom:'2px solid #e2e8f0',background:'#f8fafc',cursor:'pointer'}}><div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:4}}>QH<SortIcon col="qh" active={leaveSortCol} dir={leaveSortDir}/></div></th>
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredRoster.filter(r=>LEAVE_TYPES.has(r.shift)).length===0
+                      {leaveRows.length===0
                         ? <tr><td colSpan={4} style={{padding:32,textAlign:'center',color:'#94a3b8',fontSize:12,fontWeight:700}}>No leave records</td></tr>
-                        : filteredRoster.filter(r=>LEAVE_TYPES.has(r.shift)).sort((a,b)=>a.date.localeCompare(b.date)).map((r,i)=>{
-                          const h=handlerMap.get(r.handlerId);
-                          const lc=LEAVE_COLORS[i%LEAVE_COLORS.length];
+                        : leaveRows.map((r)=>{
+                          const lc=r.color;
                           return (
-                            <tr key={i} style={{background:'#fff'}}
+                            <tr key={r.id} style={{background:'#fff'}}
                               onMouseEnter={e=>e.currentTarget.style.background='#fef2f2'}
                               onMouseLeave={e=>e.currentTarget.style.background='#fff'}
                             >
                               <td style={{padding:'7px 12px',borderBottom:'1px solid #f1f5f9'}}>
                                 <div style={{display:'flex',alignItems:'center',gap:6}}>
                                   <div style={{width:22,height:22,borderRadius:'50%',background:'#fee2e2',display:'flex',alignItems:'center',justifyContent:'center',fontSize:8,fontWeight:900,color:'#dc2626',flexShrink:0}}>
-                                    {h?.name.split(' ').map((p:string)=>p[0]).join('').slice(0,2).toUpperCase()||'?'}
+                                    {r.handlerName.split(' ').map((p:string)=>p[0]).join('').slice(0,2).toUpperCase()||'?'}
                                   </div>
-                                  <span style={{fontSize:12,fontWeight:700,color:'#0f172a'}}>{h?.name||r.handlerId}</span>
+                                  <span style={{fontSize:12,fontWeight:700,color:'#0f172a'}}>{r.handlerName}</span>
                                 </div>
                               </td>
                               <td style={{padding:'7px 12px',textAlign:'center',borderBottom:'1px solid #f1f5f9'}}>
-                                <Badge label={r.shift} color={lc} bg={`${lc}15`} border={`${lc}35`}/>
+                                <Badge label={r.leaveType} color={lc} bg={`${lc}15`} border={`${lc}35`}/>
                               </td>
                               <td style={{padding:'7px 12px',textAlign:'center',borderBottom:'1px solid #f1f5f9',fontSize:11,fontWeight:700,color:'#64748b',fontVariantNumeric:'tabular-nums'}}>{r.date}</td>
                               <td style={{padding:'7px 12px',textAlign:'center',borderBottom:'1px solid #f1f5f9'}}>
-                                {h?.isQH?<Badge label="QH" color="#92400e" bg="#fef3c7" border="#fde68a"/>:<span style={{fontSize:9,color:'#cbd5e1'}}>—</span>}
+                                {r.isQH?<Badge label="QH" color="#92400e" bg="#fef3c7" border="#fde68a"/>:<span style={{fontSize:9,color:'#cbd5e1'}}>—</span>}
                               </td>
                             </tr>
                           );
@@ -1566,21 +1741,21 @@ const HomePage: React.FC = () => {
                 </div>
               </Card>
               <Card>
-                <CardHead sup="Breakdown" title="By Leave Type"/>
+                <CardHead sup="Breakdown" title="By Leave Type" onInfo={() => openInfo('By Leave Type', 'Pie view of leave-type distribution. Use controls to sort by highest count or alphabetically.')} right={<div style={{display:'flex',gap:6}}><ControlPill active={leaveChartSortMode==='count'} onClick={() => setLeaveChartSortMode('count')} label="Count"/><ControlPill active={leaveChartSortMode==='alpha'} onClick={() => setLeaveChartSortMode('alpha')} label="A-Z"/></div>} />
                 <div style={{flex:1,minHeight:0,display:'flex',flexDirection:'column'}}>
-                  {leaveDist.length===0?<Empty msg="No leaves"/>:(<>
+                  {visibleLeaveDist.length===0?<Empty msg="No leaves"/>:(<>
                     <div style={{flex:1,minHeight:0}}>
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
-                          <Pie data={leaveDist.map(l=>({...l,fill:l.color}))} dataKey="value" nameKey="label" cx="50%" cy="48%" innerRadius="40%" outerRadius="65%" paddingAngle={2}>
-                            {leaveDist.map((e,i)=><Cell key={i} fill={e.color}/>)}
+                          <Pie data={visibleLeaveDist.map(l=>({...l,fill:l.color}))} dataKey="value" nameKey="label" cx="50%" cy="48%" innerRadius="40%" outerRadius="65%" paddingAngle={2}>
+                            {visibleLeaveDist.map((e,i)=><Cell key={i} fill={e.color}/>) }
                           </Pie>
                           <Tooltip content={<PieTT/>}/>
                         </PieChart>
                       </ResponsiveContainer>
                     </div>
                     <div style={{flexShrink:0,padding:'0 12px 10px',display:'flex',flexWrap:'wrap',gap:'3px 8px'}}>
-                      {leaveDist.map((e,i)=>(
+                      {visibleLeaveDist.map((e,i)=>(
                         <div key={i} style={{display:'flex',alignItems:'center',gap:3,fontSize:8,fontWeight:700,color:'#374151'}}>
                           <div style={{width:6,height:6,borderRadius:2,background:e.color,flexShrink:0}}/>{e.label} ({e.value})
                         </div>
@@ -1594,6 +1769,29 @@ const HomePage: React.FC = () => {
 
         </div>
       </div>
+
+      {infoModal.open && (
+        <div style={{position:'fixed',inset:0,zIndex:85,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
+          <div style={{position:'absolute',inset:0,background:'rgba(15,23,42,0.38)',backdropFilter:'blur(6px)'}} onClick={() => setInfoModal({ open: false, title: '', message: '' })} />
+          <div style={{position:'relative',width:'min(520px,92vw)',background:'#fff',border:'1px solid #e2e8f0',borderRadius:14,padding:18,boxShadow:'0 20px 60px rgba(15,23,42,0.18)'}}>
+            <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12}}>
+              <div>
+                <div style={{fontSize:10,fontWeight:900,color:'#2563eb',textTransform:'uppercase',letterSpacing:'0.14em'}}>KPI / Chart Info</div>
+                <h3 style={{margin:'6px 0 0',fontSize:18,fontWeight:900,color:'#0f172a'}}>{infoModal.title}</h3>
+              </div>
+              <button onClick={() => setInfoModal({ open: false, title: '', message: '' })} style={{border:'none',background:'transparent',cursor:'pointer',color:'#64748b',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                <X size={16} />
+              </button>
+            </div>
+            <p style={{margin:'12px 0 0',fontSize:13,lineHeight:1.6,color:'#334155'}}>{infoModal.message}</p>
+            <div style={{display:'flex',justifyContent:'flex-end',marginTop:18}}>
+              <button onClick={() => setInfoModal({ open: false, title: '', message: '' })} style={{padding:'8px 12px',border:'1px solid #cbd5e1',borderRadius:8,background:'#fff',fontSize:11,fontWeight:800,color:'#0f172a',cursor:'pointer'}}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isRefineModalOpen && (
         <div style={{position:'fixed',inset:0,zIndex:70,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
