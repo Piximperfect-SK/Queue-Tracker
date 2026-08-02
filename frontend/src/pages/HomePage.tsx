@@ -5,9 +5,10 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, AreaChart, Area,
 } from 'recharts';
+import * as XLSX from 'xlsx';
 import {
   Users, Activity, ChevronLeft, ChevronRight,
-  BarChart2, Shield, Calendar, ArrowUp, ArrowDown,
+  BarChart2, Shield, Calendar, ArrowUp, ArrowDown, Download,
   Search, ChevronUp, ChevronDown, Minus,
 } from 'lucide-react';
 
@@ -35,6 +36,7 @@ const monthOf = (d: string) => d.slice(0,7);
 const yearOf  = (d: string) => d.slice(0,4);
 const fmt     = (n: number) => n.toLocaleString();
 const pct     = (a: number, b: number) => b > 0 ? Math.round((a/b)*100) : 0;
+const pctChange = (curr: number, prev: number) => prev > 0 ? Math.round(((curr-prev)/prev)*100) : (curr > 0 ? 100 : 0);
 
 // ── KPI Card ──────────────────────────────────────────────────────────────────
 const KpiCard: React.FC<{
@@ -180,6 +182,39 @@ const HomePage: React.FC = () => {
 
   const qhCount = handlers.filter(h=>h.isQH).length;
 
+  // ── Previous period (for trend deltas) ────────────────────────────────────
+  const prevPeriodKey = useMemo(() => {
+    if (mode==='day')   { const [y,m,d]=selectedDay.split('-').map(Number); const dt=new Date(y,m-1,d); dt.setDate(dt.getDate()-1); return dt.toLocaleDateString('en-CA'); }
+    if (mode==='month') { const [y,m]=selectedMonth.split('-').map(Number); const dt=new Date(y,m-2,1); return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}`; }
+    return String(+selectedYear-1);
+  }, [mode, selectedDay, selectedMonth, selectedYear]);
+
+  const inPrevPeriod = useCallback((date: string) => {
+    if (mode==='day')   return date === prevPeriodKey;
+    if (mode==='month') return monthOf(date) === prevPeriodKey;
+    return yearOf(date) === prevPeriodKey;
+  }, [mode, prevPeriodKey]);
+
+  const prevFilteredStats  = useMemo(() => stats.filter(s => inPrevPeriod(s.date)),  [stats,  inPrevPeriod]);
+  const prevFilteredRoster = useMemo(() => roster.filter(r => inPrevPeriod(r.date)), [roster, inPrevPeriod]);
+
+  const prevTotalInc   = prevFilteredStats.reduce((a,s)=>a+Number(s.incidents||0),0);
+  const prevTotalTask  = prevFilteredStats.reduce((a,s)=>a+Number(s.sctasks  ||0),0);
+  const prevTotalCalls = prevFilteredStats.reduce((a,s)=>a+Number(s.calls    ||0),0);
+  const prevGrandTotal = prevTotalInc+prevTotalTask+prevTotalCalls;
+
+  const prevActiveCount = useMemo(() =>
+    new Set(prevFilteredRoster.filter(r=>!LEAVE_TYPES.has(r.shift)).map(r=>r.handlerId)).size,
+  [prevFilteredRoster]);
+
+  // ── Attendance rate: % of scheduled agent-days actually worked (not on leave) ──
+  const attendanceRate = useMemo(() =>
+    filteredRoster.length ? pct(filteredRoster.filter(r=>!LEAVE_TYPES.has(r.shift)).length, filteredRoster.length) : 0,
+  [filteredRoster]);
+  const prevAttendanceRate = useMemo(() =>
+    prevFilteredRoster.length ? pct(prevFilteredRoster.filter(r=>!LEAVE_TYPES.has(r.shift)).length, prevFilteredRoster.length) : 0,
+  [prevFilteredRoster]);
+
   const agentStats = useMemo(() => {
     const map: Record<string,{inc:number;task:number;calls:number;days:Set<string>}> = {};
     filteredStats.forEach(s => {
@@ -198,9 +233,10 @@ const HomePage: React.FC = () => {
       .map(h => {
         const s  = agentStats[h.id] || {inc:0,task:0,calls:0,days:new Set()};
         const total = s.inc+s.task+s.calls;
+        const perDay = s.days.size > 0 ? +(total/s.days.size).toFixed(1) : 0;
         const shift = filteredRoster.find(r=>r.handlerId===h.id&&!LEAVE_TYPES.has(r.shift))?.shift || '—';
         const onLeave = filteredRoster.some(r=>r.handlerId===h.id&&LEAVE_TYPES.has(r.shift));
-        return { id:h.id, name:h.name, isQH:h.isQH, inc:s.inc, task:s.task, calls:s.calls, total, days:s.days.size, shift, onLeave };
+        return { id:h.id, name:h.name, isQH:h.isQH, inc:s.inc, task:s.task, calls:s.calls, total, perDay, days:s.days.size, shift, onLeave };
       })
       .sort((a,b) => {
         const v = (x:any) => typeof x[sortCol]==='string' ? x[sortCol].toLowerCase() : (x[sortCol]||0);
@@ -260,7 +296,7 @@ const HomePage: React.FC = () => {
   }, [filteredRoster]);
 
   const topPerformers = useMemo(() =>
-    agentRows.filter(r=>r.total>0).slice(0,5),
+    [...agentRows].filter(r=>r.total>0).sort((a,b)=>b.perDay-a.perDay).slice(0,5),
   [agentRows]);
 
   const qhRows  = useMemo(() => agentRows.filter(r=>r.isQH),  [agentRows]);
@@ -288,6 +324,52 @@ const HomePage: React.FC = () => {
     else if(mode==='month'){const[y,m]=selectedMonth.split('-').map(Number);const dt=new Date(y,m-1+dir,1);setSelectedMonth(`${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}`);}
     else setSelectedYear(String(+selectedYear+dir));
   };
+
+  const exportReport = useCallback(() => {
+    const wb = XLSX.utils.book_new();
+
+    const summaryAoA = [
+      ['Queue Tracker — Productivity Report'],
+      ['Period', periodLabel],
+      ['Generated', new Date().toLocaleString('en-US')],
+      [],
+      ['Metric', 'Current', `Previous ${mode}`, 'Change'],
+      ['Active Agents',   activeCount,           prevActiveCount,      `${pctChange(activeCount, prevActiveCount)}%`],
+      ['Attendance Rate', `${attendanceRate}%`,  `${prevAttendanceRate}%`, `${pctChange(attendanceRate, prevAttendanceRate)}%`],
+      ['Incidents',       totalInc,              prevTotalInc,          `${pctChange(totalInc, prevTotalInc)}%`],
+      ['SC Tasks',        totalTask,             prevTotalTask,         `${pctChange(totalTask, prevTotalTask)}%`],
+      ['Calls',           totalCalls,            prevTotalCalls,        `${pctChange(totalCalls, prevTotalCalls)}%`],
+      ['Grand Total',     grandTotal,            prevGrandTotal,        `${pctChange(grandTotal, prevGrandTotal)}%`],
+      ['Total Agents (registered)', handlers.length, '', ''],
+      ['Queue Handlers',  qhCount, '', ''],
+    ];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summaryAoA), 'Summary');
+
+    const agentAoA = [
+      ['Agent','QH','Incidents','SC Tasks','Calls','Total','Days Worked','Avg / Day','Current Shift','On Leave'],
+      ...agentRows.map(r => [r.name, r.isQH?'Yes':'No', r.inc, r.task, r.calls, r.total, r.days, r.perDay, r.shift, r.onLeave?'Yes':'No']),
+    ];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(agentAoA), 'Agent Detail');
+
+    const shiftAoA = [
+      ['Shift','Agents','Incidents','SC Tasks','Calls','Total','Avg / Agent'],
+      ...shiftAnalysis.map(s => [s.shift, s.agents, s.inc, s.task, s.calls, s.total, s.agents>0?+(s.total/s.agents).toFixed(1):0]),
+    ];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(shiftAoA), 'Shift Breakdown');
+
+    const leaveAoA = [
+      ['Leave Type','Count'],
+      ...leaveDist.map(l => [l.label, l.value]),
+    ];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(leaveAoA), 'Leave Breakdown');
+
+    const safePeriod = String(periodLabel).replace(/[^\w-]+/g, '_');
+    XLSX.writeFile(wb, `Queue-Tracker-Report-${safePeriod}.xlsx`);
+  }, [
+    periodLabel, mode, activeCount, prevActiveCount, attendanceRate, prevAttendanceRate,
+    totalInc, prevTotalInc, totalTask, prevTotalTask, totalCalls, prevTotalCalls,
+    grandTotal, prevGrandTotal, handlers.length, qhCount, agentRows, shiftAnalysis, leaveDist,
+  ]);
 
   if (role && role!=='admin') return (
     <div style={{height:'100%',display:'flex',alignItems:'center',justifyContent:'center',gap:16,opacity:0.35}}>
@@ -349,6 +431,7 @@ const HomePage: React.FC = () => {
       <td style={{padding:'6px 10px',textAlign:'center',borderBottom:'1px solid #f1f5f9'}}><span style={{fontSize:12,fontWeight:900,color:CALL_C,fontVariantNumeric:'tabular-nums'}}>{r.calls}</span></td>
       <td style={{padding:'6px 10px',textAlign:'center',borderBottom:'1px solid #f1f5f9'}}><span style={{fontSize:13,fontWeight:900,color:'#0f172a',fontVariantNumeric:'tabular-nums'}}>{r.total}</span></td>
       {mode!=='day'&&<td style={{padding:'6px 10px',textAlign:'center',borderBottom:'1px solid #f1f5f9'}}><span style={{fontSize:11,fontWeight:700,color:'#64748b'}}>{r.days}</span></td>}
+      {mode!=='day'&&<td style={{padding:'6px 10px',textAlign:'center',borderBottom:'1px solid #f1f5f9'}}><span style={{fontSize:11,fontWeight:700,color:'#475569'}}>{r.perDay}</span></td>}
       <td style={{padding:'6px 10px',textAlign:'center',borderBottom:'1px solid #f1f5f9'}}>
         <div style={{width:'100%',maxWidth:80,margin:'0 auto'}}>
           <div style={{height:4,background:'#f1f5f9',borderRadius:2,overflow:'hidden'}}>
@@ -375,6 +458,7 @@ const HomePage: React.FC = () => {
         <TH label="Calls" col="calls"/>
         <TH label="Total" col="total"/>
         {mode!=='day'&&<TH label="Days" col="days"/>}
+        {mode!=='day'&&<TH label="Avg/Day" col="perDay"/>}
         <TH label="Bar"/>
         <TH label="Shift" col="shift"/>
       </tr>
@@ -411,13 +495,18 @@ const HomePage: React.FC = () => {
             <button onClick={()=>navPeriod(1)} style={{width:24,height:24,border:'1px solid #e2e8f0',borderRadius:6,background:'#fff',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}><ChevronRight size={12} color="#64748b"/></button>
           </div>
         </div>
-        <div style={{display:'flex',border:'1px solid #cbd5e1',borderRadius:6,overflow:'hidden'}}>
-          {[{l:'INC',v:totalInc,c:'#2563eb',bg:'#dbeafe'},{l:'TASK',v:totalTask,c:'#b45309',bg:'#fef9c3'},{l:'CALLS',v:totalCalls,c:'#00ADB5',bg:'#f0fdfa'},{l:'TOTAL',v:grandTotal,c:'#0f172a',bg:'#f1f5f9'}].map((t,i)=>(
-            <div key={t.l} style={{padding:'3px 12px',textAlign:'center',borderLeft:i?'1px solid #e2e8f0':'none',background:t.bg,minWidth:56}}>
-              <div style={{fontSize:7,color:t.c,fontWeight:900,textTransform:'uppercase',letterSpacing:'0.12em'}}>{t.l}</div>
-              <div style={{fontSize:15,fontWeight:900,color:t.c,fontVariantNumeric:'tabular-nums'}}>{t.v}</div>
-            </div>
-          ))}
+        <div style={{display:'flex',alignItems:'center',gap:10}}>
+          <div style={{display:'flex',border:'1px solid #cbd5e1',borderRadius:6,overflow:'hidden'}}>
+            {[{l:'INC',v:totalInc,c:'#2563eb',bg:'#dbeafe'},{l:'TASK',v:totalTask,c:'#b45309',bg:'#fef9c3'},{l:'CALLS',v:totalCalls,c:'#00ADB5',bg:'#f0fdfa'},{l:'TOTAL',v:grandTotal,c:'#0f172a',bg:'#f1f5f9'}].map((t,i)=>(
+              <div key={t.l} style={{padding:'3px 12px',textAlign:'center',borderLeft:i?'1px solid #e2e8f0':'none',background:t.bg,minWidth:56}}>
+                <div style={{fontSize:7,color:t.c,fontWeight:900,textTransform:'uppercase',letterSpacing:'0.12em'}}>{t.l}</div>
+                <div style={{fontSize:15,fontWeight:900,color:t.c,fontVariantNumeric:'tabular-nums'}}>{t.v}</div>
+              </div>
+            ))}
+          </div>
+          <button onClick={exportReport} style={{display:'flex',alignItems:'center',gap:6,height:32,padding:'0 12px',border:'1px solid #cbd5e1',borderRadius:6,background:'#fff',cursor:'pointer',fontSize:11,fontWeight:700,color:'#0f172a'}}>
+            <Download size={12}/> Export
+          </button>
         </div>
       </div>
 
@@ -454,13 +543,17 @@ const HomePage: React.FC = () => {
 
           {/* ── OVERVIEW ───────────────────────────────────────────────────── */}
           {activeTab==='overview' && (<>
-            <div style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:10,flexShrink:0}}>
-              <KpiCard label="Active Agents" value={activeCount}  sub="on shift"       color="#0f172a"/>
-              <KpiCard label="Total Agents"  value={handlers.length} sub="registered"  color="#475569"/>
-              <KpiCard label="Incidents"     value={totalInc}     sub="logged"          color="#2563eb"/>
-              <KpiCard label="SC Tasks"      value={totalTask}    sub="completed"       color="#b45309"/>
-              <KpiCard label="Calls"         value={totalCalls}   sub="handled"         color="#00ADB5"/>
-              <KpiCard label="Avg / Agent"   value={activeCount?+(grandTotal/activeCount).toFixed(1):0} sub="tickets+calls" color="#7c3aed"/>
+            <div style={{fontSize:9,fontWeight:700,color:'#94a3b8',textTransform:'uppercase',letterSpacing:'0.1em',flexShrink:0}}>
+              vs previous {mode}
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:10,flexShrink:0}}>
+              <KpiCard label="Active Agents"   value={activeCount}      sub="on shift"        color="#0f172a" trend={pctChange(activeCount, prevActiveCount)}/>
+              <KpiCard label="Attendance"      value={`${attendanceRate}%`} sub="scheduled days worked" color="#0d9488" trend={pctChange(attendanceRate, prevAttendanceRate)}/>
+              <KpiCard label="Incidents"       value={totalInc}         sub="logged"          color="#2563eb" trend={pctChange(totalInc, prevTotalInc)}/>
+              <KpiCard label="SC Tasks"        value={totalTask}        sub="completed"       color="#b45309" trend={pctChange(totalTask, prevTotalTask)}/>
+              <KpiCard label="Calls"           value={totalCalls}       sub="handled"         color="#00ADB5" trend={pctChange(totalCalls, prevTotalCalls)}/>
+              <KpiCard label="Avg / Agent"     value={activeCount?+(grandTotal/activeCount).toFixed(1):0} sub="tickets+calls" color="#7c3aed"/>
+              <KpiCard label="Total Agents"    value={handlers.length}  sub="registered"      color="#475569"/>
             </div>
 
             <div style={{display:'grid',gridTemplateColumns:'1fr 260px',gap:10,flex:1,minHeight:200}}>
@@ -533,7 +626,7 @@ const HomePage: React.FC = () => {
                 </div>
               </Card>
               <Card>
-                <CardHead sup="Rankings" title="Top Performers"/>
+                <CardHead sup="Rankings · Avg / Day Worked" title="Top Performers"/>
                 <div style={{flex:1,overflow:'hidden',padding:'8px 14px 10px',display:'flex',flexDirection:'column',gap:6}}>
                   {topPerformers.length===0?<Empty msg="No data"/>:topPerformers.map((r,i)=>(
                     <div key={r.id}>
@@ -542,10 +635,10 @@ const HomePage: React.FC = () => {
                           <span style={{fontSize:11,fontWeight:900,color:i<3?RANK_C[i]:'#94a3b8',width:12,fontVariantNumeric:'tabular-nums'}}>{i+1}</span>
                           <span style={{fontSize:11,fontWeight:700,color:'#0f172a',maxWidth:100,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.name}</span>
                         </div>
-                        <span style={{fontSize:12,fontWeight:900,color:'#0f172a',fontVariantNumeric:'tabular-nums'}}>{r.total}</span>
+                        <span style={{fontSize:12,fontWeight:900,color:'#0f172a',fontVariantNumeric:'tabular-nums'}}>{r.perDay}<span style={{fontSize:9,fontWeight:700,color:'#94a3b8'}}>/day</span></span>
                       </div>
                       <div style={{height:4,background:'#f1f5f9',borderRadius:2,overflow:'hidden'}}>
-                        <div style={{width:`${pct(r.total,topPerformers[0].total)}%`,height:'100%',background:i<3?RANK_C[i]:'#cbd5e1',borderRadius:2}}/>
+                        <div style={{width:`${pct(r.perDay,topPerformers[0].perDay)}%`,height:'100%',background:i<3?RANK_C[i]:'#cbd5e1',borderRadius:2}}/>
                       </div>
                     </div>
                   ))}
@@ -600,7 +693,7 @@ const HomePage: React.FC = () => {
                   <TableHeaders/>
                   <tbody>
                     {agentRows.length===0
-                      ? <tr><td colSpan={9} style={{padding:40,textAlign:'center',color:'#94a3b8',fontSize:12,fontWeight:700}}>No agents found</td></tr>
+                      ? <tr><td colSpan={10} style={{padding:40,textAlign:'center',color:'#94a3b8',fontSize:12,fontWeight:700}}>No agents found</td></tr>
                       : agentRows.map((r,i)=><AgentRow key={r.id} r={r} rank={i}/>)
                     }
                   </tbody>
@@ -625,7 +718,7 @@ const HomePage: React.FC = () => {
                     <TableHeaders showRank/>
                     <tbody>
                       {qhRows.length===0
-                        ? <tr><td colSpan={9} style={{padding:32,textAlign:'center',color:'#94a3b8',fontSize:12,fontWeight:700}}>No QH data for this period</td></tr>
+                        ? <tr><td colSpan={10} style={{padding:32,textAlign:'center',color:'#94a3b8',fontSize:12,fontWeight:700}}>No QH data for this period</td></tr>
                         : qhRows.map((r,i)=><AgentRow key={r.id} r={r} rank={i} medals/>)
                       }
                     </tbody>
@@ -666,7 +759,7 @@ const HomePage: React.FC = () => {
                   <TableHeaders showRank/>
                   <tbody>
                     {stdRows.length===0
-                      ? <tr><td colSpan={9} style={{padding:24,textAlign:'center',color:'#94a3b8',fontSize:12,fontWeight:700}}>No standard agent data</td></tr>
+                      ? <tr><td colSpan={10} style={{padding:24,textAlign:'center',color:'#94a3b8',fontSize:12,fontWeight:700}}>No standard agent data</td></tr>
                       : stdRows.map((r,i)=><AgentRow key={r.id} r={r} rank={i}/>)
                     }
                   </tbody>
