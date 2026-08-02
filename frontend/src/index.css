@@ -332,3 +332,60 @@ html, body, #root {
 [data-theme="light"] nav.app-nav .nav-divider {
   background: #e2e8f0 !important;
 }
+
+/* Fix white-on-white text in light mode: override all hardcoded white text
+   classes used inside the navbar so they render as dark slate on the white
+   navbar background. */
+[data-theme="light"] nav.app-nav .text-white,
+[data-theme="light"] nav.app-nav .text-white\/55,
+[data-theme="light"] nav.app-nav .text-white\/42,
+[data-theme="light"] nav.app-nav .text-white\/82,
+[data-theme="light"] nav.app-nav .text-white\/65,
+[data-theme="light"] nav.app-nav .text-white\/60,
+[data-theme="light"] nav.app-nav .text-white\/40,
+[data-theme="light"] nav.app-nav .text-white\/68 {
+  color: #1e293b !important;
+}
+[data-theme="light"] nav.app-nav .text-white\/30 {
+  color: rgba(30,41,59,0.4) !important;
+}
+[data-theme="light"] nav.app-nav .text-white\/18 {
+  color: rgba(30,41,59,0.3) !important;
+}
+[data-theme="light"] nav.app-nav .text-white\/12 {
+  color: rgba(30,41,59,0.25) !important;
+}
+[data-theme="light"] nav.app-nav .text-white\/10 {
+  color: rgba(30,41,59,0.2) !important;
+}
+[data-theme="light"] nav.app-nav .text-white\/6 {
+  color: rgba(30,41,59,0.12) !important;
+}
+
+/* Online users avatar initials + "0" placeholder in light mode */
+[data-theme="light"] nav.app-nav .nav-pill .text-white {
+  color: #1e293b !important;
+}
+[data-theme="light"] nav.app-nav .nav-pill .text-white\/40 {
+  color: rgba(30,41,59,0.4) !important;
+}
+
+/* Theme toggle + logout icons in light mode */
+[data-theme="light"] nav.app-nav .nav-item.text-white\/65,
+[data-theme="light"] nav.app-nav .nav-item.text-white\/60 {
+  color: rgba(30,41,59,0.6) !important;
+}
+[data-theme="light"] nav.app-nav .nav-item.text-white\/65:hover,
+[data-theme="light"] nav.app-nav .nav-item.text-white\/60:hover {
+  color: #1e293b !important;
+}
+
+/* Active nav item in light mode: dark text on light pill */
+[data-theme="light"] nav.app-nav .nav-item.bg-white\/14 {
+  background: #1e293b !important;
+  color: #ffffff !important;
+}
+[data-theme="light"] nav.app-nav .nav-item.bg-white\/14:hover {
+  background: #1e293b !important;
+  color: #ffffff !important;
+}
