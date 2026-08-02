@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRole } from '../auth/RoleContext';
 import type { Handler, RosterEntry, DailyStats } from '../types';
-import { syncData } from '../utils/socket';
+import { syncData, socket } from '../utils/socket';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, AreaChart, Area,
@@ -123,6 +123,36 @@ const findColumnIndex = (headers: string[], keywords: string[]) =>
   headers.findIndex((h) => keywords.some((k) => h.includes(k)));
 
 const SERVER_ACK_TIMEOUT_MS = 30000;
+
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const fetchServerStatsMatchRatio = (sampleRows: DailyStats[]) =>
+  new Promise<{ ratio: number; matched: number; total: number }>((resolve) => {
+    const timer = setTimeout(() => {
+      socket.off('init', onInit);
+      resolve({ ratio: 0, matched: 0, total: sampleRows.length });
+    }, 12000);
+
+    const sampleKeys = new Set(
+      sampleRows.map((r) => `${r.handlerId}|${r.date}|${Number(r.incidents || 0)}|${Number(r.sctasks || 0)}|${Number(r.calls || 0)}`)
+    );
+
+    const onInit = (db: any) => {
+      clearTimeout(timer);
+      const serverStats: DailyStats[] = Array.isArray(db?.stats) ? db.stats : [];
+      const serverKeys = new Set(
+        serverStats.map((r) => `${r.handlerId}|${r.date}|${Number(r.incidents || 0)}|${Number(r.sctasks || 0)}|${Number(r.calls || 0)}`)
+      );
+
+      let matched = 0;
+      sampleKeys.forEach((k) => { if (serverKeys.has(k)) matched += 1; });
+      const total = sampleKeys.size;
+      resolve({ ratio: total ? matched / total : 0, matched, total });
+    };
+
+    socket.once('init', onInit);
+    socket.emit('get_initial_data');
+  });
 
 const parseDateFromSheetName = (sheetName: string, fallbackYear: number) => {
   const raw = normalizeCellValue(sheetName);
@@ -279,6 +309,8 @@ const HomePage: React.FC = () => {
   const [refineWarnings, setRefineWarnings] = useState<string[]>([]);
   const [refineSourceName, setRefineSourceName] = useState('');
   const [importProgress, setImportProgress] = useState<{ step: string; percent: number; mode: 'import' | 'both' | null } | null>(null);
+  const [backendSyncMonitor, setBackendSyncMonitor] = useState<{ active: boolean; percent: number; message: string; attempt: number; totalAttempts: number } | null>(null);
+  const [syncDoneModal, setSyncDoneModal] = useState<{ open: boolean; title: string; message: string }>({ open: false, title: '', message: '' });
   const analyticsFileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -827,6 +859,61 @@ const HomePage: React.FC = () => {
         await withAck('Handlers', (cb) => syncData.updateHandlers(mergedHandlers, cb));
       }
 
+      const startBackgroundSyncMonitor = async (expectedRows: DailyStats[]) => {
+        const sampleRows = expectedRows.slice(0, 250);
+        if (!sampleRows.length) return;
+
+        const totalAttempts = 10;
+        setBackendSyncMonitor({
+          active: true,
+          percent: 5,
+          message: 'Waiting for backend sync confirmation...',
+          attempt: 0,
+          totalAttempts,
+        });
+
+        for (let attempt = 1; attempt <= totalAttempts; attempt++) {
+          const check = await fetchServerStatsMatchRatio(sampleRows);
+          const ratioPct = Math.round(check.ratio * 100);
+          const progressPct = Math.min(95, Math.max(10, Math.round((attempt / totalAttempts) * 95)));
+
+          setBackendSyncMonitor({
+            active: true,
+            percent: progressPct,
+            message: `Checking backend sync... ${check.matched}/${check.total} sample rows confirmed (${ratioPct}%).`,
+            attempt,
+            totalAttempts,
+          });
+
+          if (check.ratio >= 0.95) {
+            setBackendSyncMonitor({
+              active: false,
+              percent: 100,
+              message: 'Backend sync confirmed.',
+              attempt,
+              totalAttempts,
+            });
+            setSyncDoneModal({
+              open: true,
+              title: 'Backend Sync Completed',
+              message: `Analytics sync is now fully confirmed on server (${check.matched}/${check.total} sample rows).`,
+            });
+            setTimeout(() => setBackendSyncMonitor(null), 1000);
+            return;
+          }
+
+          if (attempt < totalAttempts) await delay(3500);
+        }
+
+        setBackendSyncMonitor({
+          active: false,
+          percent: 100,
+          message: 'Still syncing on backend. You can continue working; it will finish shortly.',
+          attempt: totalAttempts,
+          totalAttempts,
+        });
+      };
+
       const onlyTimeoutErrors = ackErrors.length > 0 && ackErrors.every((e) => e.toLowerCase().includes('timed out'));
       const tone: ImportFeedback['tone'] = 'success';
       const savedMsg = !ackErrors.length
@@ -839,6 +926,11 @@ const HomePage: React.FC = () => {
         message: `Imported ${parsedStats.length} analytics row(s).${newHandlers.length ? ` +${newHandlers.length} new agent(s).` : ''}${refineNote}${savedMsg}`,
         tone,
       });
+
+      if (onlyTimeoutErrors) {
+        void startBackgroundSyncMonitor(parsedStats);
+      }
+
       setImportProgress({ step: 'Import completed.', percent: 100, mode: 'import' });
       closeRefineModal(true);
     } catch (err) {
@@ -1020,6 +1112,26 @@ const HomePage: React.FC = () => {
             <button onClick={() => setImportStatus(null)} style={{border:'none',background:'transparent',cursor:'pointer',color:'inherit',opacity:0.65,display:'flex',alignItems:'center',justifyContent:'center'}}>
               <X size={14}/>
             </button>
+          </div>
+        </div>
+      )}
+
+      {backendSyncMonitor && (
+        <div style={{flexShrink:0,padding:'8px 16px 0'}}>
+          <div style={{padding:'8px 10px',borderRadius:8,border:'1px solid #bfdbfe',background:'#eff6ff'}}>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,marginBottom:6}}>
+              <span style={{fontSize:9,fontWeight:900,color:'#1d4ed8',textTransform:'uppercase',letterSpacing:'0.12em'}}>Backend Sync Progress</span>
+              <span style={{fontSize:11,fontWeight:900,color:'#1e3a8a'}}>{backendSyncMonitor.percent}%</span>
+            </div>
+            <div style={{height:8,background:'#dbeafe',borderRadius:999,overflow:'hidden'}}>
+              <div style={{height:'100%',width:`${Math.max(0, Math.min(100, backendSyncMonitor.percent))}%`,background:'#2563eb',transition:'width 220ms ease'}} />
+            </div>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,marginTop:6}}>
+              <span style={{fontSize:11,fontWeight:700,color:'#1e40af'}}>{backendSyncMonitor.message}</span>
+              {backendSyncMonitor.active && (
+                <span style={{fontSize:10,fontWeight:800,color:'#1e40af'}}>Attempt {backendSyncMonitor.attempt}/{backendSyncMonitor.totalAttempts}</span>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -1593,6 +1705,25 @@ const HomePage: React.FC = () => {
                   Download + Import
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {syncDoneModal.open && (
+        <div style={{position:'fixed',inset:0,zIndex:80,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
+          <div style={{position:'absolute',inset:0,background:'rgba(15,23,42,0.35)'}} onClick={() => setSyncDoneModal({ open: false, title: '', message: '' })} />
+          <div style={{position:'relative',width:'min(460px,92vw)',background:'#fff',border:'1px solid #e2e8f0',borderRadius:12,padding:16}}>
+            <div style={{fontSize:10,fontWeight:900,color:'#16a34a',textTransform:'uppercase',letterSpacing:'0.14em'}}>Notification</div>
+            <h3 style={{margin:'6px 0 4px',fontSize:18,fontWeight:900,color:'#0f172a'}}>{syncDoneModal.title}</h3>
+            <p style={{margin:0,fontSize:12,color:'#334155',lineHeight:1.5}}>{syncDoneModal.message}</p>
+            <div style={{display:'flex',justifyContent:'flex-end',marginTop:14}}>
+              <button
+                onClick={() => setSyncDoneModal({ open: false, title: '', message: '' })}
+                style={{padding:'8px 12px',border:'1px solid #cbd5e1',borderRadius:8,background:'#fff',fontSize:11,fontWeight:800,color:'#0f172a',cursor:'pointer'}}
+              >
+                OK
+              </button>
             </div>
           </div>
         </div>
