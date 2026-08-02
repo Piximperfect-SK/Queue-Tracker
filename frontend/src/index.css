@@ -385,16 +385,7 @@ html, body, #root {
   background: #e2e8f0 !important;
 }
 
-/* Fix white-on-white text in light mode: override all hardcoded white text
-   classes used inside the navbar so they render as dark slate on the white
-   navbar background. */
-[data-theme="light"] nav.app-nav .text-white,
-[data-theme="light"] nav.app-nav .text-white\/55,
-[data-theme="light"] nav.app-nav .text-white\/42,
-[data-theme="light"] nav.app-nav .text-white\/82,
-[data-theme="light"] nav.app-nav .text-white\/65,
-[data-theme="light"] nav.app-nav .text-white\/60,
-[data-theme="light"] nav.app-nav .text-white\/40,
+/* Fix white-on-white text in the navbar for both themes. */
 [data-theme="light"] nav.app-nav .text-white,
 [data-theme="light"] nav.app-nav .text-white\/55,
 [data-theme="light"] nav.app-nav .text-white\/42,
@@ -413,32 +404,33 @@ html, body, #root {
 [data-theme="dark"] nav.app-nav .text-white\/68 {
   color: var(--nav-text) !important;
 }
+
 [data-theme="light"] nav.app-nav .text-white\/30,
-[data-theme="dark"] nav.app-nav .text-white\/30 { color: var(--nav-text-soft) !important; }
+[data-theme="dark"] nav.app-nav .text-white\/30,
 [data-theme="light"] nav.app-nav .text-white\/18,
-[data-theme="dark"] nav.app-nav .text-white\/18 { color: var(--nav-text-muted) !important; }
+[data-theme="dark"] nav.app-nav .text-white\/18,
 [data-theme="light"] nav.app-nav .text-white\/12,
-[data-theme="dark"] nav.app-nav .text-white\/12 { color: var(--nav-text-muted) !important; }
+[data-theme="dark"] nav.app-nav .text-white\/12,
 [data-theme="light"] nav.app-nav .text-white\/10,
-[data-theme="dark"] nav.app-nav .text-white\/10 { color: var(--nav-text-muted) !important; }
-  color: rgba(30,41,59,0.4) !important;
+[data-theme="dark"] nav.app-nav .text-white\/10 {
+  color: var(--nav-text-muted) !important;
 }
 
-/* Theme toggle + logout icons in light mode */
 [data-theme="light"] nav.app-nav .nav-item.text-white\/65,
 [data-theme="light"] nav.app-nav .nav-item.text-white\/60 {
   color: rgba(30,41,59,0.6) !important;
 }
+
 [data-theme="light"] nav.app-nav .nav-item.text-white\/65:hover,
 [data-theme="light"] nav.app-nav .nav-item.text-white\/60:hover {
   color: #1e293b !important;
 }
 
-/* Active nav item in light mode: dark text on light pill */
 [data-theme="light"] nav.app-nav .nav-item.bg-white\/14 {
   background: #1e293b !important;
   color: #ffffff !important;
 }
+
 [data-theme="light"] nav.app-nav .nav-item.bg-white\/14:hover {
   background: #1e293b !important;
   color: #ffffff !important;
