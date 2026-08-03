@@ -26,17 +26,25 @@ const authLimiter = rateLimit({
   message: { error: 'Too many attempts. Try again later.' },
 });
 
-// Encryption key for pending user secrets. In production this must be set,
-// otherwise anyone who can restart the service would effectively rotate the
-// key and invalidate all pending setup secrets.
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || (process.env.NODE_ENV === 'production'
-  ? (() => { throw new Error('ENCRYPTION_KEY must be set in production'); })()
-  : crypto.randomBytes(32).toString('hex').slice(0, 32));
+// Encryption key for pending user secrets.
+// Reuse the access-code encryption secret when a dedicated key is not set,
+// so production can boot cleanly without a second required secret.
+const ENCRYPTION_SECRET = process.env.ENCRYPTION_KEY || process.env.ACCESS_CODE_ENCRYPTION_KEY || (
+  process.env.NODE_ENV === 'production'
+    ? null
+    : crypto.randomBytes(32).toString('hex').slice(0, 32)
+);
+
+if (!ENCRYPTION_SECRET) {
+  throw new Error('ENCRYPTION_KEY or ACCESS_CODE_ENCRYPTION_KEY must be set in production');
+}
+
+const ENCRYPTION_KEY = crypto.createHash('sha256').update(ENCRYPTION_SECRET).digest();
 const IV_LENGTH = 16;
 
 function encrypt(text) {
   const iv = crypto.randomBytes(IV_LENGTH);
-  const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY), iv);
+  const cipher = crypto.createCipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
   let encrypted = cipher.update(text);
   encrypted = Buffer.concat([encrypted, cipher.final()]);
   return iv.toString('hex') + ':' + encrypted.toString('hex');
@@ -46,7 +54,7 @@ function decrypt(text) {
   const parts = text.split(':');
   const iv = Buffer.from(parts.shift(), 'hex');
   const encryptedText = Buffer.from(parts.join(':'), 'hex');
-  const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY), iv);
+  const decipher = crypto.createDecipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
   let decrypted = decipher.update(encryptedText);
   decrypted = Buffer.concat([decrypted, decipher.final()]);
   return decrypted.toString();
